@@ -24,20 +24,7 @@ DEFAULT_DISCOVERY_CONFIG = {
     # factor extraction
     'variance_target': 0.6,  # smallest r explaining >= this share of variance
     'max_factors': 4,
-    # Optional Hodrick-Prescott smoothing applied to the panel BEFORE
-    # differencing, for factor extraction ONLY (edges are still found on the
-    # unsmoothed residuals, so short-lag lead-lag structure survives).
-    #
-    # OFF by default, because it is a genuine tradeoff, not a free win
-    # (measured in examples/tva_factor_validation.py against generator ground
-    # truth). A piecewise-linear trend contributes almost no variance to first
-    # differences, so on NOISE-DOMINATED input the factor signal is buried and
-    # pre-smoothing helps enormously: mean |corr| factor recovery on raw daily
-    # panels went 0.005 -> 0.57 at lambda=1e8. But on an already-clean trend
-    # panel the same smoothing HURTS (0.85 -> 0.51, factor counts collapse),
-    # and lasso edge precision on SVAR panels drops 0.78 -> 0.64 at every
-    # lambda tested. Enable it only when the input is known to be noisy
-    # relative to its trend movement; 1e8 suits daily data.
+    # Optional Hodrick-Prescott smoothing applied to the panel
     'factor_hp_lambda': None,
     'soft_threshold': 0.15,  # fraction of per-factor max |loading| zeroed out
     # deconfounding
@@ -636,6 +623,7 @@ def discover_structure(
     config: Optional[dict] = None,
     seed: int = 42,
     extra_adjacencies: Optional[dict] = None,
+    external_factors: Optional[np.ndarray] = None,
 ) -> dict:
     """Discover factors, loadings, and a conditional lead-lag edge table.
 
@@ -650,6 +638,8 @@ def discover_structure(
             given seed).
         extra_adjacencies: optional {family_name: (N, N) adjacency} for the
             'event', 'metadata', and 'business' families built elsewhere.
+        external_factors: optional (T, K) level-space factor paths to
+            deconfound against instead of the internal difference-space SVD.
 
     Returns:
         dict with 'factors' (T, r) level-space composite tracks, 'loadings'
@@ -680,9 +670,7 @@ def discover_structure(
     # D-1: difference + standardize
     X, _scale = _difference_and_standardize(values)
 
-    # D-1b: a separate, HP-smoothed view used ONLY for factor extraction.
-    # Edges are still discovered on the residuals of the unsmoothed panel, so
-    # lead-lag structure at short lags is not smoothed away.
+    # D-1b: a separate, HP-smoothed view used for factor extraction.
     hp_lambda = cfg.get('factor_hp_lambda')
     if hp_lambda:
         X_factor, _ = _difference_and_standardize(_hp_smooth(values, hp_lambda))
@@ -694,6 +682,31 @@ def discover_structure(
         anchor_idx = np.where(np.asarray(anchor_mask, dtype=bool))[0]
         _f_anchor, _l_anchor, scores = extract_factors(X_factor[:, anchor_idx], cfg)
         # loadings for ALL series by regression on the factor scores
+        gram = scores.T @ scores
+        loadings = (X_factor.T @ scores) @ np.linalg.pinv(gram)
+        tau = float(cfg['soft_threshold']) * np.abs(loadings).max(
+            axis=0, keepdims=True
+        )
+        loadings = np.sign(loadings) * np.maximum(np.abs(loadings) - tau, 0.0)
+        factors = np.concatenate(
+            [np.zeros((1, scores.shape[1])), np.cumsum(scores, axis=0)], axis=0
+        )
+    elif external_factors is not None:
+        supplied = np.asarray(
+            external_factors.values
+            if hasattr(external_factors, 'values')
+            else external_factors,
+            dtype=float,
+        )
+        if supplied.ndim == 1:
+            supplied = supplied[:, None]
+        scores = np.diff(supplied, axis=0)
+        if scores.shape[0] != X.shape[0]:  # align to the differenced panel
+            scores = scores[-X.shape[0]:] if scores.shape[0] > X.shape[0] else np.pad(
+                scores, ((X.shape[0] - scores.shape[0], 0), (0, 0)), mode='edge'
+            )
+        sd = scores.std(axis=0, keepdims=True)
+        scores = np.divide(scores, sd, out=np.zeros_like(scores), where=sd > 1e-12)
         gram = scores.T @ scores
         loadings = (X_factor.T @ scores) @ np.linalg.pinv(gram)
         tau = float(cfg['soft_threshold']) * np.abs(loadings).max(

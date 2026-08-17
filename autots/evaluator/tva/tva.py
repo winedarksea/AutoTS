@@ -60,7 +60,7 @@ class TVA:
     Args:
         detector_params: Dict passed to TimeSeriesFeatureDetector.
         trend_network: 'v2' (learned directed, default), 'v1' (hierarchical
-            latent), or 'none' — a torch-free mode that forecasts the trend
+            latent), 'factor' (learned latent-factor trend), or 'none'
             with a damped rolling-trend extrapolation while still running
             factor/edge discovery, MinT reconciliation, and residual-sigma
             intervals. 'none' is the Phase-4 kill-rule configuration: fast,
@@ -113,10 +113,18 @@ class TVA:
         prototype_assignment_method: Prototype assignment method for bottleneck
             ('cosine', 'l2', 'linear'). Defaults to 'cosine'.
         prototype_assignment_temperature: Temperature for prototype assignment logits.
+        n_factors: Number of latent factors for trend_network='factor', or
+            'auto' (default) to pick a rank from the smoothed level-panel
+            singular spectrum.
+        factor_knot_spacing: Candidate-knot spacing (steps) of the factor
+            trend-filter basis in 'factor' mode.
+        factor_max_lag: Maximum learned per-series response lag in 'factor'
+            mode. Defaults to 0 (contemporaneous)
+        factor_config: Dict overriding factor_network.DEFAULT_FACTOR_CONFIG.
+        factor_deconfound_edges: Re-run series edge discovery deconfounded
+            against the learned factors ('factor' mode). Off by default
         structure_learning_config: Dict enabling DAG and dynamic hierarchy learning
-            in the V2 trend network. Defaults to enabled with conservative penalties
-            ({'enabled': True, 'learn_hierarchy': True, 'learn_dag': True, ...}).
-            Pass {'enabled': False} to disable.
+            in the V2 trend network.
     """
 
     def __init__(
@@ -153,10 +161,16 @@ class TVA:
         prototype_assignment_method: str = 'cosine',
         prototype_assignment_temperature: float = 1.0,
         structure_learning_config: dict = None,
+        n_factors: int | str = 'auto',
+        factor_knot_spacing: int = 7,
+        factor_max_lag: int = 0,
+        factor_config: dict = None,
+        factor_deconfound_edges: bool = False,
     ):
         if not HAS_TORCH and str(trend_network) != 'none':
             raise ImportError(
-                "TVA requires PyTorch for trend_network 'v1'/'v2'. Install with: "
+                "TVA requires PyTorch for trend_network 'v1'/'v2'/'factor'. "
+                "Install with: "
                 "pip install torch — or use trend_network='none' for the "
                 "torch-free damped-trend + factor-discovery mode."
             )
@@ -188,6 +202,11 @@ class TVA:
         self.prior_construction_config = prior_construction_config
         self.causal_prior_construction_config = causal_prior_construction_config
         self.discovery_config = discovery_config
+        self.n_factors = n_factors
+        self.factor_knot_spacing = factor_knot_spacing
+        self.factor_max_lag = factor_max_lag
+        self.factor_config = factor_config
+        self.factor_deconfound_edges = factor_deconfound_edges
         self.d_token = d_token
         self.n_meso = n_meso
         self.n_global = n_global
@@ -240,6 +259,9 @@ class TVA:
         self._last_sigma = None
         self._discovery = None
         self._reconciliation_method_effective = None
+        self._factor_network = None
+        self._factor_info = None
+        self._factor_scale = None
 
     def fit(self, df: pd.DataFrame) -> 'TVA':
         """Full TVA pipeline: decompose, build priors, train network.
@@ -334,6 +356,12 @@ class TVA:
         # per-series scale: robust std of trend first differences, floored so
         # near-constant trends do not explode when normalized (P1-1)
         self._trend_scale = self._compute_trend_scale(trend_data)
+
+        if self.trend_network_type == 'factor':
+            self._run_structure_discovery()
+            self._fit_factor_network(df)
+            self._setup_reconciliation()
+            return self
 
         # create sliding windows (window-local delta targets, per-series scaled)
         windows, targets = self._create_windows(trend_data)
@@ -711,17 +739,137 @@ class TVA:
 
         return self
 
-    def _run_structure_discovery(self):
-        """Factor and edge discovery (torch-free, Phase 2)."""
-        self._discovery = None
-        discovery_cfg = dict(self.discovery_config or {})
-        discovery_enabled = discovery_cfg.pop('enabled', True)
-        if not discovery_enabled:
-            return
+    def _build_adjusted_panel(self, smooth_window: int = 365) -> np.ndarray:
+        """Level-space panel with the detector's *validated* components removed.
+
+        Args:
+            smooth_window: window of the low-frequency part retained from the
+                high-frequency components. Defaults to a full year (clamped to
+                T // 3) so a yearly seasonal cycle averages to ~zero and is
+                still removed, while multi-year drift is kept.
+
+        Returns:
+            (T, N) float array aligned with the training index and columns.
+        """
+        adjusted = self._df_original.ffill().bfill().astype(float)
+        window = max(int(min(smooth_window, max(len(adjusted) // 3, 1))), 1)
+        for key in ('seasonality', 'holidays', 'anomalies'):
+            comp = self._components.get(key)
+            if comp is None:
+                continue
+            comp = comp.reindex(
+                index=adjusted.index, columns=adjusted.columns
+            ).fillna(0.0)
+            slow = comp.rolling(window, center=True, min_periods=1).mean()
+            adjusted = adjusted - (comp - slow)
+        shifts = self._components.get('level_shifts')
+        if shifts is not None:
+            adjusted = adjusted - shifts.reindex(
+                index=adjusted.index, columns=adjusted.columns
+            ).fillna(0.0)
+        return adjusted.to_numpy(dtype=float)
+
+    def _fit_factor_network(self, df: pd.DataFrame):
+        """Fit the level-space latent-factor trend model ('factor' mode)."""
+        from autots.evaluator.tva.factor_network import (
+            fit_latent_factor_model,
+            robust_level_scale,
+            select_n_factors,
+        )
+
+        adjusted = self._build_adjusted_panel()
+        center, scale = robust_level_scale(adjusted)
+        normalized = (adjusted - center[np.newaxis, :]) / scale[np.newaxis, :]
+        self._factor_scale = {'center': center, 'scale': scale}
+
+        n_factors = self.n_factors
+        if n_factors == 'auto' or n_factors is None:
+            n_factors = select_n_factors(normalized, cap=6)
+            # a discovered rank is a useful second opinion when it is larger
+            if (
+                self._discovery is not None
+                and self._discovery['loadings'].shape[1] > n_factors
+            ):
+                n_factors = min(int(self._discovery['loadings'].shape[1]), 6)
+        n_factors = int(np.clip(int(n_factors), 1, max(len(df.columns), 1)))
+
         if self.verbose:
-            print("TVA: Discovering factor and edge structure...")
+            print(f"TVA: fitting latent-factor trend model (K={n_factors})...")
+        self._factor_network, self._factor_info = fit_latent_factor_model(
+            normalized,
+            n_factors=n_factors,
+            knot_spacing=self.factor_knot_spacing,
+            max_lag=self.factor_max_lag,
+            horizon=self.forecast_horizon,
+            config=self.factor_config,
+            seed=self.random_seed,
+            device=self.device,
+            verbose=max(self.verbose - 1, 0),
+        )
+        self._network = None
+        self._fusion_layer = None
+        self._loss_fn = None
+        if self.factor_deconfound_edges:
+            self._rediscover_edges_with_factors()
+
+    def _rediscover_edges_with_factors(self):
+        """Re-run edge discovery deconfounded against the *learned* factors.
+
+        Series->series edges only mean anything once the shared confounder is
+        removed. Discovery's own factors come from the lag-1 differenced
+        detector trend, where slow factors have poor SNR; the learned
+        level-space paths are a better confounder estimate, so the edge table
+        is rebuilt against them and the learned factors/loadings replace the
+        discovered ones for accessor consistency.
+
+        Measured, and the reason this is opt-in: on a pure-confounder panel
+        (true edge set empty) it drops data-driven edges 70 -> 60, far short of
+        the ~0 target, and on a lag-10 leader/follower panel it halves recall
+        (0.126 -> 0.067). The confounder estimate is better but not good
+        enough to make series-level edges trustworthy.
+        """
+        if self._discovery is None or self._factor_network is None:
+            return
         from autots.evaluator.tva.discovery import discover_structure
 
+        prune = self._factor_info['config']['prune_share']
+        paths = self._factor_network.fitted_factors(prune)
+        discovery_cfg = dict(self.discovery_config or {})
+        discovery_cfg.pop('enabled', None)
+        try:
+            rediscovered = discover_structure(
+                self._components['trend'],
+                anchor_mask=None,
+                series_metadata=self.series_metadata,
+                config=discovery_cfg or None,
+                seed=self.random_seed,
+                extra_adjacencies=self._build_extra_adjacencies() or None,
+                external_factors=paths,
+            )
+        except Exception as exc:
+            warnings.warn(
+                "TVA factor-deconfounded edge discovery failed; keeping the "
+                f"original edge table. {exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return
+        self._discovery['edges'] = rediscovered['edges']
+        self._discovery['adjacency'] = rediscovered['adjacency']
+        self._discovery['family_adjacencies'] = rediscovered['family_adjacencies']
+        self._discovery['factors'] = paths
+        self._discovery['loadings'] = self._factor_network.fitted_loadings(prune)
+        self._discovery['factor_names'] = [
+            f'factor_{i + 1}' for i in range(paths.shape[1])
+        ]
+        self._discovery['communities'] = (
+            np.abs(self._discovery['loadings']).argmax(axis=1).astype(int)
+            if self._discovery['loadings'].size
+            else np.full(len(self._df_original.columns), -1, dtype=int)
+        )
+
+    def _build_extra_adjacencies(self) -> dict:
+        """Event / metadata / business prior adjacencies for edge discovery."""
         extra_adjacencies = {}
         if self._priors is not None:
             structural_config = self._priors._resolve_structural_config()
@@ -744,6 +892,20 @@ class TVA:
             extra_adjacencies['business'] = (
                 causal if business is None else np.maximum(business, causal)
             )
+        return extra_adjacencies
+
+    def _run_structure_discovery(self):
+        """Factor and edge discovery (torch-free, Phase 2)."""
+        self._discovery = None
+        discovery_cfg = dict(self.discovery_config or {})
+        discovery_enabled = discovery_cfg.pop('enabled', True)
+        if not discovery_enabled:
+            return
+        if self.verbose:
+            print("TVA: Discovering factor and edge structure...")
+        from autots.evaluator.tva.discovery import discover_structure
+
+        extra_adjacencies = self._build_extra_adjacencies()
         try:
             self._discovery = discover_structure(
                 self._components['trend'],
@@ -789,6 +951,9 @@ class TVA:
 
         if forecast_length is None:
             forecast_length = self.forecast_horizon
+
+        if self.trend_network_type == 'factor':
+            return self._predict_factor(int(forecast_length))
 
         # torch-free mode: damped rolling-trend extrapolation
         if self._network is None:
@@ -976,6 +1141,68 @@ class TVA:
                     stacklevel=2,
                 )
 
+        return result
+
+    def _predict_factor(self, forecast_length: int) -> pd.DataFrame:
+        """Forecast from the learned latent-factor trend model.
+
+        The factor paths are continued with their calibrated per-factor damping
+        and recombined through each series' loadings and response lag (a series
+        with lag d reads the leaders' already-observed path for its first d
+        steps); the idiosyncratic line is continued with its own damping. The
+        detector's seasonality, holidays and level shifts are added back
+        additively, and sigma combines the model's rolling-origin residual with
+        the decomposition residual in quadrature.
+        """
+        if self._factor_network is None:
+            raise RuntimeError("TVA must be fit before calling predict.")
+
+        with torch.no_grad():
+            normalized_fc = (
+                self._factor_network.forecast(forecast_length).cpu().numpy()
+            )  # (N, H)
+        center = self._factor_scale['center']
+        scale = self._factor_scale['scale']
+        trend_fc = normalized_fc.T * scale[np.newaxis, :] + center[np.newaxis, :]
+
+        forecast_comps = self._decomposer.get_forecast_components(forecast_length)
+        future_index = forecast_comps['trend'].index[:forecast_length]
+        forecast_values = (
+            trend_fc
+            + forecast_comps['seasonality'].values
+            + forecast_comps['holidays'].values
+            + forecast_comps['level_shifts'].values
+        )
+        result = pd.DataFrame(
+            forecast_values, index=future_index, columns=self._df_original.columns
+        )
+
+        model_sigma = np.asarray(self._factor_info['sigma'], dtype=float) * scale
+        resid_sigma = None
+        if hasattr(self._decomposer, 'get_residual_sigma'):
+            resid_sigma = self._decomposer.get_residual_sigma()
+        if resid_sigma is not None:
+            model_sigma = np.sqrt(
+                model_sigma**2 + np.asarray(resid_sigma, dtype=float) ** 2
+            )
+        self._last_sigma = pd.DataFrame(
+            np.tile(model_sigma[np.newaxis, :], (forecast_length, 1)),
+            index=future_index,
+            columns=self._df_original.columns,
+        )
+
+        if (
+            getattr(self, '_reconciliation_method_effective', None)
+            and self._priors is not None
+        ):
+            try:
+                result = self.reconcile(result)
+            except Exception as exc:
+                warnings.warn(
+                    f"TVA reconciliation failed; returning unreconciled forecast. {exc}",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
         return result
 
     def what_if(self, **constraints) -> pd.DataFrame:
@@ -1245,15 +1472,25 @@ class TVA:
 
         Columns: source, target, lag, sign, weight, family, stability,
         delta_mse. Empty DataFrame when discovery was disabled or found
-        nothing.
+        nothing. In trend_network='factor' mode the induced factor -> series
+        bipartite edges (family 'factor') are appended; see get_factor_graph.
         """
         columns = [
             'source', 'target', 'lag', 'sign', 'weight', 'family', 'stability',
             'delta_mse',
         ]
-        if self._discovery is None or not self._discovery.get('edges'):
-            return pd.DataFrame(columns=columns)
-        return pd.DataFrame(self._discovery['edges'])[columns]
+        series_edges = (
+            pd.DataFrame(self._discovery['edges'])[columns]
+            if self._discovery is not None and self._discovery.get('edges')
+            else pd.DataFrame(columns=columns)
+        )
+        factor_edges = self.get_factor_graph()
+        if factor_edges.empty:
+            return series_edges
+        factor_edges = factor_edges.assign(stability=np.nan, delta_mse=np.nan)[columns]
+        if series_edges.empty:
+            return factor_edges.reset_index(drop=True)
+        return pd.concat([series_edges, factor_edges], ignore_index=True)
 
     def get_factors(self) -> dict:
         """Return named composite factors and their sparse signed loadings (W-7).
@@ -1261,8 +1498,12 @@ class TVA:
         Returns:
             Dict with 'factors' (DataFrame, one named column per factor, level
             space, indexed like the training data), 'loadings' (DataFrame,
-            series x factor), and 'factor_names'.
+            series x factor), and 'factor_names'. In trend_network='factor'
+            mode these are the *learned* level-space paths, plus 'lags',
+            'variance_share', 'phi' and 'diag'.
         """
+        if self.trend_network_type == 'factor' and self._factor_network is not None:
+            return self._learned_factor_tables()
         if self._discovery is None:
             return {'factors': None, 'loadings': None, 'factor_names': []}
         names = self._discovery['factor_names']
@@ -1278,6 +1519,65 @@ class TVA:
         return {'factors': factors, 'loadings': loadings, 'factor_names': names}
 
     # ---- internal helpers ----
+
+    def _learned_factor_tables(self) -> dict:
+        """Learned factor paths, loadings, lags and diagnostics ('factor' mode)."""
+        model = self._factor_network
+        prune = self._factor_info['config']['prune_share']
+        paths = model.fitted_factors(prune)
+        loadings = model.fitted_loadings(prune)
+        names = [f'factor_{i + 1}' for i in range(paths.shape[1])]
+        index = self._components['trend'].index if self._components else None
+        series = list(self._df_original.columns)
+        keep = model.live_factors(prune)
+        return {
+            'factors': pd.DataFrame(paths, index=index, columns=names),
+            'loadings': pd.DataFrame(loadings, index=series, columns=names),
+            'factor_names': names,
+            'lags': pd.Series(model.fitted_lags(), index=series, name='lag'),
+            'variance_share': pd.Series(
+                model.variance_share()[keep], index=names, name='variance_share'
+            ),
+            'phi': [self._factor_info['diagnostics']['phi'][i] for i in keep],
+            'diag': self._factor_info['diagnostics'],
+        }
+
+    def get_factor_graph(self) -> pd.DataFrame:
+        """Induced factor -> series bipartite graph ('factor' mode).
+
+        One row per (factor, series) pair with a non-negligible loading, giving
+        the signed loading weight and the series' learned response lag. This is
+        the structure the latent-factor mode actually uses to forecast, as
+        opposed to the series->series edges from discovery.
+
+        Returns:
+            DataFrame with columns source, target, lag, sign, weight, family.
+            Empty when not in 'factor' mode or not fitted.
+        """
+        columns = ['source', 'target', 'lag', 'sign', 'weight', 'family']
+        if self.trend_network_type != 'factor' or self._factor_network is None:
+            return pd.DataFrame(columns=columns)
+        tables = self._learned_factor_tables()
+        loadings = tables['loadings']
+        lags = tables['lags']
+        threshold = 0.05 * float(np.abs(loadings.values).max() or 1.0)
+        rows = []
+        for factor in loadings.columns:
+            for series, weight in loadings[factor].items():
+                if abs(weight) < threshold:
+                    continue
+                rows.append(
+                    {
+                        'source': factor,
+                        'target': series,
+                        'lag': int(lags[series]),
+                        'sign': 1 if weight >= 0 else -1,
+                        'weight': float(weight),
+                        'family': 'factor',
+                    }
+                )
+        rows.sort(key=lambda r: (r['source'], -abs(r['weight'])))
+        return pd.DataFrame(rows, columns=columns)
 
     def _build_network_discovery_inputs(self) -> Optional[dict]:
         """Convert the named discovery result into network-ready buffers."""

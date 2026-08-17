@@ -25,7 +25,11 @@ class TVAModel(ModelObject):
         frequency: String alias of datetime index frequency or 'infer'.
         prediction_interval: Confidence interval for probabilistic forecast.
         forecast_length: Number of periods to forecast (sets TVA forecast_horizon).
-        trend_network: 'v2' (learned directed graph, default), 'v1'
+        n_factors: latent factors for trend_network='factor' ('auto' default).
+        factor_knot_spacing: trend-filter knot spacing in 'factor' mode.
+        factor_max_lag: max learned response lag in 'factor' mode (0 = off).
+        trend_network: 'v2' (learned directed graph, default), 'factor'
+            (learned latent-factor trend), 'v1'
             (hierarchical latent), or 'none' (torch-free damped rolling trend
             + factor/edge discovery + MinT + residual-sigma intervals).
         fusion: 'attention' (DigitalTwinFusion) or 'additive' (AdditiveFusion).
@@ -61,6 +65,9 @@ class TVAModel(ModelObject):
         forecast_length: int = 28,
         trend_network: str = "v2",
         fusion: str = "attention",
+        n_factors="auto",
+        factor_knot_spacing: int = 7,
+        factor_max_lag: int = 0,
         d_token: int = 32,
         n_meso="auto",
         n_global="auto",
@@ -99,6 +106,9 @@ class TVAModel(ModelObject):
         self.forecast_length = forecast_length
         self.trend_network = trend_network
         self.fusion = fusion
+        self.n_factors = n_factors
+        self.factor_knot_spacing = factor_knot_spacing
+        self.factor_max_lag = factor_max_lag
         self.d_token = d_token
         self.n_meso = n_meso
         self.n_global = n_global
@@ -166,6 +176,9 @@ class TVAModel(ModelObject):
             detector_params=self.detector_params,
             trend_network=self.trend_network,
             fusion=self.fusion,
+            n_factors=self.n_factors,
+            factor_knot_spacing=self.factor_knot_spacing,
+            factor_max_lag=self.factor_max_lag,
             d_token=self.d_token,
             n_meso=self.n_meso,
             n_global=self.n_global,
@@ -299,6 +312,9 @@ class TVAModel(ModelObject):
         return {
             "trend_network": self.trend_network,
             "fusion": self.fusion,
+            "n_factors": self.n_factors,
+            "factor_knot_spacing": self.factor_knot_spacing,
+            "factor_max_lag": self.factor_max_lag,
             "d_token": self.d_token,
             "n_meso": self.n_meso,
             "n_global": self.n_global,
@@ -333,8 +349,16 @@ class TVAModel(ModelObject):
         # ablation showed it matches the full network on synthetic panels, so
         # it gets real sampling weight
         trend_network = random.choices(
-            ["v2", "none", "v1"], weights=[0.55, 0.3, 0.15]
+            ["v2", "none", "factor", "v1"], weights=[0.35, 0.25, 0.3, 0.1]
         )[0]
+        # only sampled meaningfully in 'factor' mode; harmless elsewhere
+        n_factors = random.choices(
+            ["auto", 1, 2, 3, 4, 6], weights=[0.5, 0.05, 0.1, 0.15, 0.1, 0.1]
+        )[0]
+        factor_knot_spacing = random.choices(
+            [7, 14, 28], weights=[0.6, 0.25, 0.15]
+        )[0]
+        factor_max_lag = random.choices([0, 7, 14], weights=[0.8, 0.1, 0.1])[0]
         fusion = random.choices(
             ["attention", "additive", "direct"], weights=[0.35, 0.45, 0.15]
         )[0]
@@ -459,6 +483,9 @@ class TVAModel(ModelObject):
         return {
             "trend_network": trend_network,
             "fusion": fusion,
+            "n_factors": n_factors,
+            "factor_knot_spacing": factor_knot_spacing,
+            "factor_max_lag": factor_max_lag,
             "d_token": d_token,
             "n_meso": n_meso,
             "n_global": n_global,
