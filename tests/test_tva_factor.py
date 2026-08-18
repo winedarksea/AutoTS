@@ -7,8 +7,12 @@ suite. Everything that needs torch is skipped when torch is unavailable.
 """
 
 import unittest
+import warnings
+
 import numpy as np
 import pandas as pd
+
+from autots.evaluator.tva import factor_network
 
 from autots.evaluator.tva.discovery import match_factors
 from autots.evaluator.tva.factor_network import (
@@ -359,3 +363,439 @@ class TestSearchIntegration(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestRotateIdentification(unittest.TestCase):
+    """C1: resolving the rotational indeterminacy of the identification basis.
+
+    The load-bearing property is that a rotation is a *re-parameterization*:
+    ``factors @ loadings.T`` must survive it bit-for-bit-ish, so accuracy and
+    every span metric are invariant and only basis-dependent structure moves.
+    """
+
+    @staticmethod
+    def _panel(seed=0, n_per=8, K=3, T=400):
+        """Simple-structure latent-factor panel: each series loads one factor."""
+        rng = np.random.default_rng(seed)
+        factors = np.cumsum(rng.normal(size=(T, K)), axis=0)
+        n = n_per * K
+        loadings = np.zeros((n, K))
+        for i in range(n):
+            sign = 1.0 if (i % 3) else -1.0
+            loadings[i, i // n_per] = sign * (0.5 + rng.random())
+        values = factors @ loadings.T + 0.05 * rng.normal(size=(T, n))
+        return values, factors, loadings
+
+    def _ident(self, seed=0, K=3):
+        values, factors, loadings = self._panel(seed=seed, K=K)
+        ident = factor_network.estimate_factors_alternating(values, n_factors=K)
+        return ident, loadings
+
+    def test_reconstruction_is_invariant(self):
+        for method in ('varimax', 'quartimax', 'promax'):
+            ident, _ = self._ident()
+            rotated = factor_network.rotate_identification(ident, method=method)
+            before = ident['factors'] @ ident['loadings'].T
+            after = rotated['factors'] @ rotated['loadings'].T
+            self.assertLess(
+                np.abs(before - after).max(), 1e-8,
+                f'{method} changed the reconstruction',
+            )
+
+    def test_coefs_still_generate_the_rotated_factors(self):
+        # the torch model is initialized from coefs, not factors: if the two
+        # disagree the rotation silently doesn't reach the fitted model
+        ident, _ = self._ident()
+        rotated = factor_network.rotate_identification(ident, method='varimax')
+        # _l1_trend_filter returns column-centered paths, so the invariant is
+        # up to that centering -- which the rotation preserves because
+        # centering is linear and the same map is applied to both objects.
+        regenerated = rotated['design'] @ rotated['coefs']
+        regenerated = regenerated - regenerated.mean(axis=0, keepdims=True)
+        self.assertLess(
+            np.abs(regenerated - rotated['factors']).max(), 1e-6
+        )
+
+    def test_unit_std_increments(self):
+        ident, _ = self._ident()
+        rotated = factor_network.rotate_identification(ident, method='varimax')
+        sd = np.std(np.diff(rotated['factors'], axis=0), axis=0)
+        np.testing.assert_allclose(sd, np.ones_like(sd), atol=1e-8)
+
+    def test_mass_vote_orientation_is_baked_in(self):
+        ident, _ = self._ident()
+        rotated = factor_network.rotate_identification(ident, method='varimax')
+        lam = rotated['loadings']
+        mass = (lam * np.abs(lam)).sum(axis=0)
+        self.assertTrue(np.all(mass >= 0), 'columns left with negative mass')
+
+    def test_matched_loading_correlation_improves(self):
+        from autots.evaluator.tva.metrics import loading_structure_score
+
+        gains = []
+        for seed in (0, 1, 2):
+            ident, true_loadings = self._ident(seed=seed)
+            rotated = factor_network.rotate_identification(ident, method='varimax')
+            base = loading_structure_score(true_loadings, ident['loadings'])
+            rot = loading_structure_score(true_loadings, rotated['loadings'])
+            gains.append(
+                abs(rot['matched_loading_corr']) - abs(base['matched_loading_corr'])
+            )
+            self.assertGreater(rot['dominant_recovery'], 0.9)
+        self.assertGreater(float(np.mean(gains)), 0.0)
+
+    def test_unknown_method_and_degenerate_inputs_pass_through(self):
+        ident, _ = self._ident()
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            self.assertIs(
+                factor_network.rotate_identification(ident, method='nope'), ident
+            )
+        self.assertIs(factor_network.rotate_identification(ident, method=None), ident)
+        self.assertIs(factor_network.rotate_identification(None, 'varimax'), None)
+        single = factor_network.estimate_factors_alternating(
+            self._panel(K=1)[0], n_factors=1
+        )
+        rotated = factor_network.rotate_identification(single, method='varimax')
+        self.assertEqual(rotated['loadings'].shape, single['loadings'].shape)
+
+    @unittest.skipUnless(factor_network.HAS_TORCH, 'torch required')
+    def test_rotate_none_is_bitwise_identical_to_today(self):
+        values, _, _ = self._panel(seed=3)
+        kwargs = dict(n_factors=3, horizon=28, seed=11)
+        model_a, _ = factor_network.fit_latent_factor_model(values, **kwargs)
+        model_b, _ = factor_network.fit_latent_factor_model(
+            values, config={'rotate': None}, **kwargs
+        )
+        np.testing.assert_array_equal(
+            model_a.fitted_loadings(), model_b.fitted_loadings()
+        )
+
+    @unittest.skipUnless(factor_network.HAS_TORCH, 'torch required')
+    def test_rotation_reaches_the_fitted_model(self):
+        """The rotated basis must survive stage A into ``fitted_loadings``.
+
+        Stage A refines loadings by gradient descent from the rotated
+        initialization; if the rotation were applied after the parameter copy
+        (or washed out by the refinement) the graph would still be built on
+        the arbitrary basis.
+        """
+        values, _, _ = self._panel(seed=3)
+        kwargs = dict(n_factors=3, horizon=28, seed=11)
+        model_a, _ = factor_network.fit_latent_factor_model(values, **kwargs)
+        model_b, info_b = factor_network.fit_latent_factor_model(
+            values, config={'rotate': 'varimax'}, **kwargs
+        )
+        # raw parameters, not fitted_loadings(): pruning can drop a different
+        # number of columns in each basis, which is a genuine consequence of
+        # the rotation but makes the shapes incomparable here
+        lam_a = model_a.loadings.detach().cpu().numpy()
+        lam_b = model_b.loadings.detach().cpu().numpy()
+        self.assertGreater(np.abs(lam_a - lam_b).max(), 1e-4)
+        # and it is the *identification's* rotated basis that came through
+        np.testing.assert_allclose(
+            lam_b, info_b['identification']['loadings'], atol=0.2
+        )
+
+    @unittest.skipUnless(factor_network.HAS_TORCH, 'torch required')
+    def test_rotation_is_exact_at_model_initialization(self):
+        """Where the invariance MUST be exact: the parameter copy.
+
+        The rotation is applied between identification and the copy into the
+        torch model, so a freshly-initialized model must reconstruct
+        identically in either basis (to float32). Anything larger here is an
+        algebra bug, not a fit difference.
+        """
+        import torch
+
+        values, _, _ = self._panel(seed=3)
+        ident = factor_network.estimate_factors_alternating(values, n_factors=3)
+        rotated = factor_network.rotate_identification(ident, method='varimax')
+        T, N = values.shape
+
+        def initialized(source):
+            model = factor_network.LatentFactorTrend(
+                n_series=N, n_time=T, n_factors=3, knot_spacing=7,
+                max_lag=14, slope_window=90,
+            )
+            with torch.no_grad():
+                model.coef.copy_(torch.tensor(source['coefs'], dtype=torch.float32))
+                model.loadings.copy_(
+                    torch.tensor(source['loadings'], dtype=torch.float32)
+                )
+                model.idio_level.copy_(
+                    torch.tensor(values.mean(axis=0), dtype=torch.float32)
+                )
+                return model().cpu().numpy()
+
+        a, b = initialized(ident), initialized(rotated)
+        rel = np.sqrt(np.mean((a - b) ** 2)) / max(np.sqrt(np.mean(a ** 2)), 1e-9)
+        self.assertLess(rel, 1e-5)
+
+    @unittest.skipUnless(factor_network.HAS_TORCH, 'torch required')
+    def test_reconstruction_drift_through_stage_a_stays_bounded(self):
+        """After stage A the two bases may differ, but only slightly.
+
+        Stage A descends from a different starting point under
+        basis-dependent regularizers (``w_l1_loadings`` finally has sparse
+        structure to preserve rather than fight) and can early-stop at a
+        different step, so exact equality is not the claim. Boundedness is:
+        a large drift here would mean the rotation changed what the model
+        can represent, not merely how it is parameterized.
+        """
+        import torch
+
+        values, _, _ = self._panel(seed=3)
+        kwargs = dict(n_factors=3, horizon=28, seed=11)
+        model_a, _ = factor_network.fit_latent_factor_model(values, **kwargs)
+        model_b, _ = factor_network.fit_latent_factor_model(
+            values, config={'rotate': 'varimax'}, **kwargs
+        )
+        with torch.no_grad():
+            recon_a = model_a().cpu().numpy()
+            recon_b = model_b().cpu().numpy()
+        rel = np.sqrt(np.mean((recon_a - recon_b) ** 2)) / max(
+            np.sqrt(np.mean(recon_a ** 2)), 1e-9
+        )
+        self.assertLess(rel, 0.10)
+
+
+class TestSparseLoadingSolve(unittest.TestCase):
+    """C3: an l1 loading solve as the identifying restriction lstsq lacks.
+
+    Least squares is rotation-invariant, so it cannot prefer the true
+    simple-structure loadings over any rotation of them. An l1 penalty can.
+    """
+
+    @staticmethod
+    def _panel(seed=0, n_per=4, K=3, T=300, noise=0.05):
+        rng = np.random.default_rng(seed)
+        factors = np.cumsum(rng.normal(size=(T, K)), axis=0)
+        n = n_per * K
+        loadings = np.zeros((n, K))
+        for i in range(n):
+            loadings[i, i // n_per] = (1.0 if (i % 3) else -1.0) * (1.0 + rng.random())
+        values = factors @ loadings.T + noise * rng.normal(size=(T, n))
+        return values, loadings
+
+    def test_l1_zero_is_bit_identical_to_lstsq(self):
+        values, _ = self._panel()
+        base = factor_network.estimate_factors_alternating(values, 3)
+        same = factor_network.estimate_factors_alternating(
+            values, 3, loading_l1=0.0
+        )
+        np.testing.assert_array_equal(base['loadings'], same['loadings'])
+        np.testing.assert_array_equal(base['factors'], same['factors'])
+
+    def test_fit_loadings_matches_lstsq_at_zero_penalty(self):
+        rng = np.random.default_rng(1)
+        F = rng.normal(size=(120, 3))
+        Y = rng.normal(size=(120, 7))
+        expected, *_ = np.linalg.lstsq(F, Y, rcond=None)
+        np.testing.assert_array_equal(
+            factor_network._fit_loadings(F, Y, l1=0.0), expected
+        )
+
+    def test_penalty_produces_exact_zeros(self):
+        values, _ = self._panel()
+        base = factor_network.estimate_factors_alternating(values, 3)
+        sparse = factor_network.estimate_factors_alternating(
+            values, 3, loading_l1=0.1
+        )
+        self.assertEqual(float((np.abs(base['loadings']) == 0).mean()), 0.0)
+        self.assertGreater(float((np.abs(sparse['loadings']) == 0).mean()), 0.1)
+
+    def test_final_solve_does_not_erase_the_sparsity(self):
+        # the post-normalization solve at the end of the estimator is a dense
+        # lstsq unless it too goes through _fit_loadings
+        values, _ = self._panel()
+        sparse = factor_network.estimate_factors_alternating(
+            values, 3, loading_l1=0.1
+        )
+        self.assertGreater(float((np.abs(sparse['loadings']) == 0).mean()), 0.0)
+
+    def test_relaxed_refit_is_unbiased_on_the_support(self):
+        rng = np.random.default_rng(2)
+        F = rng.normal(size=(400, 3))
+        true = np.array([[3.0], [0.0], [0.0]])
+        Y = F @ true + 0.01 * rng.normal(size=(400, 1))
+        relaxed = factor_network._fit_loadings(F, Y, l1=0.05, relax=True)
+        shrunk = factor_network._fit_loadings(F, Y, l1=0.05, relax=False)
+        self.assertLess(abs(relaxed[0, 0] - 3.0), abs(shrunk[0, 0] - 3.0))
+        self.assertEqual(relaxed[1, 0], 0.0)
+        self.assertEqual(relaxed[2, 0], 0.0)
+
+    def test_constant_series_gets_no_loading(self):
+        rng = np.random.default_rng(4)
+        F = rng.normal(size=(100, 2))
+        Y = np.hstack([F @ np.array([[2.0], [0.0]]), np.zeros((100, 1))])
+        out = factor_network._fit_loadings(F, Y, l1=0.05)
+        np.testing.assert_array_equal(out[:, 1], np.zeros(2))
+
+    @unittest.skipUnless(factor_network.HAS_TORCH, 'torch required')
+    def test_prox_defaults_off_and_preserves_zeros_when_on(self):
+        values, _ = self._panel()
+        kwargs = dict(n_factors=3, horizon=28, seed=5)
+        model_off, _ = factor_network.fit_latent_factor_model(
+            values, config={'loading_l1': 0.1}, **kwargs
+        )
+        model_on, _ = factor_network.fit_latent_factor_model(
+            values, config={'loading_l1': 0.1, 'w_prox_loadings': 1.0}, **kwargs
+        )
+        # threshold is w_prox_loadings * lr_aux per step, against loadings of
+        # order 0.3 on a normalized panel -- so the useful range is ~O(1),
+        # not the ~1e-3 the loading-magnitude-naive guess suggests
+        zeros_off = float((model_off.loadings.detach().numpy() == 0).mean())
+        zeros_on = float((model_on.loadings.detach().numpy() == 0).mean())
+        self.assertGreater(zeros_on, zeros_off)
+
+    @unittest.skipUnless(factor_network.HAS_TORCH, 'torch required')
+    def test_prox_zero_is_identical_to_today(self):
+        values, _ = self._panel()
+        kwargs = dict(n_factors=3, horizon=28, seed=5)
+        a, _ = factor_network.fit_latent_factor_model(values, **kwargs)
+        b, _ = factor_network.fit_latent_factor_model(
+            values, config={'w_prox_loadings': 0.0}, **kwargs
+        )
+        np.testing.assert_array_equal(
+            a.loadings.detach().numpy(), b.loadings.detach().numpy()
+        )
+
+
+class TestSplitHalfFactorStability(unittest.TestCase):
+    """C4: which *columns* are shared structure, not just whether any are."""
+
+    @staticmethod
+    def _panel(seed=0, n_per=8, K=3, T=400):
+        rng = np.random.default_rng(seed)
+        factors = np.cumsum(rng.normal(size=(T, K)), axis=0)
+        n = n_per * K
+        loadings = np.zeros((n, K))
+        for i in range(n):
+            loadings[i, i // n_per] = 1.0 + rng.random()
+        return factors @ loadings.T + 0.05 * rng.normal(size=(T, n))
+
+    def test_real_factors_score_high(self):
+        out = factor_network.split_half_factor_stability(self._panel(), 3)
+        self.assertEqual(out.shape, (3,))
+        self.assertGreater(float(np.min(out)), 0.8)
+
+    def test_overspecified_rank_lowers_the_weakest_columns(self):
+        real = factor_network.split_half_factor_stability(self._panel(), 3)
+        over = factor_network.split_half_factor_stability(self._panel(), 6)
+        self.assertEqual(over.shape, (6,))
+        self.assertLess(float(np.min(over)), float(np.min(real)))
+
+    def test_degenerate_panels_return_nan_not_an_exception(self):
+        out = factor_network.split_half_factor_stability(
+            np.zeros((50, 2)), 2
+        )
+        self.assertEqual(out.shape, (2,))
+        self.assertTrue(np.all(np.isnan(out)))
+
+    def test_is_deterministic_for_a_seed(self):
+        panel = self._panel()
+        a = factor_network.split_half_factor_stability(panel, 3, seed=9)
+        b = factor_network.split_half_factor_stability(panel, 3, seed=9)
+        np.testing.assert_array_equal(a, b)
+
+    @unittest.skipUnless(factor_network.HAS_TORCH, 'torch required')
+    def test_reps_zero_leaves_info_key_none(self):
+        values = self._panel()
+        _, info = factor_network.fit_latent_factor_model(
+            values, n_factors=3, horizon=28, seed=5
+        )
+        self.assertIsNone(info['factor_stability'])
+        _, info_on = factor_network.fit_latent_factor_model(
+            values, n_factors=3, horizon=28, seed=5,
+            config={'factor_stability_reps': 2},
+        )
+        self.assertEqual(np.asarray(info_on['factor_stability']).shape, (3,))
+
+
+@unittest.skipUnless(factor_network.HAS_TORCH, 'torch required')
+class TestStructureLadderKnobsThroughTVA(unittest.TestCase):
+    """Every ladder knob must be reachable from ``TVA(factor_config=...)``
+    and must default to today's behavior.
+
+    The ladder's whole discipline is that each candidate is independently
+    killable by flipping one config value back, which only holds if the knob
+    actually travels from the constructor to the estimator.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        rng = np.random.default_rng(0)
+        T, K, n_per = 500, 3, 5
+        factors = np.cumsum(rng.normal(size=(T, K)), axis=0)
+        n = n_per * K
+        loadings = np.zeros((n, K))
+        for i in range(n):
+            loadings[i, i // n_per] = (1.0 if (i % 3) else -1.0) * (1.0 + rng.random())
+        values = 100.0 + factors @ loadings.T + 0.5 * rng.normal(size=(T, n))
+        cls.df = pd.DataFrame(
+            values,
+            index=pd.date_range('2021-01-01', periods=T, freq='D'),
+            columns=[f's{i}' for i in range(n)],
+        )
+
+    def _fit(self, factor_config=None, coherence_config=None):
+        model = TVA(
+            trend_network='factor', forecast_horizon=14, random_seed=42,
+            verbose=0, factor_config=factor_config,
+            coherence_config=coherence_config,
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            model.fit(self.df)
+        return model
+
+    def test_all_new_knobs_default_to_current_behavior(self):
+        base = self._fit()
+        inert = self._fit({
+            'rotate': None,
+            'rotate_kaiser': True,
+            'loading_l1': 0.0,
+            'w_prox_loadings': 0.0,
+            'factor_stability_reps': 0,
+            'structure_input': None,
+        })
+        np.testing.assert_array_equal(
+            base._factor_network.fitted_loadings(),
+            inert._factor_network.fitted_loadings(),
+        )
+
+    def test_rotate_changes_the_basis_but_not_the_forecast_much(self):
+        base, rotated = self._fit(), self._fit({'rotate': 'varimax'})
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            fa = base.predict(14)
+            fb = rotated.predict(14)
+        self.assertGreater(
+            np.abs(
+                base._factor_network.loadings.detach().numpy()
+                - rotated._factor_network.loadings.detach().numpy()
+            ).max(), 1e-4,
+        )
+        rel = np.abs(fa.values - fb.values).mean() / max(
+            np.abs(fa.values).mean(), 1e-9
+        )
+        self.assertLess(rel, 0.05)
+
+    def test_structure_input_leaves_the_forecast_untouched(self):
+        base = self._fit()
+        two_track = self._fit({'structure_input': 'robust'})
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            fa = base.predict(14)
+            fb = two_track.predict(14)
+        # by construction: the second fit only produces a loading matrix
+        np.testing.assert_allclose(fa.values, fb.values, rtol=1e-6, atol=1e-6)
+
+    def test_factor_stability_lands_in_info(self):
+        model = self._fit({'factor_stability_reps': 2})
+        stability = model._factor_info['factor_stability']
+        self.assertIsNotNone(stability)
+        self.assertEqual(
+            np.asarray(stability).shape[0], model._factor_network.K
+        )

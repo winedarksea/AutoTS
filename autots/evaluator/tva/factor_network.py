@@ -36,6 +36,23 @@ DEFAULT_FACTOR_CONFIG = {
     'w_lag_entropy': 1e-3,
     'w_l1_loadings': 1e-4,
     'w_prox': 1e-4,
+    # ---- C1: identification-basis rotation (default off) -------------------
+    # None | 'varimax' | 'quartimax' | 'promax'. Resolves the rotational
+    # indeterminacy the alternating estimator leaves open; reconstruction (and
+    # therefore accuracy) is invariant, only the basis changes.
+    'rotate': None,
+    'rotate_kaiser': True,
+    # ---- C3: sparse loading solve (default off; 0.0 == today's lstsq) ------
+    'loading_l1': 0.0,
+    'loading_l1_adaptive': True,
+    'loading_relax': True,
+    # proximal soft-threshold on model.loadings after each stage-A step,
+    # without which 600 Adam steps wash the identified zeros back out
+    'w_prox_loadings': 0.0,
+    # ---- C4: per-factor split-half stability (0 == not computed) ----------
+    # Feeds coherence.resolve_signs' long-dead `stability` argument, so a
+    # factor nobody can reproduce cannot partition the panel.
+    'factor_stability_reps': 0,
     # extrapolation (stage B)
     'stage_b_steps': 200,
     'lr_phi': 1e-2,
@@ -239,6 +256,68 @@ def select_n_factors(values: np.ndarray, cap: int = 6, window: int = 181) -> int
     return int(np.clip(int(np.argmax(ratios[:cap])) + 1, 1, cap))
 
 
+def _fit_loadings(factors: np.ndarray, yc: np.ndarray, l1: float = 0.0,
+                  adaptive: bool = True, relax: bool = True) -> np.ndarray:
+    """Solve the loading matrix given fixed factor paths. Returns (K, N).
+
+    ``l1 == 0`` is the plain least-squares solve the alternating estimator has
+    always used, returned bit-identically so the sparse path is opt-in.
+
+    ``l1 > 0`` fits a per-series lasso instead. This is the identifying
+    restriction that least squares cannot express: lstsq is rotation-invariant,
+    so it is equally happy with the true simple-structure loadings and with any
+    rotation of them, whereas an l1 penalty prefers the sparse one. Two
+    refinements make the penalty pay for structure rather than for shrinkage:
+
+    * ``adaptive`` re-weights each coefficient's penalty by ``1/|lstsq est|``,
+      so an already-large loading is barely penalized and a near-zero one is
+      pushed to exactly zero (plain lasso would shrink the big ones most, which
+      is where the signal is);
+    * ``relax`` refits unpenalized least squares on the selected support, so
+      surviving coefficients are unbiased and only *selection* came from the
+      penalty.
+
+    The target column is standardized before the fit and rescaled after, so
+    ``l1`` is a scale-free sparsity knob rather than something retuned per
+    panel.
+    """
+    base, *_ = np.linalg.lstsq(factors, yc, rcond=None)  # (K, N)
+    if not l1 or float(l1) <= 0:
+        return base
+    from sklearn.linear_model import Lasso
+
+    K, N = base.shape
+    eps = 1e-6
+    out = np.zeros_like(base)
+    for j in range(N):
+        target = yc[:, j]
+        sd = float(np.std(target))
+        if not np.isfinite(sd) or sd <= 1e-12:
+            continue  # constant series: no loading is identified
+        col = base[:, j]
+        if adaptive:
+            penalty_w = 1.0 / (np.abs(col) + eps)
+        else:
+            penalty_w = np.ones(K)
+        # penalizing |b_k * w_k| is the same as an unweighted lasso on
+        # columns scaled by 1 / w_k
+        design = factors / penalty_w[None, :]
+        model = Lasso(alpha=float(l1), max_iter=5000, tol=1e-5)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            model.fit(design, target / sd)
+        coef = (model.coef_ / penalty_w) * sd
+        support = np.abs(coef) > 0
+        if not support.any():
+            continue  # the lasso's honest answer: this series loads nothing
+        if relax:
+            refit, *_ = np.linalg.lstsq(factors[:, support], target, rcond=None)
+            coef = np.zeros(K)
+            coef[support] = refit
+        out[:, j] = coef
+    return out
+
+
 def estimate_factors_alternating(
     values: np.ndarray,
     n_factors: int,
@@ -247,16 +326,28 @@ def estimate_factors_alternating(
     iters: int = 6,
     init_window: int = 91,
     gls: bool = True,
+    loading_l1: float = 0.0,
+    loading_l1_adaptive: bool = True,
+    loading_relax: bool = True,
 ):
     """Identify latent factor paths and loadings by alternating GLS/l1-TF.
 
     Torch-free. This is the stage that actually finds the factors; the torch
     model refines around it.
 
+    ``loading_l1 > 0`` swaps every loading solve for the sparse solve in
+    :func:`_fit_loadings` — including the final one, which would otherwise
+    overwrite the sparse structure the loop just found.
+
     Returns:
         dict with 'factors' (T, K), 'loadings' (N, K), 'coefs' (P, K),
         'design' (T, P), 'weights' (N,).
     """
+    def solve(F, Y):
+        return _fit_loadings(
+            F, Y, l1=loading_l1, adaptive=loading_l1_adaptive, relax=loading_relax
+        )
+
     arr = np.asarray(values, dtype=float)
     T, N = arr.shape
     K = int(max(1, min(int(n_factors), N)))
@@ -277,7 +368,7 @@ def estimate_factors_alternating(
     coefs = np.zeros((design.shape[1], K))
     loadings = np.zeros((K, N))
     for _ in range(max(int(iters), 1)):
-        loadings, *_ = np.linalg.lstsq(factors, yc, rcond=None)  # (K, N)
+        loadings = solve(factors, yc)  # (K, N)
         lw = loadings * weights[None, :]
         scores = (yc * weights[None, :]) @ np.linalg.pinv(lw)  # (T, K)
         factors, coefs = _l1_trend_filter(scores, design, alpha)
@@ -288,7 +379,7 @@ def estimate_factors_alternating(
         factors = factors / sd[None, :]
         coefs = coefs / sd[None, :]
         if gls:
-            loadings, *_ = np.linalg.lstsq(factors, yc, rcond=None)
+            loadings = solve(factors, yc)
             resid = yc - factors @ loadings
             hf = np.diff(resid, axis=0).std(axis=0) / np.sqrt(2.0)
             weights = 1.0 / np.maximum(hf, 1e-6)
@@ -298,7 +389,7 @@ def estimate_factors_alternating(
     sd[~np.isfinite(sd) | (sd <= 0)] = 1.0
     factors = factors / sd[None, :]
     coefs = coefs / sd[None, :]
-    loadings, *_ = np.linalg.lstsq(factors, yc, rcond=None)
+    loadings = solve(factors, yc)
     return {
         'factors': factors,
         'loadings': loadings.T,
@@ -306,6 +397,140 @@ def estimate_factors_alternating(
         'design': design,
         'weights': weights,
     }
+
+
+def _kaiser_normalize(lam: np.ndarray):
+    """Row-normalize loadings to unit length for rotation; return (L, norms).
+
+    Kaiser weighting stops high-communality series (large loading vectors)
+    from dominating the varimax criterion, so a rotation is chosen for the
+    structure of the panel rather than for its loudest few members.
+    """
+    norms = np.sqrt(np.sum(lam ** 2, axis=1))
+    norms = np.where(np.isfinite(norms) & (norms > 1e-12), norms, 1.0)
+    return lam / norms[:, None], norms
+
+
+def _promax_rotation(lam_varimax: np.ndarray, power: int = 4) -> np.ndarray:
+    """Oblique promax rotation matrix, applied *after* varimax.
+
+    Chases simple structure harder than varimax can by allowing correlated
+    factors. That correlation is the price: increments of the rotated factors
+    are no longer decorrelated. Offered as the fallback when the orthogonal
+    rotation leaves too much cross-loading, not as a default.
+    """
+    target = np.abs(lam_varimax) ** (power - 1) * lam_varimax
+    Q, *_ = np.linalg.lstsq(lam_varimax, target, rcond=None)
+    inv = np.linalg.inv(Q.T @ Q)
+    scale = np.sqrt(np.abs(np.diag(inv)))
+    scale = np.where(np.isfinite(scale) & (scale > 1e-12), scale, 1.0)
+    return Q * scale[None, :]
+
+
+def rotate_identification(ident: dict, method: str = 'varimax',
+                          kaiser: bool = True) -> dict:
+    """Re-express an identification result in a simple-structure basis.
+
+    Nothing upstream breaks the factor model's rotational indeterminacy: the
+    SVD initialization picks an arbitrary orthogonal basis and every loading
+    solve is rotation-invariant lstsq, so the fit recovers the factor *span*
+    but lands on a rotation of the true basis within it. Since generator (and,
+    by assumption, real) loadings are simple-structure -- each series
+    predominantly loading one factor -- rotating toward simple structure is
+    the identifying restriction that was missing.
+
+    The reconstruction ``factors @ loadings.T`` is preserved exactly (to
+    floating point), so this is a re-parameterization, not a refit: canonical
+    correlation, subspace recovery and forecast accuracy are all invariant to
+    it. Only basis-dependent quantities -- which series loads which factor,
+    and with what sign -- change, which is precisely what the coherence graph
+    reads.
+
+    Three transforms are composed:
+
+    1. the rotation itself (``R`` from :func:`discovery._varimax`, or its
+       promax extension), applied as ``L @ R`` with the counter-transform
+       ``F @ inv(R).T`` so the product is unchanged;
+    2. re-normalization to unit-std factor increments, matching the
+       convention :func:`estimate_factors_alternating` exits on (a rotation
+       mixes columns of differing scale, so this is not a no-op);
+    3. a mass-vote sign orientation per factor -- the same rule
+       ``coherence.resolve_signs`` uses -- baked into the parameters, so the
+       model itself is oriented rather than re-oriented at graph-build time.
+
+    Args:
+        ident: the dict returned by :func:`estimate_factors_alternating`.
+        method: ``'varimax'`` | ``'quartimax'`` | ``'promax'``.
+        kaiser: row-normalize loadings before computing the rotation.
+
+    Returns:
+        A new dict with rotated ``factors``, ``loadings`` and ``coefs``
+        (``design``/``weights`` passed through). Returns ``ident`` unchanged
+        on any numerical failure or unknown method -- never raises, since a
+        rotation failure must degrade to today's behavior, not kill a fit.
+    """
+    if not ident or not method:
+        return ident
+    method = str(method).lower()
+    if method not in ('varimax', 'quartimax', 'promax'):
+        warnings.warn(f"unknown rotate method {method!r}; leaving basis as-is")
+        return ident
+    try:
+        from autots.evaluator.tva.discovery import _varimax
+
+        factors = np.asarray(ident['factors'], dtype=float)
+        loadings = np.asarray(ident['loadings'], dtype=float)  # (N, K)
+        coefs = np.asarray(ident['coefs'], dtype=float)        # (P, K)
+        K = loadings.shape[1]
+        if K < 2 or factors.size == 0 or loadings.size == 0:
+            R = np.eye(max(K, 0))
+        else:
+            basis = loadings
+            if kaiser:
+                basis, _ = _kaiser_normalize(loadings)
+            gamma = 0.0 if method == 'quartimax' else 1.0
+            R = _varimax(np.nan_to_num(basis), gamma=gamma)
+            if method == 'promax':
+                R = R @ _promax_rotation(np.nan_to_num(basis) @ R)
+
+        loadings_r = loadings @ R
+        # F @ inv(R).T keeps F @ L.T exact for oblique R too; for orthogonal R
+        # this reduces to F @ R.
+        counter = np.linalg.inv(R).T if R.size else R
+        factors_r = factors @ counter
+        coefs_r = coefs @ counter
+
+        # unit-std increments (the convention the torch model is initialized
+        # under); guard degenerate columns rather than dividing by ~0
+        sd = np.std(np.diff(factors_r, axis=0), axis=0)
+        sd = np.where(np.isfinite(sd) & (sd > 1e-12), sd, 1.0)
+        factors_r = factors_r / sd[None, :]
+        coefs_r = coefs_r / sd[None, :]
+        loadings_r = loadings_r * sd[None, :]
+
+        # mass-vote orientation, identical rule to coherence.resolve_signs
+        mass = (loadings_r * np.abs(loadings_r)).sum(axis=0)
+        signs = np.sign(mass)
+        signs = np.where(signs == 0, 1.0, signs)
+        loadings_r = loadings_r * signs[None, :]
+        factors_r = factors_r * signs[None, :]
+        coefs_r = coefs_r * signs[None, :]
+
+        if not (
+            np.all(np.isfinite(factors_r))
+            and np.all(np.isfinite(loadings_r))
+            and np.all(np.isfinite(coefs_r))
+        ):
+            return ident
+    except (np.linalg.LinAlgError, ValueError, KeyError):  # pragma: no cover
+        return ident
+
+    out = dict(ident)
+    out['factors'] = factors_r
+    out['loadings'] = loadings_r
+    out['coefs'] = coefs_r
+    out['rotation'] = R
+    return out
 
 
 def split_half_stability(
@@ -342,6 +567,80 @@ def split_half_stability(
             continue
         scores.append(match_factors(fa['factors'], fb['factors'])['mean_abs_corr'])
     return float(np.mean(scores)) if scores else float('nan')
+
+
+def split_half_factor_stability(
+    values: np.ndarray,
+    n_factors: int,
+    reference=None,
+    n_reps: int = 3,
+    seed: int = 42,
+    **kwargs,
+) -> np.ndarray:
+    """Per-factor version of :func:`split_half_stability`. Returns (K,).
+
+    The panel-level score answers "is there shared structure here at all";
+    this answers "which of these K columns is shared structure" — the question
+    the coherence graph needs, since a single unreplicable column is enough to
+    partition the panel wrongly while the panel-level score still looks fine.
+
+    Each replicate fits both disjoint halves, matches each half's columns to
+    the full-panel reference with ``match_factors``, and scores a factor by the
+    **weaker** of its two matches: a column that only one half can find is not
+    shared structure. Scores are averaged over replicates.
+
+    Args:
+        values: (T, N) panel, same input the full fit received.
+        n_factors: K, the reference rank.
+        reference: optional (T, K) full-panel factor paths. Fitted here when
+            not supplied.
+        n_reps: split replicates.
+        seed: RNG seed for the splits.
+        **kwargs: forwarded to :func:`estimate_factors_alternating`.
+
+    Returns:
+        (K,) array in [0, 1]; NaN entries where nothing could be scored.
+        Never raises — a degenerate panel returns all-NaN.
+    """
+    from autots.evaluator.tva.discovery import match_factors
+
+    arr = np.asarray(values, dtype=float)
+    K = int(max(1, n_factors))
+    out = np.full(K, np.nan)
+    n_series = arr.shape[1]
+    if n_series < 4:
+        return out
+    try:
+        if reference is None:
+            reference = estimate_factors_alternating(arr, K, **kwargs)['factors']
+        reference = np.asarray(reference, dtype=float)
+    except Exception:  # pragma: no cover - degenerate panels
+        return out
+
+    rng = np.random.default_rng(seed)
+    per_rep = []
+    for _ in range(max(int(n_reps), 1)):
+        perm = rng.permutation(n_series)
+        halves = (perm[: n_series // 2], perm[n_series // 2:])
+        scores = []
+        for cols in halves:
+            try:
+                fit = estimate_factors_alternating(arr[:, cols], K, **kwargs)
+            except Exception:  # pragma: no cover
+                scores = []
+                break
+            matched = match_factors(reference, fit['factors'])
+            corr = np.zeros(K)
+            for t_idx, value in (matched.get('correlations') or {}).items():
+                if 0 <= int(t_idx) < K and np.isfinite(value):
+                    corr[int(t_idx)] = abs(float(value))
+            scores.append(corr)
+        if len(scores) == 2:
+            # min over halves: a factor only one half can find is not shared
+            per_rep.append(np.minimum(scores[0], scores[1]))
+    if per_rep:
+        out = np.clip(np.mean(per_rep, axis=0), 0.0, 1.0)
+    return out
 
 
 def observed_mask(values: np.ndarray, mask=None) -> np.ndarray:
@@ -1082,7 +1381,21 @@ if HAS_TORCH:
             iters=cfg['alt_iters'],
             init_window=cfg['init_window'],
             gls=cfg['gls'],
+            loading_l1=cfg['loading_l1'],
+            loading_l1_adaptive=cfg['loading_l1_adaptive'],
+            loading_relax=cfg['loading_relax'],
         )
+        # C1: with lr_coef == 0 the coefficients below are frozen, so whatever
+        # basis leaves this line is the model's final basis. Rotating here --
+        # after identification, before the parameter copy -- therefore fixes
+        # the basis for the loadings graph while leaving the reconstruction
+        # (and stage B's per-factor phi, calibrated afterwards) untouched.
+        if cfg.get('rotate'):
+            ident = rotate_identification(
+                ident,
+                method=cfg['rotate'],
+                kaiser=bool(cfg.get('rotate_kaiser', True)),
+            )
 
         model = LatentFactorTrend(
             n_series=N,
@@ -1145,6 +1458,18 @@ if HAS_TORCH:
                     model.coef[1:] = torch.sign(model.coef[1:]) * (
                         model.coef[1:].abs() - thresh
                     ).clamp(min=0)
+            if cfg['w_prox_loadings'] > 0:
+                # C3 companion: the same argument for the loadings. The
+                # identification's sparse structure is what the coherence
+                # graph reads, and w_l1_loadings alone (a subgradient term)
+                # only shrinks toward zero -- it never arrives, so the zeros
+                # are gone long before fitted_loadings() is called.
+                with torch.no_grad():
+                    thresh_l = cfg['w_prox_loadings'] * cfg['lr_aux']
+                    model.loadings.copy_(
+                        torch.sign(model.loadings)
+                        * (model.loadings.abs() - thresh_l).clamp(min=0)
+                    )
             if (step + 1) % int(cfg['check_every']) == 0:
                 with torch.no_grad():
                     v = float(
@@ -1243,6 +1568,21 @@ if HAS_TORCH:
                 )
                 continuation = None
 
+        factor_stability = None
+        if int(cfg.get('factor_stability_reps') or 0) > 0:
+            factor_stability = split_half_factor_stability(
+                arr,
+                K,
+                reference=ident['factors'],
+                n_reps=int(cfg['factor_stability_reps']),
+                seed=seed,
+                knot_spacing=cfg['knot_spacing'],
+                alpha=cfg['alpha'],
+                iters=cfg['alt_iters'],
+                init_window=cfg['init_window'],
+                gls=cfg['gls'],
+            )
+
         diag = model.diagnostics()
         info = {
             'gated_series': sorted(set(gated) | set(frozen) | set(underperforming)),
@@ -1251,6 +1591,7 @@ if HAS_TORCH:
             'gated_underperforming': underperforming,
             'continuation': continuation,
             'identification': ident,
+            'factor_stability': factor_stability,
             'history': history,
             'stage_a_val': best_val if np.isfinite(best_val) else None,
             'stage_b_loss': stage_b_loss,

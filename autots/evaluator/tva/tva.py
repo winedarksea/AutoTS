@@ -268,6 +268,8 @@ class TVA:
         self._reconciliation_method_effective = None
         self._factor_network = None
         self._factor_info = None
+        self._structure_loadings = None
+        self._structure_agreement = None
         self._factor_scale = None
 
     def fit(self, df: pd.DataFrame) -> 'TVA':
@@ -877,11 +879,91 @@ class TVA:
             mask=observed_mask,
         )
         self._select_factor_space(adjusted_raw, n_factors)
+        self._fit_structure_loadings(n_factors)
         self._network = None
         self._fusion_layer = None
         self._loss_fn = None
         if self.factor_deconfound_edges:
             self._rediscover_edges_with_factors()
+
+    def _fit_structure_loadings(self, n_factors: int):
+        """C5: a second, structure-only factor fit on the robust input.
+
+        The robust trend-isolation estimator recovers the factor *span* far
+        better than the detector-adjusted panel (canonical correlation 0.77 vs
+        0.53) but is a measured dead end for the forecast path. The two uses
+        are separable: the forecast needs a well-extrapolating trend model, the
+        coherence graph needs only a good loading matrix. So this fits a
+        torch-free identification on the robust panel purely to build the
+        graph, and leaves ``self._factor_network`` — and therefore every
+        forecast value — untouched.
+
+        Guarded twice. The result is only trusted when its factors match the
+        forecast model's (``match_factors`` mean |corr| >= 0.4); a graph built
+        on a *different* set of factors than the one being shrunk would
+        assert relationships the shrink cannot act on coherently. And any
+        failure sets the attribute to None, falling back to
+        ``fitted_loadings()`` rather than failing the fit.
+        """
+        self._structure_loadings = None
+        requested = str(
+            (self.factor_config or {}).get('structure_input') or ''
+        ).lower()
+        if requested != 'robust' or self._factor_network is None:
+            return
+        try:
+            from autots.evaluator.tva.discovery import match_factors
+            from autots.evaluator.tva.factor_network import (
+                estimate_factors_alternating,
+                robust_level_scale,
+            )
+
+            cfg = dict(self._factor_info.get('config') or {})
+            space = self._factor_scale.get('space', 'level')
+            adjusted = self._to_factor_space(self._robust_adjusted_panel(), space)
+            center, scale = robust_level_scale(adjusted)
+            normalized = (adjusted - center[np.newaxis, :]) / scale[np.newaxis, :]
+
+            ident = estimate_factors_alternating(
+                normalized,
+                n_factors=int(n_factors),
+                knot_spacing=cfg.get('knot_spacing', self.factor_knot_spacing),
+                alpha=cfg.get('alpha', 1e-3),
+                iters=cfg.get('alt_iters', 6),
+                init_window=cfg.get('init_window', 91),
+                gls=cfg.get('gls', True),
+                loading_l1=cfg.get('loading_l1', 0.0),
+                loading_l1_adaptive=cfg.get('loading_l1_adaptive', True),
+                loading_relax=cfg.get('loading_relax', True),
+            )
+            if cfg.get('rotate'):
+                from autots.evaluator.tva.factor_network import rotate_identification
+
+                ident = rotate_identification(
+                    ident,
+                    method=cfg['rotate'],
+                    kaiser=bool(cfg.get('rotate_kaiser', True)),
+                )
+
+            reference = self._factor_network.fitted_factors(
+                cfg.get('prune_share', 0.02)
+            )
+            agreement = float(
+                match_factors(reference, ident['factors'])['mean_abs_corr']
+            )
+            self._structure_agreement = agreement
+            if agreement >= float(cfg.get('structure_min_agreement', 0.4) or 0.4):
+                self._structure_loadings = np.asarray(
+                    ident['loadings'], dtype=float
+                )
+        except Exception as exc:  # pragma: no cover - never fail a fit
+            warnings.warn(
+                f"TVA structure-only factor fit failed; the coherence graph "
+                f"falls back to the forecast model's loadings. {exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            self._structure_loadings = None
 
     def _rediscover_edges_with_factors(self):
         """Re-run edge discovery deconfounded against the *learned* factors.
@@ -1648,9 +1730,21 @@ class TVA:
             cconf = dict(cfg.get('coherence_config') or {})
             cconf.setdefault('gated', self._factor_info.get('gated_series'))
             cconf.setdefault('sigma', self._factor_info.get('sigma'))
+            # C4: per-factor split-half stability, when the fit computed it.
+            # resolve_signs multiplies it into the sign confidence, so an
+            # unreplicable factor falls below min_sign_confidence and drops
+            # out of the graph rather than partitioning the panel on noise.
+            cconf.setdefault('stability', self._factor_info.get('factor_stability'))
             loadings = self._factor_network.fitted_loadings(
                 cfg.get('prune_share', 0.02)
             )
+            # C5: prefer the structure-only fit's loadings when one was
+            # computed and cleared its agreement guard (see
+            # _fit_structure_loadings). Shape must still line up with the
+            # panel the shrink will act on.
+            structure = getattr(self, '_structure_loadings', None)
+            if structure is not None and structure.shape[0] == loadings.shape[0]:
+                loadings = structure
             graphs, _meta = ch.build_candidates(loadings, cconf)
             folds = self._coherence_inner_folds(horizon)
             if not folds:
@@ -2361,9 +2455,23 @@ class TVA:
         index = self._components['trend'].index if self._components else None
         series = list(self._df_original.columns)
         keep = model.live_factors(prune)
+        # C5: when a structure-only fit was run and cleared its agreement
+        # guard, report the loadings the coherence graph will actually be
+        # built on -- otherwise a diagnostic reads the forecast model's basis
+        # and silently scores a different object than the shrink consumes.
+        structure = getattr(self, '_structure_loadings', None)
+        structure_frame = None
+        if structure is not None and structure.shape[0] == len(series):
+            structure_frame = pd.DataFrame(
+                structure,
+                index=series,
+                columns=[f'factor_{i + 1}' for i in range(structure.shape[1])],
+            )
         return {
             'factors': pd.DataFrame(paths, index=index, columns=names),
             'loadings': pd.DataFrame(loadings, index=series, columns=names),
+            'structure_loadings': structure_frame,
+            'structure_agreement': getattr(self, '_structure_agreement', None),
             'factor_names': names,
             'lags': pd.Series(model.fitted_lags(), index=series, name='lag'),
             'variance_share': pd.Series(

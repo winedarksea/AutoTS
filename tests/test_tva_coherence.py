@@ -395,3 +395,121 @@ class TestDegenerateInputs(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestGraphAbstention(unittest.TestCase):
+    """C2: a series with no decisive dominant factor should join no group.
+
+    The shrink pulls every in-group member toward the group consensus, so a
+    mis-grouped series is moved in the wrong direction — strictly worse than
+    leaving it alone. These knobs buy precision by declining to answer.
+    """
+
+    # rows 0-1 unambiguous on f0, rows 2-3 unambiguous on f1, row 4 a coin flip
+    LAM = np.array([
+        [1.0, 0.05, 0.0],
+        [0.9, 0.02, 0.0],
+        [0.05, 1.0, 0.0],
+        [0.02, 0.9, 0.0],
+        [0.72, 0.70, 0.0],
+    ])
+
+    def test_defaults_are_an_exact_no_op(self):
+        base = group_graph(self.LAM)
+        for cfg in ({}, {'dominance_margin': 1.0}, {'min_loading_share': 0.0}):
+            self.assertEqual(group_graph(self.LAM, cfg)['groups'],
+                             base['groups'])
+
+    def test_ambiguous_row_abstains_at_margin(self):
+        base = group_graph(self.LAM)
+        members = {i for v in base['groups'].values() for i in v}
+        self.assertIn(4, members)
+        strict = group_graph(self.LAM, {'dominance_margin': 1.5})
+        strict_members = {i for v in strict['groups'].values() for i in v}
+        self.assertNotIn(4, strict_members)
+        # and the decisive series are untouched
+        self.assertTrue({0, 1, 2, 3}.issubset(strict_members))
+
+    def test_ambiguous_row_abstains_at_loading_share(self):
+        strict = group_graph(self.LAM, {'min_loading_share': 0.6})
+        members = {i for v in strict['groups'].values() for i in v}
+        self.assertNotIn(4, members)
+        self.assertTrue({0, 1, 2, 3}.issubset(members))
+
+    def test_abstention_never_invents_groups(self):
+        for margin in (1.0, 1.25, 1.5, 2.0):
+            graph = group_graph(self.LAM, {'dominance_margin': margin})
+            base = group_graph(self.LAM)
+            for key, members in graph['groups'].items():
+                self.assertIn(key, base['groups'])
+                self.assertTrue(set(members).issubset(set(base['groups'][key])))
+
+    def test_single_factor_panel_ignores_margin(self):
+        # with one column there is no runner-up; the margin test must not fire
+        lam = np.array([[1.0], [0.8], [-0.9], [-0.7]])
+        graph = group_graph(lam, {'dominance_margin': 2.0})
+        self.assertTrue(graph['groups'])
+
+    def test_shrink_is_still_inert_at_strength_zero(self):
+        rng = np.random.default_rng(0)
+        trends = rng.normal(size=(30, 5)).cumsum(axis=0)
+        cfg = {'dominance_margin': 1.5, 'min_loading_share': 0.5}
+        out = coherence_shrink(
+            trends, group_graph(self.LAM, cfg), strength=0.0
+        )
+        np.testing.assert_array_equal(out, trends)
+
+
+class TestStabilityVeto(unittest.TestCase):
+    """C4: ``resolve_signs``' long-dead ``stability`` argument, finally wired.
+
+    A factor that neither half of the panel can reproduce still gets a
+    confident-looking sign from the mass vote, because the vote only measures
+    agreement among loadings — not whether the factor exists. Multiplying in
+    a stability score is what lets ``min_sign_confidence`` see the difference.
+    """
+
+    # two decisive groups, both with a confident mass-vote orientation, so
+    # the only thing that can remove one is the stability veto
+    LAM = np.array([
+        [1.0, 0.10, 0.0],
+        [0.9, 0.10, 0.0],
+        [0.1, 1.00, 0.0],
+        [0.1, 0.90, 0.0],
+    ])
+
+    def test_stability_none_is_the_current_behavior(self):
+        base = group_graph(self.LAM)
+        self.assertEqual(group_graph(self.LAM, {'stability': None})['groups'],
+                         base['groups'])
+
+    def test_stability_scales_the_confidence(self):
+        _, plain = resolve_signs(self.LAM)
+        _, scaled = resolve_signs(self.LAM, stability=np.array([1.0, 0.25, 1.0]))
+        np.testing.assert_allclose(scaled[0], plain[0])
+        np.testing.assert_allclose(scaled[1], plain[1] * 0.25)
+
+    def test_unstable_factor_drops_out_of_the_graph(self):
+        cfg = {'min_sign_confidence': 0.5}
+        with_all = group_graph(self.LAM, cfg)
+        vetoed = group_graph(
+            self.LAM, dict(cfg, stability=np.array([1.0, 0.1, 1.0]))
+        )
+        self.assertTrue(any(k.startswith('f1') for k in with_all['groups']))
+        self.assertFalse(any(k.startswith('f1') for k in vetoed['groups']))
+
+    def test_wrong_length_stability_is_ignored_not_fatal(self):
+        base = group_graph(self.LAM)
+        for bad in (np.array([1.0]), np.array([1.0] * 9), 'nonsense'):
+            try:
+                out = group_graph(self.LAM, {'stability': bad})
+            except Exception as exc:  # pragma: no cover
+                self.fail(f'group_graph raised on stability={bad!r}: {exc}')
+            self.assertEqual(out['groups'], base['groups'])
+
+    def test_candidates_and_laplacian_see_the_veto(self):
+        cfg = {'min_sign_confidence': 0.5, 'stability': np.array([1.0, 0.1, 1.0])}
+        _graphs, meta = build_candidates(self.LAM, cfg)
+        self.assertLess(meta['sign_confidence'][1], 0.5)
+        adj = laplacian_graph(self.LAM, cfg)
+        self.assertEqual(adj.shape, (4, 4))

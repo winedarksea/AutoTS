@@ -35,11 +35,25 @@ DEFAULT_COHERENCE_CONFIG = {
     'min_sign_confidence': 0.0,
     # minimum within-group directional agreement required to shrink a group
     'decisiveness_floor': 0.0,
+    # ---- C2: graph abstention (defaults are exact no-ops) ------------------
+    # A series joins its dominant factor's group only if that dominance is
+    # decisive. Precision matters more than recall here: a wrongly-grouped
+    # series is actively pulled the wrong way, whereas an abstaining one is
+    # merely left alone. Both tests are on the series' own loading row, so a
+    # failing series simply does not join any group.
+    # |lam[i, dom]| >= margin * (second largest |lam[i, .]|)
+    'dominance_margin': 1.0,
+    # lam[i, dom]**2 / ||lam[i]||**2 >= share  (fraction of communality)
+    'min_loading_share': 0.0,
     # ---- secondary knobs ---------------------------------------------------
     # series indices to leave completely alone (the factor gates' output)
     'gated': (),
     # per-series residual scale for the precision weights; None -> ones
     'sigma': None,
+    # (K,) per-factor stability in [0, 1] (factor_network.split_half_factor_
+    # stability); multiplied into the sign confidence, so an unreplicable
+    # factor falls below min_sign_confidence. None -> no stability veto.
+    'stability': None,
     # cosine-similarity floor for a laplacian link to be kept at all
     'min_similarity': 0.0,
     # endpoint window for net-direction; None -> max(1, H // 4)
@@ -120,6 +134,25 @@ def resolve_signs(loadings, factors=None, stability=None):
     return lam * signs[np.newaxis, :], confidence
 
 
+def _config_stability(cfg: dict, n_factors: int):
+    """``(K,)`` stability vector from config, or None when unusable.
+
+    Silently ignores a wrong-length vector rather than raising: the fit that
+    produced it may have selected a different rank than the graph being built,
+    and a stale veto is worse than none.
+    """
+    stability = cfg.get('stability')
+    if stability is None:
+        return None
+    try:
+        arr = np.asarray(stability, dtype=float).ravel()
+    except (TypeError, ValueError):
+        return None
+    if arr.size != int(n_factors):
+        return None
+    return np.nan_to_num(arr, nan=0.0, posinf=1.0, neginf=0.0)
+
+
 def _precision_weights(lam: np.ndarray, cfg: dict) -> np.ndarray:
     """(N,) ``|lambda| / sigma`` precision weights, normalized to mean 1.
 
@@ -154,10 +187,14 @@ def group_graph(loadings, config=None) -> dict:
     diverge, not be pulled together. Factors below ``min_sign_confidence`` are
     dropped: without a trusted orientation, "same sign" isn't meaningful.
 
+    ``dominance_margin`` and ``min_loading_share`` let a series abstain when
+    its dominant factor isn't decisive; both default to exact no-ops.
+
     Args:
         loadings: (N, K) loading matrix (raw; signs are resolved internally).
         config: overrides for ``DEFAULT_COHERENCE_CONFIG``. Reads ``gated``
-            (series indices to exclude), ``sigma`` and ``min_sign_confidence``.
+            (series indices to exclude), ``sigma``, ``min_sign_confidence``,
+            ``dominance_margin`` and ``min_loading_share``.
 
     Returns:
         dict with
@@ -181,7 +218,9 @@ def group_graph(loadings, config=None) -> dict:
     if lam_raw.size == 0 or lam_raw.shape[0] < 2 or lam_raw.shape[1] == 0:
         return empty
 
-    lam, confidence = resolve_signs(lam_raw)
+    lam, confidence = resolve_signs(
+        lam_raw, stability=_config_stability(cfg, lam_raw.shape[1])
+    )
     signs = np.sign((lam_raw * np.abs(lam_raw)).sum(axis=0))
     signs = np.where(signs == 0, 1.0, signs)
     weights = _precision_weights(lam, cfg)
@@ -192,15 +231,29 @@ def group_graph(loadings, config=None) -> dict:
 
     magnitude = np.abs(lam)
     dom = magnitude.argmax(axis=1)
+    margin = float(cfg.get('dominance_margin') or 1.0)
+    min_share = float(cfg.get('min_loading_share') or 0.0)
+    # squared row norm for the communality-share test; guarded against the
+    # all-zero row, which the exposure check below rejects anyway
+    row_energy = np.sum(magnitude ** 2, axis=1)
     groups: dict = {}
     for i in range(lam.shape[0]):
         if i in gated:
             continue
         k = int(dom[i])
-        if magnitude[i, k] <= 0:
+        top = magnitude[i, k]
+        if top <= 0:
             continue  # no measured exposure: nothing to be coherent with
         if confidence[k] < min_conf:
             continue  # coin-flip orientation: refuse to partition on it
+        if margin > 1.0 and lam.shape[1] > 1:
+            runner_up = float(np.partition(magnitude[i], -2)[-2])
+            if top < margin * runner_up:
+                continue  # ambiguous dominance: abstain rather than guess
+        if min_share > 0.0:
+            energy = float(row_energy[i])
+            if energy <= 0 or (top * top) / energy < min_share:
+                continue  # exposure too spread out to call a dominant factor
         key = 'f{}{}'.format(k, '+' if lam[i, k] >= 0 else '-')
         groups.setdefault(key, []).append(i)
     groups = {k: v for k, v in sorted(groups.items()) if len(v) >= 2}
@@ -241,7 +294,9 @@ def laplacian_graph(loadings, config=None, n_neighbors: int = 5) -> np.ndarray:
     if n < 2 or lam_raw.shape[1] == 0:
         return np.zeros((max(n, 0), max(n, 0)), dtype=float)
 
-    lam, confidence = resolve_signs(lam_raw)
+    lam, confidence = resolve_signs(
+        lam_raw, stability=_config_stability(cfg, lam_raw.shape[1])
+    )
     norms = np.linalg.norm(lam, axis=1)
     good = norms > 0
     unit = np.zeros_like(lam)
@@ -838,7 +893,9 @@ def build_candidates(loadings, config=None):
     """
     cfg = _merged_config(config)
     lam = _clean_loadings(loadings)
-    _signed, confidence = resolve_signs(lam)
+    _signed, confidence = resolve_signs(
+        lam, stability=_config_stability(cfg, lam.shape[1] if lam.ndim == 2 else 0)
+    )
     meta = {
         'sign_confidence': [float(c) for c in np.atleast_1d(confidence)],
         'n_series': int(lam.shape[0]) if lam.ndim == 2 else 0,

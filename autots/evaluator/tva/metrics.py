@@ -24,6 +24,7 @@ __all__ = [
     "real_data_coherence",
     "trend_only_coherence",
     "oracle_normalized_coherence",
+    "loading_structure_score",
 ]
 
 
@@ -345,3 +346,281 @@ def _nanmean(arr, axis=None):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
             return np.nanmean(arr, axis=axis)
+
+
+# ---------------------------------------------------------------------------
+# Loading-structure recovery
+# ---------------------------------------------------------------------------
+
+
+def _as_loading_array(loadings):
+    """(N, K) float array from a DataFrame/array, non-finite entries zeroed."""
+    if loadings is None:
+        return np.zeros((0, 0), dtype=float)
+    arr = np.asarray(
+        loadings.values if hasattr(loadings, "values") else loadings, dtype=float
+    )
+    if arr.ndim == 1:
+        arr = arr[:, np.newaxis]
+    if arr.ndim != 2:
+        return np.zeros((0, 0), dtype=float)
+    return np.nan_to_num(arr, nan=0.0, posinf=0.0, neginf=0.0)
+
+
+def _greedy_column_match(true_lam, est_lam) -> dict:
+    """``{true_col: (est_col, sign)}`` by greedy |correlation| on loadings.
+
+    Fallback used when factor paths aren't available to
+    :func:`~autots.evaluator.tva.discovery.match_factors`. Greedy rather than
+    Hungarian because the fallback only has to be sane, not optimal, and this
+    keeps ``metrics`` free of a scipy dependency.
+    """
+    n_true, n_est = true_lam.shape[1], est_lam.shape[1]
+    if n_true == 0 or n_est == 0:
+        return {}
+    corr = np.zeros((n_true, n_est), dtype=float)
+    for a in range(n_true):
+        ta = true_lam[:, a]
+        for b in range(n_est):
+            eb = est_lam[:, b]
+            if np.std(ta) > 1e-12 and np.std(eb) > 1e-12:
+                with np.errstate(invalid="ignore"):
+                    c = np.corrcoef(ta, eb)[0, 1]
+                corr[a, b] = c if np.isfinite(c) else 0.0
+    out = {}
+    used_true, used_est = set(), set()
+    for _ in range(min(n_true, n_est)):
+        masked = np.abs(corr).copy()
+        for a in used_true:
+            masked[a, :] = -1.0
+        for b in used_est:
+            masked[:, b] = -1.0
+        a, b = np.unravel_index(int(np.argmax(masked)), masked.shape)
+        if masked[a, b] < 0:
+            break
+        out[int(a)] = (int(b), 1.0 if corr[a, b] >= 0 else -1.0)
+        used_true.add(int(a))
+        used_est.add(int(b))
+    return out
+
+
+def _same_group_pairs(lam, active=None) -> set:
+    """Unordered ``(i, j)`` pairs sharing a dominant factor *and* its sign.
+
+    The relation the coherence graph is trying to assert: series that load the
+    same factor the same way should move together. Series with no exposure
+    (all-zero row) are excluded rather than pooled into a spurious group.
+    """
+    n, k = lam.shape
+    if n < 2 or k == 0:
+        return set()
+    magnitude = np.abs(lam)
+    exposed = magnitude.max(axis=1) > 0
+    if active is not None:
+        exposed = exposed & np.asarray(active, dtype=bool)
+    dom = magnitude.argmax(axis=1)
+    sign = np.sign(lam[np.arange(n), dom])
+    pairs = set()
+    for i in range(n):
+        if not exposed[i]:
+            continue
+        for j in range(i + 1, n):
+            if not exposed[j]:
+                continue
+            if dom[i] == dom[j] and sign[i] == sign[j]:
+                pairs.add((i, j))
+    return pairs
+
+
+def _normalize_asserted(asserted_pairs) -> set:
+    """``{(i, j)}`` with ``i < j`` from ``(i, j)`` or ``(i, j, sign)`` tuples.
+
+    Signed graphs also carry ``-1`` links, which assert *opposite* movement —
+    not the same-factor-same-sign relation being scored — so they are dropped
+    rather than counted as (necessarily wrong) positive assertions.
+    """
+    out = set()
+    for item in asserted_pairs or ():
+        try:
+            if len(item) >= 3 and float(item[2]) < 0:
+                continue
+            i, j = int(item[0]), int(item[1])
+        except (TypeError, ValueError, IndexError):
+            continue
+        if i == j:
+            continue
+        out.add((min(i, j), max(i, j)))
+    return out
+
+
+def loading_structure_score(
+    true_loadings,
+    est_loadings,
+    true_factors=None,
+    est_factors=None,
+    asserted_pairs=None,
+) -> dict:
+    """Score how well estimated loadings recover the true loading *structure*.
+
+    Canonical correlation says whether the factor *span* was found; this says
+    whether the *basis within the span* is the true one. A rotation of the
+    correct span scores near chance here while scoring ~1.0 on span metrics,
+    which is exactly the failure mode the coherence graph is built on top of.
+
+    Args:
+        true_loadings: (N, K_true) generator loadings (DataFrame or array).
+        est_loadings: (N, K_est) fitted loadings, **same series order**.
+        true_factors: optional (T, K_true) true factor paths.
+        est_factors: optional (T, K_est) estimated factor paths. When both are
+            supplied, columns are matched with ``discovery.match_factors``
+            (Hungarian on differenced |corr|); otherwise a greedy |corr| match
+            on the loading columns themselves is used.
+        asserted_pairs: optional iterable of ``(i, j)`` or ``(i, j, sign)``
+            series-index pairs the caller's graph asserts as same-group (e.g.
+            ``coherence._graph_pairs(group_graph(est_loadings, cfg), N)``).
+            Defaults to the pairs implied by the estimated loadings' own
+            (dominant factor, sign) partition.
+
+    Returns:
+        dict with ``pair_precision``, ``pair_recall``, ``pair_f1``,
+        ``n_pairs_asserted``, ``n_pairs_true``, ``dominant_recovery``,
+        ``dominant_recovery_matched``, ``sign_agreement``,
+        ``matched_loading_corr``, ``n_true``, ``n_est``.
+        Undefined quantities are ``np.nan`` (counts are ``0``); never raises.
+    """
+    empty = {
+        "pair_precision": float("nan"),
+        "pair_recall": float("nan"),
+        "pair_f1": float("nan"),
+        "n_pairs_asserted": 0,
+        "n_pairs_true": 0,
+        "dominant_recovery": float("nan"),
+        "dominant_recovery_matched": float("nan"),
+        "sign_agreement": float("nan"),
+        "matched_loading_corr": float("nan"),
+        "n_true": 0,
+        "n_est": 0,
+    }
+    try:
+        return _loading_structure_score(
+            true_loadings, est_loadings, true_factors, est_factors,
+            asserted_pairs, empty,
+        )
+    except Exception:  # pragma: no cover - harness metric, never fatal
+        return dict(empty)
+
+
+def _loading_structure_score(
+    true_loadings, est_loadings, true_factors, est_factors, asserted_pairs, empty
+) -> dict:
+    true_lam = _as_loading_array(true_loadings)
+    est_lam = _as_loading_array(est_loadings)
+    out = dict(empty)
+    out["n_true"] = int(true_lam.shape[1])
+    out["n_est"] = int(est_lam.shape[1])
+    if true_lam.size == 0 or est_lam.size == 0:
+        return out
+    n = min(true_lam.shape[0], est_lam.shape[0])
+    if n < 2:
+        return out
+    true_lam, est_lam = true_lam[:n], est_lam[:n]
+
+    # ---- column matching -------------------------------------------------
+    assignment = {}
+    if true_factors is not None and est_factors is not None:
+        from autots.evaluator.tva.discovery import match_factors
+
+        score = match_factors(true_factors, est_factors)
+        for t_idx, e_idx in (score.get("assignment") or {}).items():
+            sign = float(score.get("signs", {}).get(t_idx, 1.0)) or 1.0
+            assignment[int(t_idx)] = (int(e_idx), 1.0 if sign >= 0 else -1.0)
+    if not assignment:
+        assignment = _greedy_column_match(true_lam, est_lam)
+    if not assignment:
+        return out
+
+    # est columns expressed in the true basis (unmatched true columns -> 0)
+    est_aligned = np.zeros_like(true_lam)
+    inverse = {}
+    for t_idx, (e_idx, sign) in assignment.items():
+        if t_idx >= true_lam.shape[1] or e_idx >= est_lam.shape[1]:
+            continue
+        est_aligned[:, t_idx] = sign * est_lam[:, e_idx]
+        inverse[e_idx] = t_idx
+
+    # ---- per-column loading correlation ----------------------------------
+    corrs = []
+    for t_idx in sorted(assignment):
+        if t_idx >= true_lam.shape[1]:
+            continue
+        a, b = true_lam[:, t_idx], est_aligned[:, t_idx]
+        if np.std(a) > 1e-12 and np.std(b) > 1e-12:
+            with np.errstate(invalid="ignore"):
+                c = np.corrcoef(a, b)[0, 1]
+            if np.isfinite(c):
+                corrs.append(float(c))
+    if corrs:
+        out["matched_loading_corr"] = float(np.mean(corrs))
+
+    # ---- dominance / sign recovery, over exposed series only -------------
+    true_mag = np.abs(true_lam)
+    exposed = true_mag.max(axis=1) > 0
+    if exposed.any():
+        dom_true = true_mag.argmax(axis=1)
+        # est dominance is judged in the estimated basis and then mapped back,
+        # so a series whose strongest loading sits on a spurious (unmatched)
+        # column counts as a miss instead of silently falling through to the
+        # largest matched column.
+        est_mag = np.abs(est_lam)
+        dom_est_own = est_mag.argmax(axis=1)
+        mapped = np.array(
+            [inverse.get(int(d), -1) for d in dom_est_own], dtype=int
+        )
+        mapped = np.where(est_mag.max(axis=1) > 0, mapped, -1)
+        out["dominant_recovery"] = float(
+            np.mean(mapped[exposed] == dom_true[exposed])
+        )
+        # The charitable variant: dominance judged only among the columns that
+        # matched a true factor. Reported alongside because it is the number a
+        # K-correct fit would produce anyway, and because it isolates "wrong
+        # factor" from "dominated by a spurious extra factor" when K is over-
+        # specified -- the two diverge only when n_est > n_true.
+        if est_aligned.shape[1]:
+            aligned_mag = np.abs(est_aligned)
+            dom_aligned = aligned_mag.argmax(axis=1)
+            dom_aligned = np.where(aligned_mag.max(axis=1) > 0, dom_aligned, -1)
+            out["dominant_recovery_matched"] = float(
+                np.mean(dom_aligned[exposed] == dom_true[exposed])
+            )
+
+        rows = np.arange(n)
+        s_true = np.sign(true_lam[rows, dom_true])
+        s_est = np.sign(est_aligned[rows, dom_true])
+        usable = exposed & (s_true != 0) & (s_est != 0)
+        if usable.any():
+            out["sign_agreement"] = float(
+                np.mean(s_true[usable] == s_est[usable])
+            )
+
+    # ---- pair precision / recall ----------------------------------------
+    truth_pairs = _same_group_pairs(true_lam)
+    if asserted_pairs is None:
+        asserted = _same_group_pairs(est_lam)
+    else:
+        asserted = {
+            (i, j) for i, j in _normalize_asserted(asserted_pairs)
+            if j < n
+        }
+    out["n_pairs_true"] = len(truth_pairs)
+    out["n_pairs_asserted"] = len(asserted)
+    hits = len(asserted & truth_pairs)
+    if asserted:
+        out["pair_precision"] = float(hits / len(asserted))
+    if truth_pairs:
+        out["pair_recall"] = float(hits / len(truth_pairs))
+    p, r = out["pair_precision"], out["pair_recall"]
+    if np.isfinite(p) and np.isfinite(r) and (p + r) > 0:
+        out["pair_f1"] = float(2 * p * r / (p + r))
+    elif np.isfinite(p) and np.isfinite(r):
+        out["pair_f1"] = 0.0
+    return out
