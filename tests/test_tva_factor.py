@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 
 from autots.evaluator.tva import factor_network
+from autots.evaluator.tva import sparse_factor
 
 from autots.evaluator.tva.discovery import match_factors
 from autots.evaluator.tva.factor_network import (
@@ -799,3 +800,430 @@ class TestStructureLadderKnobsThroughTVA(unittest.TestCase):
         self.assertEqual(
             np.asarray(stability).shape[0], model._factor_network.K
         )
+
+
+class TestSignedTopK(unittest.TestCase):
+    """C9: the sparsifier. Signs are load-bearing, so this is not a ReLU."""
+
+    def test_keeps_exactly_k_nonzeros_per_row(self):
+        z = np.array([[1.0, -3.0, 2.0], [-5.0, 1.0, 1.0]])
+        for k in (1, 2):
+            out = sparse_factor.signed_topk(z, k)
+            np.testing.assert_array_equal((np.abs(out) > 0).sum(axis=1), [k, k])
+
+    def test_preserves_sign_of_the_selected_entries(self):
+        z = np.array([[1.0, -3.0, 2.0]])
+        out = sparse_factor.signed_topk(z, 1)
+        # a non-negative activation would rectify this to +3 and hand the
+        # coherence graph the wrong group ('f1+' instead of 'f1-')
+        self.assertEqual(out[0, 1], -3.0)
+
+    def test_exact_ties_still_yield_exactly_k(self):
+        # a `>= kth value` implementation admits all of these; at init many
+        # codes are exactly zero, so the failure is not hypothetical
+        z = np.zeros((3, 4))
+        out = sparse_factor.signed_topk(z, 2)
+        self.assertEqual(int((np.abs(out) > 0).sum()), 0)
+        z2 = np.ones((2, 4))
+        self.assertTrue((np.abs(sparse_factor.signed_topk(z2, 2)) > 0).sum() == 4)
+
+    def test_k_at_or_above_width_is_the_identity(self):
+        z = np.array([[1.0, -3.0, 2.0]])
+        np.testing.assert_array_equal(sparse_factor.signed_topk(z, 3), z)
+        np.testing.assert_array_equal(sparse_factor.signed_topk(z, 9), z)
+
+    def test_non_positive_k_zeroes_everything(self):
+        z = np.array([[1.0, -3.0, 2.0]])
+        np.testing.assert_array_equal(sparse_factor.signed_topk(z, 0), np.zeros_like(z))
+
+
+class TestSparseIdentification(unittest.TestCase):
+    """C9 tier 1: torch-free sparse dictionary learning over series."""
+
+    @staticmethod
+    def _panel(seed=0, n_per=8, K=3, T=400, noise=0.05):
+        """Simple-structure panel whose true factors are near-orthogonal.
+
+        The orthogonalization is load-bearing for a *hard assignment* test.
+        Raw ``cumsum`` random walks at T=400 routinely correlate 0.7+ with each
+        other (measured: 0.745 at seed 1) and differ 5x in scale; when two true
+        factors are that close, folding their series onto one atom is a
+        defensible answer rather than a failure, so an un-orthogonalized
+        fixture measures the data instead of the estimator.
+        """
+        rng = np.random.default_rng(seed)
+        factors = np.cumsum(rng.normal(size=(T, K)), axis=0)
+        factors = factors - factors.mean(axis=0)
+        factors, _ = np.linalg.qr(factors)          # decorrelate
+        factors = factors / factors.std(axis=0)     # equalize amplitude
+        n = n_per * K
+        loadings = np.zeros((n, K))
+        for i in range(n):
+            sign = 1.0 if (i % 3) else -1.0
+            loadings[i, i // n_per] = sign * (0.5 + rng.random())
+        values = factors @ loadings.T + noise * rng.normal(size=(T, n))
+        return values, factors, loadings
+
+    def _identify(self, seed=0, K=3, fit_k=None, config=None, noise=0.05):
+        values, factors, loadings = self._panel(seed=seed, K=K, noise=noise)
+        fit_k = int(fit_k or K)
+        init = estimate_factors_alternating(values, n_factors=fit_k)
+        out = sparse_factor.identify(
+            values, fit_k, init, 'sparse_alt', config=config, alpha=1e-3
+        )
+        return out, values, factors, loadings
+
+    def test_returns_the_identification_contract(self):
+        out, values, _, _ = self._identify()
+        for key in ('factors', 'loadings', 'coefs', 'design', 'weights'):
+            self.assertIn(key, out)
+        t_len, n_series = values.shape
+        self.assertEqual(out['design'].shape[0], t_len)
+        self.assertEqual(out['loadings'].shape[0], n_series)
+        self.assertEqual(out['coefs'].shape[0], out['design'].shape[1])
+        self.assertEqual(out['coefs'].shape[1], out['factors'].shape[1])
+
+    def test_design_matches_the_models_own_basis(self):
+        out, values, _, _ = self._identify()
+        np.testing.assert_array_equal(
+            out['design'], hinge_design(values.shape[0], 7).astype(float)
+        )
+
+    def test_factors_keep_the_unit_increment_convention(self):
+        out, _, _, _ = self._identify()
+        # loadings are only commensurate with info['sigma'] under this exit
+        # convention; unit-l2 atoms would rescale every precision weight.
+        # An atom nobody uses is a zero path and is exempt by construction.
+        live = np.asarray(out['atom_usage']) > 0
+        np.testing.assert_allclose(
+            np.diff(out['factors'], axis=0).std(axis=0)[live], 1.0, atol=1e-6
+        )
+
+    def test_loadings_are_sparse_and_signed(self):
+        out, _, _, _ = self._identify()
+        counts = (np.abs(out['loadings']) > 0).sum(axis=1)
+        self.assertTrue((counts <= 1).all())
+        self.assertTrue((out['loadings'] < 0).any())
+
+    def test_dead_atoms_select_the_true_rank(self):
+        # fit rank 5 on a rank-3 panel: atoms nobody uses fall out, which is
+        # the rank selection C7 was going to be built for
+        for seed in (0, 1, 2):
+            out, _, _, _ = self._identify(seed=seed, fit_k=5)
+            self.assertEqual(
+                out['n_atoms_live'], 3,
+                f'rank selection wrong on seed {seed}: usage={out["atom_usage"]}',
+            )
+            self.assertEqual(int((np.asarray(out['atom_usage']) == 0).sum()), 2)
+
+    def test_atom_usage_is_a_trustworthy_rank_diagnostic(self):
+        """Usage reports the rank, including when the fit has collapsed.
+
+        Measured on this fixture: 4 of 5 seeds recover all three factors at
+        both fitted ranks 4 and 5. The remaining seed reproducibly merges two
+        *orthogonal* true factors onto one atom regardless of the restart
+        schedule, and the acceptance guard does NOT catch it, because the
+        merged fit reconstructs marginally better than the correct one.
+        ``n_atoms_live`` is the only thing that surfaces this, which is why it
+        is carried all the way out to ``info``.
+        """
+        live = []
+        for seed in (0, 1, 2, 3, 4):
+            out, _, _, _ = self._identify(seed=seed, fit_k=4)
+            usage = np.asarray(out['atom_usage'])
+            self.assertEqual(out['n_atoms_live'], int((usage >= 2).sum()))
+            live.append(out['n_atoms_live'])
+        self.assertGreaterEqual(sum(x == 3 for x in live), 4)
+        self.assertTrue(all(x >= 2 for x in live), f'total collapse: {live}')
+
+    def test_recovers_dominant_structure_better_than_the_initializer(self):
+        from autots.evaluator.tva.metrics import loading_structure_score
+
+        gains = []
+        for seed in (0, 1, 2):
+            values, factors, loadings = self._panel(seed=seed)
+            init = estimate_factors_alternating(values, n_factors=4)
+            out = sparse_factor.identify(values, 4, init, 'sparse_alt', alpha=1e-3)
+            before = loading_structure_score(
+                loadings, init['loadings'], factors, init['factors']
+            )['matched_loading_corr']
+            after = loading_structure_score(
+                loadings, out['loadings'], factors, out['factors']
+            )['matched_loading_corr']
+            gains.append(after - before)
+        # measured ~0.08-0.35 depending on seed; bar set below the observed
+        # mean, following this file's stated convention
+        self.assertGreater(float(np.mean(gains)), 0.05)
+
+    def test_rejected_fit_falls_back_to_the_initializer(self):
+        values, _, _ = self._panel()
+        init = estimate_factors_alternating(values, n_factors=3)
+        out = sparse_factor.identify(
+            values, 3, init, 'sparse_alt', config={'accept_margin': 0.0}, alpha=1e-3
+        )
+        self.assertTrue(out['sparse_rejected'])
+        np.testing.assert_array_equal(out['loadings'], init['loadings'])
+        np.testing.assert_array_equal(out['coefs'], init['coefs'])
+
+    def test_min_code_share_abstains_with_an_all_zero_row(self):
+        # k=1 makes coherence's dominance_margin and min_loading_share
+        # unconditional (runner-up is exactly 0, share exactly 1.0), so an
+        # all-zero row is the only abstention channel the graph still honors
+        values, _, _ = self._panel()
+        rng = np.random.default_rng(1)
+        # a pure-noise series at the panel's own scale has no honest exposure
+        noise_col = rng.normal(scale=float(values.std()), size=(len(values), 1))
+        values = np.column_stack([values, noise_col])
+        init = estimate_factors_alternating(values, n_factors=3)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            base = sparse_factor.identify(
+                values, 3, init, 'sparse_alt',
+                config={'min_code_share': 0.0, 'accept_margin': 1e9}, alpha=1e-3,
+            )
+            out = sparse_factor.identify(
+                values, 3, init, 'sparse_alt',
+                config={'min_code_share': 0.9, 'accept_margin': 1e9}, alpha=1e-3,
+            )
+        n_zero_base = int((np.abs(base['loadings']).max(axis=1) <= 0).sum())
+        n_zero = int((np.abs(out['loadings']).max(axis=1) <= 0).sum())
+        self.assertGreater(n_zero, n_zero_base)
+
+    def test_degenerate_panels_never_raise(self):
+        rng = np.random.default_rng(0)
+        cases = [
+            np.zeros((50, 4)),
+            np.column_stack([np.ones(50), rng.normal(size=(50, 3))]),
+            rng.normal(size=(5, 3)),
+        ]
+        for values in cases:
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                init = estimate_factors_alternating(values, n_factors=2)
+                try:
+                    sparse_factor.identify(values, 2, init, 'sparse_alt', alpha=1e-3)
+                except Exception as exc:  # pragma: no cover - the assertion
+                    self.fail(f'sparse identification raised on {values.shape}: {exc}')
+
+    def test_a_broken_panel_falls_back_instead_of_raising(self):
+        # the estimator upstream raises on all-NaN; identify() must absorb
+        # anything that reaches it and hand back the initializer
+        values = np.full((40, 3), np.nan)
+        init = {'factors': np.zeros((40, 2)), 'loadings': np.zeros((3, 2)),
+                'coefs': np.zeros((6, 2)), 'design': np.zeros((40, 6)),
+                'weights': np.ones(3)}
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            out = sparse_factor.identify(values, 2, init, 'sparse_alt', alpha=1e-3)
+        self.assertTrue(out is None or out.get('sparse_rejected'))
+
+
+class TestLevelShiftVeto(unittest.TestCase):
+    """I1: the detector is univariate, so a shared factor move looks like N shifts."""
+
+    @staticmethod
+    def _shifts(n_series=20, n_time=40):
+        idx = pd.date_range('2021-01-01', periods=n_time)
+        return pd.DataFrame(
+            0.0, index=idx, columns=[f's{i}' for i in range(n_series)]
+        )
+
+    def test_a_panel_wide_step_is_returned_to_the_panel(self):
+        shifts = self._shifts()
+        shifts.iloc[15:, :] = 5.0
+        out = TVA._veto_shared_shifts(shifts, {})
+        np.testing.assert_allclose(out.to_numpy(), 0.0, atol=1e-9)
+
+    def test_a_lone_step_is_still_removed(self):
+        shifts = self._shifts()
+        shifts.iloc[15:, 3] = 7.0
+        out = TVA._veto_shared_shifts(shifts, {})
+        self.assertAlmostEqual(float(out.iloc[-1, 3]), 7.0, places=6)
+
+    def test_idiosyncratic_excess_survives_a_shared_step(self):
+        shifts = self._shifts()
+        shifts.iloc[15:, :] = 5.0     # shared
+        shifts.iloc[25:, 0] += 3.0    # this series' own, on top
+        out = TVA._veto_shared_shifts(shifts, {})
+        self.assertAlmostEqual(float(out.iloc[-1, 0]), 3.0, places=6)
+        self.assertAlmostEqual(float(out.iloc[-1, 1]), 0.0, places=6)
+
+    def test_disagreeing_directions_are_not_one_event(self):
+        shifts = self._shifts()
+        shifts.iloc[15:, :10] = 5.0
+        shifts.iloc[15:, 10:] = -5.0
+        out = TVA._veto_shared_shifts(shifts, {})
+        # half up, half down is not a shared factor move; nothing is vetoed
+        self.assertAlmostEqual(float(out.iloc[-1, 1]), 5.0, places=6)
+
+    def test_shrink_scales_how_much_is_returned(self):
+        shifts = self._shifts()
+        shifts.iloc[15:, :] = 5.0
+        out = TVA._veto_shared_shifts(shifts, {'level_shift_veto_shrink': 0.5})
+        self.assertAlmostEqual(float(out.iloc[-1, 1]), 2.5, places=6)
+
+    def test_veto_all_returns_every_shift(self):
+        shifts = self._shifts()
+        shifts.iloc[15:, 3] = 7.0   # a lone step, which the normal veto keeps
+        out = TVA._veto_shared_shifts(shifts, {'level_shift_veto': 'all'})
+        np.testing.assert_allclose(out.to_numpy(), 0.0, atol=1e-9)
+
+    def test_the_initial_level_is_not_dropped(self):
+        # rebuilding from cumsum of the differences loses shifts.iloc[0],
+        # which turns the veto into a per-series constant -- and a constant is
+        # removed exactly by robust_level_scale's median centering, so the fit
+        # would be bit-identical while the panel looked changed
+        shifts = self._shifts()
+        shifts.iloc[:, :] = 4.0     # a standing offset, no step anywhere
+        out = TVA._veto_shared_shifts(shifts, {})
+        np.testing.assert_allclose(out.to_numpy(), 4.0, atol=1e-9)
+
+    def test_too_few_series_is_a_no_op(self):
+        shifts = self._shifts(n_series=2)
+        shifts.iloc[15:, :] = 5.0
+        pd.testing.assert_frame_equal(TVA._veto_shared_shifts(shifts, {}), shifts)
+
+
+@unittest.skipUnless(factor_network.HAS_TORCH, 'torch required')
+class TestSparseIdentificationThroughTheModel(unittest.TestCase):
+    """C9 reaching the object it targets: fitted_loadings(), not ident['loadings']."""
+
+    @staticmethod
+    def _panel(seed=0, n_per=6, K=2, T=300):
+        rng = np.random.default_rng(seed)
+        factors = np.cumsum(rng.normal(size=(T, K)), axis=0)
+        n = n_per * K
+        loadings = np.zeros((n, K))
+        for i in range(n):
+            loadings[i, i // n_per] = (1.0 if i % 2 else -1.0) * (0.5 + rng.random())
+        return factors @ loadings.T + 0.05 * rng.normal(size=(T, n))
+
+    def _fit(self, config=None):
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            return fit_latent_factor_model(
+                self._panel(), n_factors=3, horizon=14, config=config
+            )
+
+    def test_default_is_bitwise_identical_to_today(self):
+        model_a, _ = self._fit()
+        model_b, _ = self._fit({
+            'identification': 'alternating',
+            'sparse_config': None,
+            'sparse_freeze_support': True,
+            'level_shift_veto': False,
+        })
+        # raw parameter, not fitted_loadings(): pruning can change the shape
+        np.testing.assert_array_equal(
+            model_a.loadings.detach().numpy(), model_b.loadings.detach().numpy()
+        )
+
+    def test_sparse_support_survives_stage_a(self):
+        model, info = self._fit({'identification': 'sparse_alt'})
+        counts = (np.abs(model.loadings.detach().numpy()) > 0).sum(axis=1)
+        self.assertTrue(
+            (counts <= 1).all(),
+            'stage A washed the identified zeros out before the graph reads them',
+        )
+        self.assertEqual(info['identification_method'], 'sparse_alt')
+
+    def test_without_the_projection_stage_a_destroys_the_support(self):
+        # the executable form of the hazard: w_l1_loadings is a subgradient
+        # term that never reaches zero, so 600 Adam steps refill every entry
+        model, _ = self._fit({
+            'identification': 'sparse_alt', 'sparse_freeze_support': False,
+        })
+        counts = (np.abs(model.loadings.detach().numpy()) > 0).sum(axis=1)
+        self.assertTrue((counts > 1).any())
+
+    def test_torch_free_fallback_records_the_tier_it_ran(self):
+        from unittest import mock
+
+        with mock.patch.object(sparse_factor, 'HAS_TORCH', False):
+            _, info = self._fit({'identification': 'sparse_ae'})
+        self.assertEqual(info['identification_method'], 'sparse_alt')
+
+    def test_live_atom_count_lands_in_info(self):
+        _, info = self._fit({'identification': 'sparse_alt'})
+        self.assertEqual(info['n_atoms_live'], 2)  # true rank, fitted at 3
+        self.assertEqual(len(info['atom_usage']), 3)
+
+
+@unittest.skipUnless(factor_network.HAS_TORCH, 'torch required')
+class TestSparseKnobsThroughTVA(unittest.TestCase):
+    """The C9/I1 knobs are no-ops at their defaults, end to end."""
+
+    @staticmethod
+    def _frame(seed=0, n_per=6, K=2, T=280):
+        rng = np.random.default_rng(seed)
+        factors = np.cumsum(rng.normal(size=(T, K)), axis=0)
+        n = n_per * K
+        loadings = np.zeros((n, K))
+        for i in range(n):
+            loadings[i, i // n_per] = (1.0 if i % 2 else -1.0) * (0.5 + rng.random())
+        values = factors @ loadings.T + 0.05 * rng.normal(size=(T, n))
+        return pd.DataFrame(
+            values,
+            index=pd.date_range('2021-01-01', periods=T),
+            columns=[f's{i}' for i in range(n)],
+        )
+
+    def _fit(self, factor_config=None):
+        model = TVA(
+            trend_network='factor', forecast_horizon=14, random_seed=0,
+            verbose=0, factor_config=factor_config,
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            model.fit(self._frame())
+        return model
+
+    def test_all_new_knobs_default_to_current_behavior(self):
+        base = self._fit()
+        explicit = self._fit({
+            'identification': 'alternating',
+            'sparse_config': None,
+            'sparse_freeze_support': True,
+            'level_shift_veto': False,
+            'level_shift_veto_shrink': 1.0,
+        })
+        np.testing.assert_array_equal(
+            base._factor_network.loadings.detach().numpy(),
+            explicit._factor_network.loadings.detach().numpy(),
+        )
+
+    def test_sparse_identification_reaches_the_coherence_loadings(self):
+        model = self._fit({'identification': 'sparse_alt'})
+        lam = model._factor_network.fitted_loadings(0.02)
+        counts = (np.abs(lam) > 0).sum(axis=1)
+        self.assertTrue((counts <= 1).all())
+
+    def test_sparse_forecast_still_runs_and_stays_close(self):
+        base = self._fit()
+        sparse = self._fit({'identification': 'sparse_alt'})
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            fa = base.predict(14)
+            fb = sparse.predict(14)
+        self.assertEqual(fa.shape, fb.shape)
+        rel = np.abs(fa.values - fb.values).mean() / max(np.abs(fa.values).mean(), 1e-9)
+        self.assertLess(rel, 0.25)
+
+    def test_veto_changes_the_input_panel_only_when_enabled(self):
+        base = self._fit()
+        same = self._fit({'level_shift_veto': False})
+        np.testing.assert_array_equal(base._adjusted_raw, same._adjusted_raw)
+        self.assertIsNone(same._shift_returned)
+
+    def test_veto_all_changes_the_panel_and_stays_reconstruction_symmetric(self):
+        base = self._fit()
+        vetoed = self._fit({'level_shift_veto': 'all'})
+        self.assertIsNotNone(vetoed._shift_returned)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            fa = base.predict(14)
+            fb = vetoed.predict(14)
+        # whatever the veto leaves in the trend must NOT be added back a second
+        # time at predict; asymmetry here showed up as a +59% MASE blowup
+        rel = np.abs(fa.values - fb.values).mean() / max(np.abs(fa.values).mean(), 1e-9)
+        self.assertLess(rel, 0.25)

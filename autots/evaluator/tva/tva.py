@@ -269,6 +269,7 @@ class TVA:
         self._factor_network = None
         self._factor_info = None
         self._structure_loadings = None
+        self._shift_returned = None
         self._structure_agreement = None
         self._factor_scale = None
 
@@ -773,10 +774,101 @@ class TVA:
             adjusted = adjusted - (comp - slow)
         shifts = self._components.get('level_shifts')
         if shifts is not None:
-            adjusted = adjusted - shifts.reindex(
+            shifts = shifts.reindex(
                 index=adjusted.index, columns=adjusted.columns
             ).fillna(0.0)
+            cfg = self.factor_config or {}
+            if cfg.get('level_shift_veto'):
+                vetoed = self._veto_shared_shifts(shifts, cfg)
+                # Whatever the veto keeps in the panel is now part of the
+                # fitted trend, so the reconstruction must NOT add it back a
+                # second time. Record it once here and correct every add-back
+                # site against it; the two paths have to stay symmetric or the
+                # forecast double-counts every shared step.
+                self._shift_returned = (shifts - vetoed).to_numpy(dtype=float)
+                shifts = vetoed
+            else:
+                self._shift_returned = None
+            adjusted = adjusted - shifts
         return adjusted.to_numpy(dtype=float)
+
+    @staticmethod
+    def _veto_shared_shifts(shifts, cfg):
+        """Keep the part of a level shift that the whole panel made together.
+
+        The changepoint detector is univariate: it sees each series alone, so a
+        single shared factor move gets charged to N series as N independent
+        level shifts and is then subtracted out of the panel entirely. That is
+        the largest measured loss in the factor pipeline -- removing
+        ``level_shifts`` more than halves the variance the true factors explain
+        (R^2 0.338 -> 0.156), because the movement being removed *is* the
+        signal the factor model exists to find.
+
+        This keeps the per-series *excess* over what the co-stepping group did
+        and returns the shared part to the panel. A step that only one series
+        takes is untouched, so genuine idiosyncratic shifts are still removed.
+
+        Args:
+            shifts: (T, N) frame of per-series step functions.
+            cfg: factor config, read for ``level_shift_min_share``,
+                ``level_shift_min_agreement`` and ``level_shift_window``.
+
+        Returns:
+            A (T, N) frame to subtract instead of ``shifts``.
+        """
+        import pandas as pd
+
+        step = shifts.diff().fillna(0.0)
+        values = step.to_numpy(dtype=float)
+        n_time, n_series = values.shape
+        if n_series < 3 or n_time < 3:
+            return shifts
+
+        window = max(int(cfg.get('level_shift_window', 31) or 31), 1)
+        min_share = float(cfg.get('level_shift_min_share', 0.15) or 0.15)
+        min_agree = float(cfg.get('level_shift_min_agreement', 0.60) or 0.60)
+        shrink = float(cfg.get('level_shift_veto_shrink', 1.0))
+        if str(cfg.get('level_shift_veto')).lower() == 'all':
+            # the unconditional control: subtract no level shift at all. This
+            # is what isolates how much the subtraction costs the factor fit
+            # from how much of it is genuinely shared movement.
+            return shifts * (1.0 - shrink)
+
+        moved = np.abs(values) > 0
+        # a shared move is rarely dated identically across series, so pool the
+        # vote over a short window before deciding whether it was one event
+        pooled = (
+            pd.DataFrame(moved.astype(float))
+            .rolling(window, center=True, min_periods=1)
+            .max()
+            .to_numpy()
+            > 0
+        )
+        keep = np.zeros_like(values)
+        for t in range(n_time):
+            members = np.where(pooled[t] & moved[t])[0]
+            if members.size < 2 or members.size < min_share * n_series:
+                continue
+            signs = np.sign(values[t, members])
+            nz = signs[signs != 0]
+            if nz.size == 0:
+                continue
+            if abs(float(nz.sum())) / float(nz.size) < min_agree:
+                continue  # the panel disagrees on direction: not one event
+            # Return the step to the panel rather than trying to split it into
+            # shared and idiosyncratic parts: a series' share of a factor move
+            # is proportional to its loading, which is exactly what has not
+            # been estimated yet at this point in the pipeline. Whatever excess
+            # a series had over the group stays in the panel too, where the
+            # factor model reads it as idiosyncratic -- which is what it is.
+            keep[t, members] = shrink * values[t, members]
+        # subtract only the shared part from the original panel. Rebuilding by
+        # cumsum of the differences instead would silently drop shifts.iloc[0]
+        # -- turning the whole veto into a per-series constant, which the
+        # median centering in robust_level_scale then removes exactly, so the
+        # fit would be bit-identical while looking like it had changed.
+        vetoed = shifts.to_numpy(dtype=float) - np.cumsum(keep, axis=0)
+        return pd.DataFrame(vetoed, index=shifts.index, columns=shifts.columns)
 
     def _robust_adjusted_panel(self) -> np.ndarray:
         """Trend-isolated panel from the joint robust estimator (2b).
@@ -914,7 +1006,8 @@ class TVA:
         try:
             from autots.evaluator.tva.discovery import match_factors
             from autots.evaluator.tva.factor_network import (
-                estimate_factors_alternating,
+                DEFAULT_FACTOR_CONFIG,
+                identify_factors,
                 robust_level_scale,
             )
 
@@ -924,26 +1017,20 @@ class TVA:
             center, scale = robust_level_scale(adjusted)
             normalized = (adjusted - center[np.newaxis, :]) / scale[np.newaxis, :]
 
-            ident = estimate_factors_alternating(
+            # Share the identification dispatcher rather than re-deriving the
+            # estimate+rotate sequence here, which had already drifted from
+            # DEFAULT_FACTOR_CONFIG's values -- and which would otherwise leave
+            # the structure-only track unable to use the sparse backends.
+            merged = dict(DEFAULT_FACTOR_CONFIG)
+            merged.update({k: v for k, v in cfg.items() if v is not None})
+            merged.setdefault('knot_spacing', self.factor_knot_spacing)
+            ident = identify_factors(
                 normalized,
-                n_factors=int(n_factors),
-                knot_spacing=cfg.get('knot_spacing', self.factor_knot_spacing),
-                alpha=cfg.get('alpha', 1e-3),
-                iters=cfg.get('alt_iters', 6),
-                init_window=cfg.get('init_window', 91),
-                gls=cfg.get('gls', True),
-                loading_l1=cfg.get('loading_l1', 0.0),
-                loading_l1_adaptive=cfg.get('loading_l1_adaptive', True),
-                loading_relax=cfg.get('loading_relax', True),
+                int(n_factors),
+                merged,
+                seed=self.random_seed,
+                device=self.device,
             )
-            if cfg.get('rotate'):
-                from autots.evaluator.tva.factor_network import rotate_identification
-
-                ident = rotate_identification(
-                    ident,
-                    method=cfg['rotate'],
-                    kaiser=bool(cfg.get('rotate_kaiser', True)),
-                )
 
             reference = self._factor_network.fitted_factors(
                 cfg.get('prune_share', 0.02)
@@ -1535,10 +1622,14 @@ class TVA:
             # must be a FORECAST of periodic components, not their in-sample
             # fitted values -- fitted values would hand this fold an oracle
             # the SeasonalNaive fold doesn't get, biasing the blend selection
+            returned = getattr(self, '_shift_returned', None)
+            shift_level = comps['level_shifts']
+            if returned is not None and returned.shape == shift_level.shape:
+                shift_level = shift_level - returned
             residual = (
                 values[: origin + 1]
                 - comps['trend'][: origin + 1]
-                - comps['level_shifts'][: origin + 1]
+                - shift_level[: origin + 1]
             )
             periodic = sn_mod.tile_profile(
                 sn_mod.empirical_profile(residual, season, 2), H
@@ -1547,7 +1638,7 @@ class TVA:
                 periodic = np.zeros((H, values.shape[1]), dtype=float)
             # a level shift is a step: the only thing knowable at the origin is
             # that it persists
-            add_back = periodic + comps['level_shifts'][origin][np.newaxis, :]
+            add_back = periodic + shift_level[origin][np.newaxis, :]
             tva_folds.append(trend + add_back)
             sn_folds.append(
                 seasonal_naive_forecast(values[: origin + 1], H, season)
@@ -1990,11 +2081,17 @@ class TVA:
             forecast_length, forecast_comps['seasonality'].values
         )
         self._seasonal_info = seasonal_info
+        shift_add_back = forecast_comps['level_shifts'].values
+        returned = getattr(self, '_shift_returned', None)
+        if returned is not None and returned.shape[1] == shift_add_back.shape[1]:
+            # the last row is the standing level of the shifts the veto handed
+            # back to the trend, which the trend forecast already carries
+            shift_add_back = shift_add_back - returned[-1][np.newaxis, :]
         forecast_values = (
             trend_fc
             + seasonal_path
             + forecast_comps['holidays'].values
-            + forecast_comps['level_shifts'].values
+            + shift_add_back
         )
 
         forecast_values, safety = self._apply_safety_layer(

@@ -53,6 +53,35 @@ DEFAULT_FACTOR_CONFIG = {
     # Feeds coherence.resolve_signs' long-dead `stability` argument, so a
     # factor nobody can reproduce cannot partition the panel.
     'factor_stability_reps': 0,
+    # ---- C9: sparse-code identification (default off) ---------------------
+    # 'alternating' == today. 'sparse_alt' is torch-free sparse dictionary
+    # learning over series; 'sparse_ae' is the gradient autoencoder and falls
+    # back to 'sparse_alt' without torch. Both refine *from* the alternating
+    # fit and are rejected back to it if they reconstruct materially worse, so
+    # turning one on cannot leave a panel worse identified than the default.
+    'identification': 'alternating',
+    'sparse_config': None,
+    # Project stage A's loadings back onto the identified support after each
+    # step. Without it the sparse structure never reaches fitted_loadings(),
+    # which is what the coherence graph actually reads -- the same class of
+    # miss the C5 measurement trap turned out to be. Inert unless a sparse
+    # identification actually ran.
+    'sparse_freeze_support': True,
+    # ---- I1: cross-series level-shift veto (default off) ------------------
+    # The changepoint detector is univariate, so one shared factor move is
+    # charged to N series as N independent level shifts and then subtracted
+    # out of the panel entirely -- the largest measured loss in the pipeline
+    # (true-factor R^2 0.338 -> 0.156). With the veto on, a step that most of
+    # the panel takes in the same direction stays in the panel.
+    # False | True | 'all'. Thresholds are calibrated against what the
+    # detector actually produces: on the primary synthetic cell it emits 38
+    # step events across 24 series, and at most 17% of the panel steps within
+    # +/-7 days of each other, so the obvious 30%-at-7-days rule never fires.
+    'level_shift_veto': False,
+    'level_shift_min_share': 0.15,
+    'level_shift_min_agreement': 0.60,
+    'level_shift_window': 31,
+    'level_shift_veto_shrink': 1.0,
     # extrapolation (stage B)
     'stage_b_steps': 200,
     'lr_phi': 1e-2,
@@ -425,6 +454,69 @@ def _promax_rotation(lam_varimax: np.ndarray, power: int = 4) -> np.ndarray:
     scale = np.sqrt(np.abs(np.diag(inv)))
     scale = np.where(np.isfinite(scale) & (scale > 1e-12), scale, 1.0)
     return Q * scale[None, :]
+
+
+def identify_factors(values, n_factors, cfg, seed=42, device='cpu'):
+    """Identification dispatch: alternating estimator, optional sparse refit, rotation.
+
+    At the default config this is exactly :func:`estimate_factors_alternating`
+    followed by the optional C1 rotation, so the seam is a no-op until a knob
+    moves. The sparse backends refine *from* the alternating fit and fall back
+    *to* it, which is why they are safe to expose as a plain config value.
+
+    Args:
+        values: (T, N) normalized panel.
+        n_factors: fitted rank K.
+        cfg: a merged factor config (see :data:`DEFAULT_FACTOR_CONFIG`).
+        seed: passed to the gradient tier.
+        device: passed to the gradient tier.
+
+    Returns:
+        The identification contract dict.
+    """
+    ident = estimate_factors_alternating(
+        values,
+        n_factors=n_factors,
+        knot_spacing=cfg['knot_spacing'],
+        alpha=cfg['alpha'],
+        iters=cfg['alt_iters'],
+        init_window=cfg['init_window'],
+        gls=cfg['gls'],
+        loading_l1=cfg['loading_l1'],
+        loading_l1_adaptive=cfg['loading_l1_adaptive'],
+        loading_relax=cfg['loading_relax'],
+    )
+    method = str(cfg.get('identification') or 'alternating').lower()
+    if method != 'alternating':
+        try:
+            from autots.evaluator.tva import sparse_factor
+
+            refined = sparse_factor.identify(
+                values,
+                n_factors,
+                ident,
+                method=method,
+                config=cfg.get('sparse_config'),
+                alpha=cfg['alpha'],
+                seed=seed,
+                device=device,
+            )
+            if refined is not None:
+                ident = refined
+        except Exception as exc:  # pragma: no cover - never fail a fit
+            warnings.warn(
+                f"TVA sparse identification unavailable; keeping the "
+                f"alternating basis. {exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+    if cfg.get('rotate'):
+        ident = rotate_identification(
+            ident,
+            method=cfg['rotate'],
+            kaiser=bool(cfg.get('rotate_kaiser', True)),
+        )
+    return ident
 
 
 def rotate_identification(ident: dict, method: str = 'varimax',
@@ -1373,29 +1465,13 @@ if HAS_TORCH:
         K = int(max(1, min(int(n_factors), N)))
 
         # ---- identification (torch-free, the stage that finds the factors) --
-        ident = estimate_factors_alternating(
-            arr,
-            n_factors=K,
-            knot_spacing=cfg['knot_spacing'],
-            alpha=cfg['alpha'],
-            iters=cfg['alt_iters'],
-            init_window=cfg['init_window'],
-            gls=cfg['gls'],
-            loading_l1=cfg['loading_l1'],
-            loading_l1_adaptive=cfg['loading_l1_adaptive'],
-            loading_relax=cfg['loading_relax'],
-        )
-        # C1: with lr_coef == 0 the coefficients below are frozen, so whatever
-        # basis leaves this line is the model's final basis. Rotating here --
-        # after identification, before the parameter copy -- therefore fixes
-        # the basis for the loadings graph while leaving the reconstruction
-        # (and stage B's per-factor phi, calibrated afterwards) untouched.
-        if cfg.get('rotate'):
-            ident = rotate_identification(
-                ident,
-                method=cfg['rotate'],
-                kaiser=bool(cfg.get('rotate_kaiser', True)),
-            )
+        # With lr_coef == 0 the coefficients below are frozen, so whatever
+        # basis leaves this line is the model's final basis. Both the C1
+        # rotation and the C9 sparse backends therefore act here -- after
+        # identification, before the parameter copy -- fixing the basis the
+        # loadings graph reads while leaving the reconstruction (and stage B's
+        # per-factor phi, calibrated afterwards) untouched.
+        ident = identify_factors(arr, K, cfg, seed=seed, device=device)
 
         model = LatentFactorTrend(
             n_series=N,
@@ -1412,8 +1488,30 @@ if HAS_TORCH:
             model.loadings.copy_(
                 torch.tensor(ident['loadings'], dtype=torch.float32, device=dev)
             )
+            # A sparse identification fits the per-series line jointly with
+            # the factors, so start stage A from that solution rather than
+            # from the column mean it would otherwise have to rediscover.
+            level = ident.get('idio_level')
+            if level is None or np.shape(level) != (N,):
+                level = arr.mean(axis=0)
             model.idio_level.copy_(
-                torch.tensor(arr.mean(axis=0), dtype=torch.float32, device=dev)
+                torch.tensor(np.asarray(level, dtype=float), dtype=torch.float32, device=dev)
+            )
+            slope = ident.get('idio_slope')
+            if slope is not None and np.shape(slope) == (N,):
+                model.idio_slope.copy_(
+                    torch.tensor(np.asarray(slope, dtype=float), dtype=torch.float32, device=dev)
+                )
+        # Support the sparse identification found, if any. Stage A's
+        # w_l1_loadings is a subgradient term that never actually reaches zero,
+        # so without projecting back onto this mask the identified zeros are
+        # gone long before fitted_loadings() -- and fitted_loadings() is what
+        # _apply_coherence builds the graph from.
+        support_mask = None
+        if cfg.get('sparse_freeze_support') and ident.get('identification_method', '').startswith('sparse'):
+            support_mask = torch.tensor(
+                (np.abs(np.asarray(ident['loadings'], dtype=float)) > 0).astype('float32'),
+                device=dev,
             )
 
         # ---- stage A: refine loadings, lags and the idiosyncratic line ------
@@ -1470,6 +1568,12 @@ if HAS_TORCH:
                         torch.sign(model.loadings)
                         * (model.loadings.abs() - thresh_l).clamp(min=0)
                     )
+            if support_mask is not None:
+                # C9: a projection, not a threshold -- it costs no
+                # hyperparameter, preserves the identified graph exactly, and
+                # still lets the surviving magnitudes adapt to the lag weights.
+                with torch.no_grad():
+                    model.loadings.mul_(support_mask)
             if (step + 1) % int(cfg['check_every']) == 0:
                 with torch.no_grad():
                     v = float(
@@ -1599,6 +1703,14 @@ if HAS_TORCH:
             'diagnostics': diag,
             'n_factors_fit': model.K,
             'n_factors_live': diag['n_live_factors'],
+            # C9 diagnostics: the live-atom count is a rank opinion grounded in
+            # who actually uses an atom, unlike n_factors_live (an energy
+            # threshold) and select_n_factors (an eigenvalue ratio).
+            'identification_method': ident.get('identification_method', 'alternating'),
+            'atom_usage': ident.get('atom_usage'),
+            'n_atoms_live': ident.get('n_atoms_live'),
+            'sparse_rejected': bool(ident.get('sparse_rejected', False)),
+            'init_rotate_used': ident.get('init_rotate_used'),
             'config': cfg,
         }
         if verbose:
