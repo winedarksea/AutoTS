@@ -353,23 +353,214 @@ class TVAModel(ModelObject):
         }
 
     @staticmethod
+    def _new_factor_config(method: str = "random"):
+        """Sample ``factor_network.DEFAULT_FACTOR_CONFIG`` overrides for search.
+
+        Profile-anchored rather than independent per key, for two measured
+        reasons. Several knobs are inert alone — a blend tie tolerance does
+        nothing without ``sn_blend``, and ``space`` only pays once the blend
+        is choosing between two sane paths. And the stack matters far more
+        than any single key: on the LRP iteration folds plain factor defaults
+        scored an aggregate base MASE ratio of 2.22 against SeasonalNaive,
+        while the assembled "arm F" stack (safety blend + tie tolerance 0.25 +
+        seasonal arbitration + log space) scored 1.011. Independent per-key
+        sampling would reach that corner of the space only rarely.
+
+        Library defaults are deliberately left unchanged. Arm F clears the
+        aggregate MASE, per-fold MASE and coherence gates but fails both
+        per-series gates, so it is offered to the optimizer to win on a given
+        dataset rather than asserted as a default.
+
+        Excluded on measured evidence: ``space='auto'`` (1.166 vs 1.011 for
+        forced log — the selector fails, not the option), ``blend_risk_weight``
+        (moves the worst-series ratio the wrong way), ``coherence`` (shrink
+        gain 0.000) and ``level_shift_veto`` (never fires on real detector
+        output). Enabling any of them is still possible by hand.
+        """
+        fast_mode = "fast" in str(method).lower()
+
+        # The safety layer refits the factor stage once per inner fold, so it
+        # is the dominant cost knob here; 'default' and 'explore' keep cheap
+        # arms in the pool.
+        profile = random.choices(
+            ["arm_f", "arm_f_sparse", "safety", "explore", "default"],
+            weights=(
+                [0.2, 0.15, 0.15, 0.2, 0.3]
+                if fast_mode
+                else [0.32, 0.23, 0.15, 0.15, 0.15]
+            ),
+        )[0]
+        if profile == "default":
+            # today's behavior, bit for bit — worth keeping reachable as the
+            # comparator every other profile is measured against
+            return None
+
+        cfg = {}
+        if profile in ("arm_f", "arm_f_sparse", "safety"):
+            # 1b/1e: blend the factor path against SeasonalNaive on inner
+            # rolling origins. inner_refit rides along unconditionally — the
+            # factor stage must be refit on truncated history or the folds it
+            # is graded on are in-sample, which is the bug that let the blend
+            # hand the network a weight it had not earned.
+            cfg["sn_blend"] = True
+            cfg["inner_refit"] = True
+            cfg["inner_folds"] = random.choices([3, 5], weights=[0.8, 0.2])[0]
+            cfg["safety_config"] = {
+                "blend_tie_tolerance": random.choices(
+                    [0.01, 0.1, 0.25], weights=[0.15, 0.3, 0.55]
+                )[0]
+            }
+            cfg["reanchor"] = random.choices([True, False], weights=[0.4, 0.6])[0]
+            cfg["error_cap"] = random.choices([True, False], weights=[0.3, 0.7])[0]
+            cfg["conformal_sigma"] = random.choices(
+                [True, False], weights=[0.3, 0.7]
+            )[0]
+
+        if profile in ("arm_f", "arm_f_sparse"):
+            cfg["seasonal_arbitration"] = True
+            # 2c: the single largest measured lever on LRP (aggregate 1.123 ->
+            # 1.011, worst series 6.14 -> 1.93) on a panel spanning ~1e-2 to
+            # 2e8 whose metrics comove in growth-rate terms
+            cfg["space"] = "log"
+        else:
+            cfg["space"] = random.choices(["level", "log"], weights=[0.65, 0.35])[0]
+            cfg["seasonal_arbitration"] = random.choices(
+                [True, False], weights=[0.3, 0.7]
+            )[0]
+
+        # ---- C9: sparse-code identification / autoencoder ------------------
+        # Both tiers initialize from and fall back to the alternating
+        # estimator, so sampling one cannot leave a panel worse identified.
+        # 'sparse_ae' degrades to 'sparse_alt' without torch.
+        if profile == "arm_f_sparse":
+            identification = random.choices(
+                ["sparse_ae", "sparse_alt"], weights=[0.55, 0.45]
+            )[0]
+        else:
+            identification = random.choices(
+                ["alternating", "sparse_alt", "sparse_ae"],
+                weights=[0.7, 0.15, 0.15],
+            )[0]
+        cfg["identification"] = identification
+        if identification != "alternating":
+            cfg["sparse_config"] = {
+                # k stays at 1: code_topk=2 is on the ladder's do-not-retry
+                # list (pair precision 0.267 vs 0.290, and it re-enables the
+                # abstention knobs at the cost of the sparsity that made the
+                # basis identifiable). Still settable by hand.
+                "code_topk": 1,
+                # the only abstention channel left at code_topk == 1, where
+                # dominance_margin and min_loading_share pass unconditionally
+                "min_code_share": random.choices(
+                    [0.0, 0.1, 0.2], weights=[0.5, 0.3, 0.2]
+                )[0],
+                # three restarts cost 3x the identification; a single varimax
+                # start recovers most of the anti-collapse benefit
+                "init_rotate": random.choices(
+                    [["varimax"], [None, "varimax", "quartimax"]],
+                    weights=[0.8, 0.2] if fast_mode else [0.5, 0.5],
+                )[0],
+            }
+
+        # ---- estimator knobs: cheap (no extra fits) and never yet swept ----
+        # The trendless-series gate zeroes loadings of series with no
+        # low-frequency structure. It is the direct lever on the largest
+        # measured factor-mode failure: on load_daily both factor arms run
+        # ~8x SeasonalNaive against ~3.66x for 'none', which is exactly a
+        # trendless series being handed factor exposure. Pinned at 0.6 since
+        # the mode was written and never swept; 0.0 disables the gate.
+        cfg["min_trend_to_noise"] = random.choices(
+            [0.0, 0.3, 0.6, 1.0, 1.5], weights=[0.1, 0.2, 0.35, 0.25, 0.1]
+        )[0]
+        # Exposure-share floor below which a factor is dropped. Fitted rank
+        # came out 4.0 against a true 3 in 7/7 ladder cells, and bad rank
+        # selection is what blocked the robust input estimator, so the pruning
+        # threshold is worth searching rather than assuming.
+        cfg["prune_share"] = random.choices(
+            [0.0, 0.01, 0.02, 0.05, 0.1], weights=[0.1, 0.2, 0.35, 0.25, 0.1]
+        )[0]
+        # l1 trend-filter smoothness on the factor paths. Each score column is
+        # standardized before the Lasso and rescaled after, so this is a pure
+        # smoothness knob and does not need retuning per panel scale — which
+        # is what makes it safe to sample across arbitrary datasets. Controls
+        # how many knots a factor path spends, i.e. how smooth the thing being
+        # extrapolated is, and extrapolation is the LRP failure mode.
+        cfg["alpha"] = random.choices(
+            [3e-4, 1e-3, 3e-3, 1e-2], weights=[0.2, 0.4, 0.25, 0.15]
+        )[0]
+
+        # ---- lower-weight knobs, each measured and each still plausible ----
+        # 1d: quarantine series whose recent tail is numerically constant
+        cfg["frozen_tail_gate"] = random.choices([True, False], weights=[0.35, 0.65])[
+            0
+        ]
+        # 1a: pick the factor continuation rule by held-out reconstruction
+        cfg["continuation_select"] = random.choices(
+            [True, False], weights=[0.3, 0.7]
+        )[0]
+        # 1c: zero loadings of series the factor model forecasts worse than a
+        # damped local-linear baseline on their own raw target (None == off)
+        cfg["gate_forecast_margin"] = random.choices(
+            [None, 1.0, 1.25], weights=[0.7, 0.2, 0.1]
+        )[0]
+        # C1: rotation moves only the basis the coherence graph reads, never
+        # the reconstruction. Clears every gate on a clean panel and hurts on
+        # the detector-adjusted one, so it stays low weight.
+        cfg["rotate"] = random.choices([None, "varimax"], weights=[0.85, 0.15])[0]
+        # 2b: recovers the factor span far better (canonical correlation 0.77
+        # vs 0.53) while making level-space scale and rank selection worse;
+        # on LRP the damage slightly outweighed the gain (1.021 vs 1.011)
+        cfg["input_estimator"] = random.choices(
+            ["detector", "robust"], weights=[0.8, 0.2]
+        )[0]
+        # C5: the same robust panel used for the *graph only*, leaving every
+        # forecast value untouched. A second identification fit, so it costs.
+        if random.random() < (0.1 if fast_mode else 0.15):
+            cfg["structure_input"] = "robust"
+        # 3b: fit shared factors on long-history anchors, project the rest
+        cfg["anchor_selection"] = random.choices([True, False], weights=[0.3, 0.7])[0]
+        # 3c: data-derived group factors underneath the global ones; costs
+        # group_refits extra fits, so it is rare and never sampled in fast mode
+        if not fast_mode and random.random() < 0.12:
+            cfg["group_factors"] = True
+
+        return cfg
+
+    @staticmethod
     def get_new_params(method: str = "random"):
         """Return randomly sampled parameters for AutoTS optimizer.
 
         Weights favor faster/more reliable configurations while also exposing
         structure and loss regularization knobs for broader TVA search.
+        ``trend_network`` is weighted toward 'factor' and never samples 'v1'
+        (see the comment below); in 'factor' mode a ``factor_config`` bundle
+        is drawn by :meth:`_new_factor_config`, which is where the Phase 1/2
+        safety-layer and sparse-identification knobs enter the search.
         """
         fast_mode = "fast" in str(method).lower()
 
-        # 'none' is the torch-free damped-trend + discovery mode — the Phase-4
-        # ablation showed it matches the full network on synthetic panels, so
-        # it gets real sampling weight
+        # Weighted by the five-arm benchmark (5 synthetic datasets x 2 horizons
+        # x 4 folds, plus the LRP iteration folds). 'factor' is the only arm
+        # that separates from the torch-free 'none' baseline on either
+        # benchmark; 'v1' and 'v2' scored identically to 'none' on synthetic
+        # (geometric-mean skill 0.338 for all three) while costing 663.7s and
+        # 336.8s mean fit on LRP against 19.2s for 'factor'. So 'v1' is no
+        # longer sampled at all and 'v2' is kept only as a rare escape hatch.
         trend_network = random.choices(
-            ["v2", "none", "factor", "v1"], weights=[0.35, 0.25, 0.3, 0.1]
+            ["factor", "none", "v2"], weights=[0.6, 0.3, 0.1]
         )[0]
-        # only sampled meaningfully in 'factor' mode; harmless elsewhere
+        # only read in 'factor' mode; left None elsewhere so templates don't
+        # carry inert nesting
+        factor_config = (
+            TVAModel._new_factor_config(method) if trend_network == "factor" else None
+        )
+        # only sampled meaningfully in 'factor' mode; harmless elsewhere.
+        # 'auto' (select_n_factors, an eigenvalue ratio) loses weight on
+        # measured evidence: it returned rank 4.0 against a true 3 in 7 of 7
+        # ladder cells, and rank misspecification is what blocked the robust
+        # input estimator from promotion. Explicit small K gets the mass.
         n_factors = random.choices(
-            ["auto", 1, 2, 3, 4, 6], weights=[0.5, 0.05, 0.1, 0.15, 0.1, 0.1]
+            ["auto", 1, 2, 3, 4, 6], weights=[0.35, 0.05, 0.15, 0.2, 0.15, 0.1]
         )[0]
         factor_knot_spacing = random.choices(
             [7, 14, 28], weights=[0.6, 0.25, 0.15]
@@ -500,6 +691,7 @@ class TVAModel(ModelObject):
             "trend_network": trend_network,
             "fusion": fusion,
             "n_factors": n_factors,
+            "factor_config": factor_config,
             "factor_knot_spacing": factor_knot_spacing,
             "factor_max_lag": factor_max_lag,
             "d_token": d_token,

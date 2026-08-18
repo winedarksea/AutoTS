@@ -361,6 +361,184 @@ class TestSearchIntegration(unittest.TestCase):
             self.assertEqual(model.get_params()['n_factors'], params['n_factors'])
         self.assertIn('factor', networks)
 
+    def test_v1_is_never_sampled_and_factor_dominates(self):
+        """'v1' scored identically to 'none' at 663.7s mean fit on LRP.
+
+        It stays constructible — this asserts only that the optimizer never
+        spends a fit on it, and that the sampling mass moved to 'factor'.
+        """
+        import random
+        import collections
+
+        random.seed(0)
+        seen = collections.Counter(
+            TVAModel.get_new_params()['trend_network'] for _ in range(600)
+        )
+        self.assertEqual(seen['v1'], 0)
+        # 'v2' is kept only as a rare escape hatch
+        self.assertLess(seen['v2'] / 600.0, 0.2)
+        self.assertGreater(seen['factor'] / 600.0, 0.45)
+        self.assertGreater(seen['none'], 0)
+
+    def test_factor_config_only_sampled_in_factor_mode(self):
+        import random
+
+        random.seed(1)
+        for _ in range(300):
+            params = TVAModel.get_new_params()
+            self.assertIn('factor_config', params)
+            if params['trend_network'] != 'factor':
+                self.assertIsNone(params['factor_config'])
+
+    def test_sampled_factor_config_keys_are_all_real(self):
+        """A typo'd key would be silently ignored by the config merge.
+
+        ``structure_input`` is read straight off ``factor_config`` in
+        ``TVA._fit_structure_loadings`` rather than living in the defaults, so
+        it is allowed explicitly instead of being caught as a typo.
+        """
+        import random
+        from autots.evaluator.tva.factor_network import DEFAULT_FACTOR_CONFIG
+        from autots.evaluator.tva.sparse_factor import (
+            DEFAULT_SPARSE_FACTOR_CONFIG,
+        )
+
+        random.seed(2)
+        allowed = set(DEFAULT_FACTOR_CONFIG) | {'structure_input'}
+        for _ in range(400):
+            cfg = TVAModel._new_factor_config()
+            if cfg is None:
+                continue
+            self.assertLessEqual(set(cfg), allowed)
+            sparse = cfg.get('sparse_config')
+            if sparse:
+                self.assertLessEqual(
+                    set(sparse), set(DEFAULT_SPARSE_FACTOR_CONFIG)
+                )
+
+    def test_factor_config_survives_a_template_json_round_trip(self):
+        """AutoTS stores model_parameters as JSON; tuples would not survive.
+
+        ``init_rotate`` is the live case — it is a tuple in the defaults and
+        must be sampled as a list, since a JSON round-trip returns a list
+        either way and the reloaded template has to fit identically.
+        """
+        import json
+        import random
+
+        random.seed(3)
+        checked = 0
+        for _ in range(300):
+            params = TVAModel.get_new_params()
+            if params['factor_config'] is None:
+                continue
+            restored = json.loads(json.dumps(params))
+            self.assertEqual(restored['factor_config'], params['factor_config'])
+            self.assertEqual(
+                TVAModel(**restored).get_params()['factor_config'],
+                params['factor_config'],
+            )
+            checked += 1
+        self.assertGreater(checked, 0)
+
+    def test_the_arm_f_stack_is_reachable(self):
+        """The measured-best LRP configuration must be drawable.
+
+        Aggregate base MASE ratio 1.011 against 2.22 for plain defaults, so a
+        sampler that cannot reach this corner is leaving the whole gain on the
+        table. Also asserts ``inner_refit`` rides along with ``sn_blend``:
+        without it the inner folds are in-sample and the blend hands the
+        network a weight it has not earned.
+        """
+        import random
+
+        random.seed(4)
+        arm_f = 0
+        for _ in range(400):
+            cfg = TVAModel._new_factor_config()
+            if cfg is None:
+                continue
+            if cfg.get('sn_blend'):
+                self.assertTrue(cfg.get('inner_refit'))
+                self.assertIn('blend_tie_tolerance', cfg['safety_config'])
+            if (
+                cfg.get('sn_blend')
+                and cfg.get('seasonal_arbitration')
+                and cfg.get('space') == 'log'
+                and cfg['safety_config']['blend_tie_tolerance'] == 0.25
+            ):
+                arm_f += 1
+        self.assertGreater(arm_f, 0)
+
+    def test_sparse_identification_is_reachable_with_its_config(self):
+        import random
+
+        random.seed(5)
+        methods = set()
+        for _ in range(400):
+            cfg = TVAModel._new_factor_config()
+            if cfg is None:
+                continue
+            method = cfg.get('identification', 'alternating')
+            methods.add(method)
+            if method == 'alternating':
+                self.assertNotIn('sparse_config', cfg)
+            else:
+                self.assertIn('code_topk', cfg['sparse_config'])
+        self.assertEqual(
+            methods, {'alternating', 'sparse_alt', 'sparse_ae'}
+        )
+
+    def test_measured_dead_options_are_not_sampled(self):
+        """Each of these was measured and killed; see tva_benchmark_results.md.
+
+        ``space='auto'`` scored 1.166 vs 1.011 for forced log, the coherence
+        shrink gain was 0.000, ``blend_risk_weight`` moved the worst-series
+        ratio the wrong way, and the level-shift veto never fires on real
+        detector output. All stay settable by hand, none should cost a fit
+        during a search.
+        """
+        import random
+
+        random.seed(6)
+        for _ in range(400):
+            cfg = TVAModel._new_factor_config()
+            if cfg is None:
+                continue
+            self.assertNotEqual(cfg.get('space'), 'auto')
+            self.assertFalse(cfg.get('coherence', False))
+            self.assertFalse(cfg.get('level_shift_veto', False))
+            self.assertNotIn(
+                'blend_risk_weight', cfg.get('safety_config') or {}
+            )
+
+    def test_default_profile_stays_reachable(self):
+        """A ``None`` config is the comparator every other profile is scored
+        against, so the sampler must keep drawing plain defaults."""
+        import random
+
+        random.seed(7)
+        draws = [TVAModel._new_factor_config() for _ in range(300)]
+        self.assertGreater(sum(c is None for c in draws), 0)
+        self.assertGreater(sum(c is not None for c in draws), 0)
+
+    def test_fast_mode_favors_the_cheap_profiles(self):
+        """The safety layer refits the factor stage once per inner fold and
+        ``group_factors`` costs ``group_refits`` more, so neither should
+        dominate a 'fast' search."""
+        import random
+
+        random.seed(8)
+        fast = [TVAModel._new_factor_config('fast') for _ in range(400)]
+        slow = [TVAModel._new_factor_config('random') for _ in range(400)]
+        def blended(draws):
+            return sum(bool(c and c.get('sn_blend')) for c in draws)
+
+        self.assertLess(blended(fast), blended(slow))
+        self.assertEqual(
+            sum(bool(c and c.get('group_factors')) for c in fast), 0
+        )
+
 
 if __name__ == '__main__':
     unittest.main()
