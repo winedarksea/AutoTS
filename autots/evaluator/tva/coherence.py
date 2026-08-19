@@ -58,6 +58,13 @@ DEFAULT_COHERENCE_CONFIG = {
     'min_similarity': 0.0,
     # endpoint window for net-direction; None -> max(1, H // 4)
     'direction_window': None,
+    # ---- user graph prior (inert without a prior) --------------------------
+    # blend weight of a supplied (N, N) signed prior into the loading-cosine
+    # similarity before the kNN step. The blended graphs are offered to
+    # select_coherence as *additional* candidates, so a wrong prior simply
+    # loses to the unblended graph on held-out origins.
+    'prior_weight': 0.5,
+    'prior_candidates': True,
 }
 
 
@@ -266,7 +273,27 @@ def group_graph(loadings, config=None) -> dict:
     }
 
 
-def laplacian_graph(loadings, config=None, n_neighbors: int = 5) -> np.ndarray:
+def _symmetric_prior(prior, n: int):
+    """(N, N) signed symmetric hollow view of a user prior, or None."""
+    if prior is None:
+        return None
+    arr = np.asarray(prior, dtype=float)
+    if arr.ndim != 2 or arr.shape != (n, n) or n == 0:
+        return None
+    arr = np.nan_to_num(arr, nan=0.0, posinf=0.0, neginf=0.0)
+    arr = 0.5 * (arr + arr.T)
+    np.fill_diagonal(arr, 0.0)
+    peak = float(np.abs(arr).max()) if arr.size else 0.0
+    if peak <= 0:
+        return None
+    if peak > 1.0:
+        arr = arr / peak
+    return arr
+
+
+def laplacian_graph(
+    loadings, config=None, n_neighbors: int = 5, prior=None
+) -> np.ndarray:
     """Signed k-nearest-neighbour graph over sign-resolved loading vectors.
 
     General form for panels with no clean dominant-factor partition
@@ -283,6 +310,9 @@ def laplacian_graph(loadings, config=None, n_neighbors: int = 5) -> np.ndarray:
         loadings: (N, K) loading matrix.
         config: overrides for ``DEFAULT_COHERENCE_CONFIG``.
         n_neighbors: links retained per node before symmetrization.
+        prior: optional (N, N) signed user prior, blended into the cosine
+            similarity at ``config['prior_weight']`` before the kNN step.
+            Both are signed, so a negative prior link pushes apart natively.
 
     Returns:
         (N, N) signed, symmetric, hollow weighted adjacency. All-zero when the
@@ -304,6 +334,14 @@ def laplacian_graph(loadings, config=None, n_neighbors: int = 5) -> np.ndarray:
     cos = unit @ unit.T
     np.fill_diagonal(cos, 0.0)
     cos = np.nan_to_num(cos, nan=0.0, posinf=0.0, neginf=0.0)
+
+    prior_sym = _symmetric_prior(prior, n)
+    if prior_sym is not None:
+        w_prior = float(cfg.get('prior_weight') or 0.0)
+        if w_prior > 0:
+            w_prior = min(w_prior, 1.0)
+            cos = (1.0 - w_prior) * cos + w_prior * prior_sym
+            np.fill_diagonal(cos, 0.0)
 
     floor = float(cfg.get('min_similarity') or 0.0)
     if floor > 0:
@@ -875,17 +913,25 @@ def apply_selection(trend_fc, selection, graphs, config=None):
         return trend_fc, info
 
 
-def build_candidates(loadings, config=None):
+def build_candidates(loadings, config=None, prior=None):
     """Convenience: the candidate graph set implied by ``config['graph']``.
 
     Wiring helper so ``tva.py`` builds the same candidate set for the inner
     selection and for the final application with one call each.
+
+    When a ``prior`` is supplied and ``config['prior_weight'] > 0``, the set
+    gains a prior-blended ``laplacian_k{k}_prior`` per neighbour count plus a
+    ``prior_only`` adjacency. They are only *candidates*: ``select_coherence``
+    grades them on held-out inner origins against the unblended graphs and the
+    always-admissible "do nothing" baseline, so a wrong prior costs nothing.
 
     Args:
         loadings: (N, K) loading matrix.
         config: overrides for ``DEFAULT_COHERENCE_CONFIG``. ``graph`` selects
             the family: ``'group'``, ``'laplacian'``, ``'auto'`` (both) or
             ``'none'`` (empty, i.e. the correction is disabled).
+        prior: optional (N, N) signed user prior. ``None`` reproduces the
+            candidate dict exactly as before.
 
     Returns:
         ``(graphs, meta)`` where ``graphs`` is ``{name: graph}`` and ``meta``
@@ -914,4 +960,19 @@ def build_candidates(loadings, config=None):
             adj = laplacian_graph(lam, cfg, n_neighbors=int(k))
             if np.any(adj):
                 graphs['laplacian_k{}'.format(int(k))] = adj
+
+    n_series = int(meta['n_series'])
+    prior_sym = _symmetric_prior(prior, n_series)
+    if (
+        prior_sym is not None
+        and cfg.get('prior_candidates', True)
+        and float(cfg.get('prior_weight') or 0.0) > 0
+    ):
+        if mode in ('laplacian', 'auto'):
+            for k in cfg.get('neighbors') or (5,):
+                adj = laplacian_graph(lam, cfg, n_neighbors=int(k), prior=prior_sym)
+                if np.any(adj):
+                    graphs['laplacian_k{}_prior'.format(int(k))] = adj
+        if np.any(prior_sym):
+            graphs['prior_only'] = prior_sym
     return graphs, meta

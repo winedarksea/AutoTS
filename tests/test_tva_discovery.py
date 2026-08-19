@@ -449,5 +449,94 @@ class TestMatchFactors(unittest.TestCase):
         self.assertEqual(matched['mean_abs_corr'], 0.0)
 
 
+class TestPriorFamilies(unittest.TestCase):
+    """User priors reach discovery signed, separated, and trusted at
+    prior_confidence rather than at parity with the data-derived families."""
+
+    @staticmethod
+    def _panel(n_series=4, n_days=200, seed=0):
+        rng = np.random.default_rng(seed)
+        idx = pd.date_range('2022-01-01', periods=n_days, freq='D')
+        values = np.cumsum(rng.normal(0, 1, (n_days, n_series)), axis=0) + 100
+        return pd.DataFrame(
+            values, index=idx, columns=[f's{i}' for i in range(n_series)]
+        )
+
+    def test_negative_prior_entry_yields_a_negative_edge(self):
+        df = self._panel()
+        prior = np.zeros((4, 4), dtype=np.float32)
+        prior[0, 1] = prior[1, 0] = -0.8
+        out = discover_structure(df, extra_adjacencies={'business': prior})
+        business = [e for e in out['edges'] if e['family'] == 'business']
+        self.assertTrue(business)
+        for edge in business:
+            self.assertEqual(edge['sign'], -1)
+            self.assertAlmostEqual(edge['weight'], 0.8, places=5)
+
+    def test_business_and_causal_are_separate_families(self):
+        df = self._panel()
+        business = np.zeros((4, 4), dtype=np.float32)
+        business[0, 1] = business[1, 0] = 1.0
+        causal = np.zeros((4, 4), dtype=np.float32)
+        causal[2, 3] = 0.5
+        out = discover_structure(
+            df, extra_adjacencies={'business': business, 'causal': causal}
+        )
+        families = {e['family'] for e in out['edges']}
+        self.assertIn('business', families)
+        self.assertIn('causal', families)
+        self.assertIn('business', out['family_adjacencies'])
+        self.assertIn('causal', out['family_adjacencies'])
+        causal_edges = [e for e in out['edges'] if e['family'] == 'causal']
+        # directed: only the one supplied direction
+        self.assertEqual(
+            [(e['source'], e['target']) for e in causal_edges], [('s2', 's3')]
+        )
+
+    def test_family_weights_deep_merge(self):
+        from autots.evaluator.tva.discovery import (
+            DEFAULT_DISCOVERY_CONFIG, _resolve_config,
+        )
+        resolved = _resolve_config({'family_weights': {'business': 0.1}})
+        self.assertEqual(resolved['family_weights']['business'], 0.1)
+        # everything the user did not mention survives
+        for family, weight in DEFAULT_DISCOVERY_CONFIG['family_weights'].items():
+            if family == 'business':
+                continue
+            self.assertEqual(resolved['family_weights'][family], weight)
+        # the module default is not mutated by the merge
+        self.assertEqual(
+            DEFAULT_DISCOVERY_CONFIG['family_weights']['business'], 1.0
+        )
+
+    def test_causal_has_a_default_weight(self):
+        from autots.evaluator.tva.discovery import DEFAULT_DISCOVERY_CONFIG
+        self.assertIn('causal', DEFAULT_DISCOVERY_CONFIG['family_weights'])
+
+    def test_family_weight_tracks_prior_confidence(self):
+        from autots.evaluator.tva.tva import TVA
+        prior = [['s0', 's1']]
+        for confidence in (0.1, 0.9):
+            tva = TVA(prior_adjacency=prior, prior_confidence=confidence)
+            tva._prior_input = np.zeros((4, 4), dtype=np.float32)
+            tva._causal_prior_input = None
+            cfg = tva._apply_prior_family_weights({})
+            self.assertEqual(cfg['family_weights']['business'], confidence)
+            self.assertEqual(cfg['family_weights']['causal'], confidence)
+        # an explicit user weight wins over prior_confidence
+        tva = TVA(prior_adjacency=prior, prior_confidence=0.9)
+        tva._prior_input = np.zeros((4, 4), dtype=np.float32)
+        tva._causal_prior_input = None
+        cfg = tva._apply_prior_family_weights({'family_weights': {'business': 0.2}})
+        self.assertEqual(cfg['family_weights']['business'], 0.2)
+
+    def test_no_prior_leaves_the_config_untouched(self):
+        from autots.evaluator.tva.tva import TVA
+        tva = TVA()
+        tva._prior_input = None
+        tva._causal_prior_input = None
+        self.assertEqual(tva._apply_prior_family_weights({}), {})
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

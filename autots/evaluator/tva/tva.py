@@ -24,7 +24,11 @@ import warnings
 from typing import Optional
 
 from autots.evaluator.tva.decomposition import NornDecomposer
-from autots.evaluator.tva.priors import YggdrasilPriors, SeriesMetadata
+from autots.evaluator.tva.priors import (
+    YggdrasilPriors,
+    SeriesMetadata,
+    coerce_prior_adjacency,
+)
 from autots.evaluator.tva.reconciliation import ReconciliationBridge
 from autots.evaluator.tva.structure import (
     GraphSnapshot,
@@ -76,9 +80,17 @@ class TVA:
                 attention-driven; zero-init ensures pure-additive start.
             'additive': AdditiveFusion — plain sum, no learned parameters.
         series_metadata: List of SeriesMetadata for prior construction.
-        prior_adjacency: (N, N) explicit prior adjacency matrix (optional).
-        prior_confidence: Weight of priors (0=ignore, 1=rigid).
-        causal_prior: Optional soft causal edge prior for V2 adjacency regularization.
+        prior_adjacency: Optional co-movement graph prior. Accepts an (N, N)
+            matrix, a labelled DataFrame, a list of
+            ``{'source', 'target', 'weight', 'directed'}`` edge dicts, or a
+            list of name groups (each group a clique) -- see
+            ``priors.coerce_prior_adjacency``. Signed: a negative weight is a
+            substitution claim and pushes the pair apart.
+        prior_confidence: Weight of priors (0=ignore, 1=rigid). Sets the
+            merge weight of the 'business'/'causal' edge families (against
+            1.0 for the data-derived ones) and the coherence blend weight.
+        causal_prior: Optional directed prior in the same forms, used for V2
+            adjacency regularization and kept as its own edge family.
         prior_construction_config: Dict configuring automatic structural prior
             construction from event clusters and metadata. Defaults to blending
             detected changepoints/anomalies with metadata similarity
@@ -121,7 +133,10 @@ class TVA:
         factor_max_lag: Maximum learned per-series response lag in 'factor'
             mode. Defaults to 0 (contemporaneous)
         factor_config: Dict overriding factor_network.DEFAULT_FACTOR_CONFIG.
-        coherence_config: Post-forecast coherence-shrink settings (None = off).
+        coherence_config: Post-forecast coherence-shrink settings. Merged
+            over ``factor_config['coherence_config']``; supplying it also
+            enables the shrink unless ``factor_config`` set 'coherence'
+            explicitly. None (default) leaves the shrink off.
         derived_definitions: Declared ratio identities {column: (num, den)};
             never inferred from column names.
         factor_deconfound_edges: Re-run series edge discovery deconfounded
@@ -272,6 +287,8 @@ class TVA:
         self._shift_returned = None
         self._structure_agreement = None
         self._factor_scale = None
+        self._prior_input = None
+        self._causal_prior_input = None
 
     def fit(self, df: pd.DataFrame) -> 'TVA':
         """Full TVA pipeline: decompose, build priors, train network.
@@ -286,6 +303,27 @@ class TVA:
             torch.manual_seed(self.random_seed)
         np.random.seed(self.random_seed)
         self._df_original = df
+
+        # Step 0: normalize whatever prior form the user supplied into one
+        # signed (N, N) matrix over this panel's column order. Every
+        # downstream consumer reads these, not the raw attributes.
+        self._prior_input = coerce_prior_adjacency(
+            self.prior_adjacency, list(df.columns)
+        )
+        self._causal_prior_input = coerce_prior_adjacency(
+            self.causal_prior, list(df.columns)
+        )
+        if (
+            self._prior_input is not None or self._causal_prior_input is not None
+        ) and str(self.trend_network_type).lower() == 'v1':
+            warnings.warn(
+                "TVA trend_network='v1' ignores graph priors entirely: the "
+                "(N, N) prior fails v1's attention-mask shape check and v1 "
+                "emits no adjacency for the soft-prior loss. Use "
+                "trend_network='factor' or 'v2' for the prior to have effect.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
 
         # Step 1: Decompose
         if self.verbose:
@@ -307,8 +345,8 @@ class TVA:
         should_build_priors = any(
             [
                 self.series_metadata,
-                self.prior_adjacency is not None,
-                self.causal_prior is not None,
+                self._prior_input is not None,
+                self._causal_prior_input is not None,
                 self.prior_construction_config,
                 self.causal_prior_construction_config,
             ]
@@ -317,7 +355,7 @@ class TVA:
         if should_build_priors:
             self._priors = YggdrasilPriors(
                 series_metadata=self.series_metadata,
-                relationship_matrix=self.prior_adjacency,
+                relationship_matrix=self._prior_input,
                 prior_confidence=self.prior_confidence,
                 detected_features=detected_features,
                 trend_data=self._components['trend'],
@@ -484,8 +522,8 @@ class TVA:
             network_kwargs['structure_learning_config'] = (
                 self._structure_config.to_dict()
             )
-            if self.causal_prior is not None:
-                network_kwargs['causal_prior'] = self.causal_prior
+            if self._causal_prior_input is not None:
+                network_kwargs['causal_prior'] = self._causal_prior_input
             network_kwargs['discovery'] = self._build_network_discovery_inputs()
             self._network = CompositeTrendNetworkV2(**network_kwargs).to(device)
         else:
@@ -957,6 +995,11 @@ class TVA:
             'min_observed_multiple',
             max(float(self.min_anchor_history) / max(self.forecast_horizon, 1), 1.0),
         )
+        # D: make the user's graph prior available to the loading penalty.
+        # w_prior_loadings stays at its 0.0 default, so this changes nothing
+        # until the user (or the AutoTS search) asks for it.
+        if self._prior_input is not None:
+            cfg.setdefault('prior_adjacency', self._prior_input)
         observed_mask = self._df_original.notna().to_numpy()
         self._factor_network, self._factor_info = fit_anchor_factor_model(
             normalized,
@@ -1069,6 +1112,7 @@ class TVA:
         paths = self._factor_network.fitted_factors(prune)
         discovery_cfg = dict(self.discovery_config or {})
         discovery_cfg.pop('enabled', None)
+        discovery_cfg = self._apply_prior_family_weights(discovery_cfg)
         try:
             rediscovered = discover_structure(
                 self._components['trend'],
@@ -1101,8 +1145,34 @@ class TVA:
             else np.full(len(self._df_original.columns), -1, dtype=int)
         )
 
+    def _apply_prior_family_weights(self, discovery_cfg: dict) -> dict:
+        """Trust user priors at ``prior_confidence``, not at 1.0.
+
+        Prior edges used to enter the merged adjacency at the same weight as
+        the data-derived ``factor``/``lasso`` families while bypassing their
+        held-out delta-MSE falsification. ``prior_confidence`` (default 0.3)
+        is the user's own statement of how much they trust the guess, so it
+        is what the merge should use -- unless they named the weights
+        explicitly in ``discovery_config['family_weights']``.
+        """
+        if self._prior_input is None and self._causal_prior_input is None:
+            return discovery_cfg
+        confidence = self.prior_confidence
+        if confidence is None:
+            return discovery_cfg
+        try:
+            confidence = float(confidence)
+        except (TypeError, ValueError):
+            return discovery_cfg
+        cfg = dict(discovery_cfg or {})
+        weights = dict(cfg.get('family_weights') or {})
+        for family in ('business', 'causal'):
+            weights.setdefault(family, confidence)
+        cfg['family_weights'] = weights
+        return cfg
+
     def _build_extra_adjacencies(self) -> dict:
-        """Event / metadata / business prior adjacencies for edge discovery."""
+        """Event / metadata / business / causal adjacencies for discovery."""
         extra_adjacencies = {}
         if self._priors is not None:
             structural_config = self._priors._resolve_structural_config()
@@ -1115,15 +1185,16 @@ class TVA:
             metadata_adj = self._priors._build_metadata_prior_adjacency()
             if metadata_adj is not None:
                 extra_adjacencies['metadata'] = metadata_adj
-        if self.prior_adjacency is not None:
+        # 'business' (co-movement) and 'causal' (directed) stay separate
+        # families: merging them destroyed the distinction and let a directed
+        # prior masquerade as a symmetric one.
+        if self._prior_input is not None:
             extra_adjacencies['business'] = np.asarray(
-                self.prior_adjacency, dtype=np.float32
+                self._prior_input, dtype=np.float32
             )
-        if self.causal_prior is not None:
-            business = extra_adjacencies.get('business')
-            causal = np.asarray(self.causal_prior, dtype=np.float32)
-            extra_adjacencies['business'] = (
-                causal if business is None else np.maximum(business, causal)
+        if self._causal_prior_input is not None:
+            extra_adjacencies['causal'] = np.asarray(
+                self._causal_prior_input, dtype=np.float32
             )
         return extra_adjacencies
 
@@ -1139,6 +1210,7 @@ class TVA:
         from autots.evaluator.tva.discovery import discover_structure
 
         extra_adjacencies = self._build_extra_adjacencies()
+        discovery_cfg = self._apply_prior_family_weights(discovery_cfg)
         try:
             self._discovery = discover_structure(
                 self._components['trend'],
@@ -1813,12 +1885,21 @@ class TVA:
             (adjusted (N, H), info dict).
         """
         cfg = (self._factor_info or {}).get('config') or {}
-        if not cfg.get('coherence'):
+        # E: the top-level ``coherence_config`` argument was stored and never
+        # read. Passing it is an explicit user act, so it also enables the
+        # shrink when factor_config left ``coherence`` unset -- the global
+        # default stays off.
+        top_level = dict(self.coherence_config or {})
+        enabled = cfg.get('coherence')
+        if not enabled and top_level and 'coherence' not in (self.factor_config or {}):
+            enabled = True
+        if not enabled:
             return normalized_fc, {}
         try:
             from autots.evaluator.tva import coherence as ch
 
             cconf = dict(cfg.get('coherence_config') or {})
+            cconf.update(top_level)
             cconf.setdefault('gated', self._factor_info.get('gated_series'))
             cconf.setdefault('sigma', self._factor_info.get('sigma'))
             # C4: per-factor split-half stability, when the fit computed it.
@@ -1836,7 +1917,11 @@ class TVA:
             structure = getattr(self, '_structure_loadings', None)
             if structure is not None and structure.shape[0] == loadings.shape[0]:
                 loadings = structure
-            graphs, _meta = ch.build_candidates(loadings, cconf)
+            if self._prior_input is not None:
+                cconf.setdefault('prior_weight', self.prior_confidence)
+            graphs, _meta = ch.build_candidates(
+                loadings, cconf, prior=self._prior_input
+            )
             folds = self._coherence_inner_folds(horizon)
             if not folds:
                 return normalized_fc, {'reason': 'insufficient history'}

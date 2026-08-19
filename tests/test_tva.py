@@ -25,6 +25,13 @@ def _make_daily_df(n_series: int = 4, n_days: int = 400, seed: int = 0) -> pd.Da
     return pd.DataFrame(data, index=dates, columns=[f"s{i}" for i in range(n_series)])
 
 
+def _hollow(matrix: np.ndarray) -> np.ndarray:
+    """Copy of ``matrix`` with a zeroed diagonal (what a coerced prior is)."""
+    out = np.asarray(matrix, dtype=np.float32).copy()
+    np.fill_diagonal(out, 0.0)
+    return out
+
+
 def _make_coherent_df(n_series: int = 6, n_days: int = 400, seed: int = 1) -> pd.DataFrame:
     """All series share a common upward trend — tests coherence loss."""
     rng = np.random.default_rng(seed)
@@ -1659,10 +1666,16 @@ class TestTVAIntegration(unittest.TestCase):
         ):
             tva.fit(df)
 
-        np.testing.assert_allclose(tva._prior_adj, explicit_prior, atol=1e-6)
+        # coerce_prior_adjacency hollows the diagonal on the way in: a
+        # self-link is meaningless to every consumer, and SoftPriorLoss would
+        # otherwise pull the learned adjacency's self-loops toward it. The
+        # off-diagonal claim -- the whole content of the prior -- is intact.
+        np.testing.assert_allclose(
+            tva._prior_adj, _hollow(explicit_prior), atol=1e-6
+        )
         np.testing.assert_allclose(
             tva._network._causal_prior.detach().cpu().numpy(),
-            explicit_causal,
+            _hollow(explicit_causal),
             atol=1e-6,
         )
 
@@ -2346,6 +2359,219 @@ class TestTVABenchmarkSmoke(unittest.TestCase):
         self.assertEqual(results['error'].isna().sum(), len(results))
         summary = tva_benchmark.summarize(results)
         self.assertIn('mase_skill_geo', summary.columns)
+
+
+class TestCoercePriorAdjacency(unittest.TestCase):
+    """Every supported prior form yields the same matrix."""
+
+    NAMES = ['a', 'b', 'c']
+
+    def _coerce(self, prior):
+        from autots.evaluator.tva.priors import coerce_prior_adjacency
+        return coerce_prior_adjacency(prior, self.NAMES)
+
+    def test_none_passes_through(self):
+        self.assertIsNone(self._coerce(None))
+
+    def test_all_forms_agree(self):
+        target = np.array(
+            [[0.0, 0.8, 0.0], [0.8, 0.0, 0.0], [0.0, 0.0, 0.0]], dtype=np.float32
+        )
+        matrix = self._coerce(target)
+        frame = self._coerce(
+            pd.DataFrame(target, index=self.NAMES, columns=self.NAMES)
+        )
+        edges = self._coerce([{'source': 'a', 'target': 'b', 'weight': 0.8}])
+        groups = self._coerce([{'series': ['a', 'b'], 'weight': 0.8}])
+        for name, got in (
+            ('matrix', matrix), ('frame', frame),
+            ('edges', edges), ('groups', groups),
+        ):
+            with self.subTest(form=name):
+                np.testing.assert_allclose(got, target, atol=1e-6)
+                self.assertEqual(got.dtype, np.float32)
+
+    def test_dataframe_is_order_safe(self):
+        # supplied in a different column order than the panel
+        frame = pd.DataFrame(
+            [[0.0, 0.5], [0.5, 0.0]], index=['c', 'a'], columns=['c', 'a']
+        )
+        got = self._coerce(frame)
+        self.assertAlmostEqual(float(got[0, 2]), 0.5)
+        self.assertAlmostEqual(float(got[2, 0]), 0.5)
+        self.assertAlmostEqual(float(got[0, 1]), 0.0)
+
+    def test_group_list_is_a_clique(self):
+        got = self._coerce([['a', 'b', 'c']])
+        np.testing.assert_allclose(got, 1.0 - np.eye(3, dtype=np.float32), atol=1e-6)
+
+    def test_directed_edge_stays_directed(self):
+        got = self._coerce(
+            [{'source': 'a', 'target': 'c', 'weight': 0.4, 'directed': True}]
+        )
+        self.assertAlmostEqual(float(got[0, 2]), 0.4)
+        self.assertAlmostEqual(float(got[2, 0]), 0.0)
+
+    def test_negative_weight_survives(self):
+        got = self._coerce([{'source': 'a', 'target': 'b', 'weight': -0.6}])
+        self.assertAlmostEqual(float(got[0, 1]), -0.6)
+        self.assertAlmostEqual(float(got[1, 0]), -0.6)
+
+    def test_clipped_and_hollow(self):
+        got = self._coerce(np.full((3, 3), 5.0))
+        self.assertLessEqual(float(np.abs(got).max()), 1.0)
+        np.testing.assert_allclose(np.diag(got), 0.0, atol=1e-7)
+
+    def test_unknown_names_warn_and_drop(self):
+        with self.assertWarns(RuntimeWarning) as ctx:
+            got = self._coerce([['a', 'nonexistent']])
+        self.assertIn('nonexistent', str(ctx.warning))
+        np.testing.assert_allclose(got, np.zeros((3, 3)), atol=1e-7)
+
+    def test_bad_shape_warns_and_returns_none(self):
+        with self.assertWarns(RuntimeWarning):
+            self.assertIsNone(self._coerce(np.zeros((2, 2))))
+
+
+@SKIP_INTEGRATION
+class TestTVAPriorLevers(unittest.TestCase):
+    """The prior must reach 'factor' mode, and a wrong one must cost nothing."""
+
+    @classmethod
+    def setUpClass(cls):
+        rng = np.random.default_rng(7)
+        T, N = 500, 8
+        idx = pd.date_range('2021-01-01', periods=T, freq='D')
+        fa = np.cumsum(rng.normal(0, 1, T))
+        fb = np.cumsum(rng.normal(0, 1, T))
+        load = np.zeros((N, 2))
+        load[:4, 0] = 1.0 + 0.15 * np.arange(4)
+        load[4:, 1] = 1.0 + 0.15 * np.arange(4)
+        data = np.column_stack([fa, fb]) @ load.T + rng.normal(0, 1.5, (T, N)) + 100
+        cls.df = pd.DataFrame(
+            data, index=idx, columns=[f's{i}' for i in range(N)]
+        )
+        cls.true_prior = [
+            ['s0', 's1', 's2', 's3'], ['s4', 's5', 's6', 's7'],
+        ]
+        cls.wrong_prior = [['s0', 's7'], ['s1', 's6']]
+
+    def _run(self, prior=None, **kwargs):
+        from autots.evaluator.tva.tva import TVA
+        tva = TVA(
+            trend_network='factor', forecast_horizon=14, window_size=91,
+            epochs=5, verbose=0, random_seed=42, prior_adjacency=prior,
+            prior_confidence=1.0, **kwargs,
+        )
+        tva.fit(self.df)
+        return tva, tva.predict(14)
+
+    def test_defaults_are_a_no_op(self):
+        _, base = self._run(None)
+        _, primed = self._run(self.true_prior)
+        np.testing.assert_array_equal(base.values, primed.values)
+
+    def test_coherence_lever_moves_the_forecast(self):
+        cfg = {'coherence': True}
+        _, base = self._run(None, factor_config=dict(cfg))
+        tva, primed = self._run(self.true_prior, factor_config=dict(cfg))
+        self.assertGreater(
+            float(np.nanmax(np.abs(base.values - primed.values))), 0.0
+        )
+        self.assertIn('prior', str(tva._coherence_info.get('graph')))
+
+    def test_loading_penalty_lever_moves_the_forecast(self):
+        _, base = self._run(None)
+        _, primed = self._run(self.true_prior, factor_config={'w_prior_loadings': 0.5})
+        self.assertGreater(
+            float(np.nanmax(np.abs(base.values - primed.values))), 0.0
+        )
+
+    def test_loading_penalty_without_a_prior_is_inert(self):
+        _, base = self._run(None)
+        _, weighted = self._run(None, factor_config={'w_prior_loadings': 0.5})
+        np.testing.assert_array_equal(base.values, weighted.values)
+
+    def test_wrong_prior_is_falsified_and_costs_nothing(self):
+        cfg = {'coherence': True}
+        _, base = self._run(None, factor_config=dict(cfg))
+        tva, wrong = self._run(self.wrong_prior, factor_config=dict(cfg))
+        # select_coherence graded the blended candidates on held-out origins
+        # and kept the unblended winner, so the forecast is untouched.
+        self.assertNotIn('prior', str(tva._coherence_info.get('graph')))
+        np.testing.assert_array_equal(base.values, wrong.values)
+
+    def test_v1_warns_that_it_ignores_the_prior(self):
+        from autots.evaluator.tva.tva import TVA
+        tva = TVA(
+            trend_network='v1', forecast_horizon=7, window_size=60, epochs=1,
+            verbose=0, random_seed=42, prior_adjacency=self.true_prior,
+            d_token=16, n_meso=4, n_global=2, n_prototypes=3, n_heads=2,
+        )
+        with self.assertWarns(RuntimeWarning) as ctx:
+            tva.fit(self.df)
+        self.assertTrue(
+            any("v1" in str(w.message) for w in ctx.warnings)
+        )
+
+
+class TestTVAModelPriorPassthrough(unittest.TestCase):
+    """The prior reaches TVA through the normal AutoTS model API."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.df = _make_daily_df(n_series=4, n_days=300)
+        cls.metadata = [
+            {'name': 's0', 'hierarchy_path': ['global', 'NA', 's0']},
+            {'name': 's1', 'hierarchy_path': ['global', 'NA', 's1']},
+            {'name': 's2', 'hierarchy_path': ['global', 'EU', 's2']},
+            {'name': 's3', 'hierarchy_path': ['global', 'EU', 's3']},
+        ]
+
+    def _fit(self):
+        from autots.models.tva_model import TVAModel
+        model = TVAModel(
+            forecast_length=7, epochs=3, window_size=60,
+            trend_network='factor', verbose=0,
+            series_metadata=self.metadata,
+            prior_adjacency=[['s0', 's1']],
+            causal_prior=[
+                {'source': 's2', 'target': 's3', 'weight': 0.5, 'directed': True}
+            ],
+        )
+        model.fit(self.df)
+        return model
+
+    def test_params_round_trip(self):
+        from autots.models.tva_model import TVAModel
+        model = TVAModel(
+            series_metadata=self.metadata, prior_adjacency=[['s0', 's1']]
+        )
+        params = model.get_params()
+        self.assertEqual(params['series_metadata'], self.metadata)
+        self.assertEqual(params['prior_adjacency'], [['s0', 's1']])
+        rebuilt = TVAModel(**params)
+        self.assertEqual(rebuilt.get_params()['series_metadata'], self.metadata)
+
+    @SKIP_INTEGRATION
+    def test_new_params_never_invents_a_prior(self):
+        from autots.models.tva_model import TVAModel
+        for _ in range(25):
+            params = TVAModel.get_new_params()
+            self.assertNotIn('prior_adjacency', params)
+            self.assertNotIn('series_metadata', params)
+            self.assertNotIn('causal_prior', params)
+
+    @SKIP_INTEGRATION
+    def test_priors_and_metadata_reach_tva(self):
+        model = self._fit()
+        forecast = model.predict(7).forecast
+        self.assertEqual(forecast.shape, (7, 4))
+        families = set(model._tva.get_edges()['family'].unique())
+        self.assertIn('business', families)
+        self.assertIn('causal', families)
+        # metadata now reaches TVA, so the hierarchy is real and MinT engages
+        self.assertEqual(model._tva._reconciliation_method_effective, 'mint')
 
 
 if __name__ == '__main__':

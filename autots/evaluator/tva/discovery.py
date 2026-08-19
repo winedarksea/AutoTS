@@ -57,15 +57,26 @@ DEFAULT_DISCOVERY_CONFIG = {
         'leadlag': 0.5,
         'event': 0.5,
         'metadata': 0.25,
+        # user-supplied priors: guesses, not measurements. TVA overrides
+        # both with prior_confidence unless the caller sets them here.
         'business': 1.0,
+        'causal': 0.5,
     },
 }
 
 
 def _resolve_config(config: Optional[dict]) -> dict:
     resolved = dict(DEFAULT_DISCOVERY_CONFIG)
+    resolved['family_weights'] = dict(DEFAULT_DISCOVERY_CONFIG['family_weights'])
     if config:
+        # family_weights is merged, not replaced: a partial user dict used to
+        # wipe out every default weight it did not mention.
+        user_weights = config.get('family_weights')
         resolved.update(config)
+        if isinstance(user_weights, dict):
+            merged = dict(DEFAULT_DISCOVERY_CONFIG['family_weights'])
+            merged.update(user_weights)
+            resolved['family_weights'] = merged
     return resolved
 
 
@@ -683,7 +694,12 @@ def leadlag_edges(R: np.ndarray, config: dict) -> list:
 
 
 def _edges_from_adjacency(adjacency: np.ndarray, family: str) -> list:
-    """Convert an (N, N) adjacency into edge rows (lag 0, sign +)."""
+    """Convert an (N, N) signed adjacency into edge rows.
+
+    Lag stays 0 -- a co-movement prior makes no lag claim -- but the sign is
+    carried through, so a substitution prior ("storm up shovels, down
+    everything else") survives instead of being silently dropped.
+    """
     edges = []
     adjacency = np.asarray(adjacency, dtype=float)
     if adjacency.ndim != 2 or adjacency.shape[0] != adjacency.shape[1]:
@@ -694,15 +710,15 @@ def _edges_from_adjacency(adjacency: np.ndarray, family: str) -> list:
             if i == j:
                 continue
             w = float(adjacency[i, j])
-            if w > 0:
+            if w != 0 and np.isfinite(w):
                 edges.append(
                     {
                         'source': i,
                         'target': j,
                         'lag': 0,
-                        'sign': 1,
-                        'weight': w,
-                        'stability': w,
+                        'sign': int(np.sign(w)),
+                        'weight': abs(w),
+                        'stability': abs(w),
                         'median_coef': w,
                         'family': family,
                         'delta_mse': None,
@@ -733,7 +749,8 @@ def discover_structure(
         seed: RNG seed for block subsampling (topology is deterministic
             given seed).
         extra_adjacencies: optional {family_name: (N, N) adjacency} for the
-            'event', 'metadata', and 'business' families built elsewhere.
+            'event', 'metadata', 'business', and 'causal' families built
+            elsewhere. Signed entries are honoured.
         external_factors: optional (T, K) level-space factor paths to
             deconfound against instead of the internal difference-space SVD.
         components: optional detector component dict (seasonality, holidays,
@@ -860,7 +877,8 @@ def discover_structure(
 
     edges = list(lasso_edges) + list(lift_edges)
 
-    # D-8: extra families supplied by the caller (event, metadata, business)
+    # D-8: extra families supplied by the caller (event, metadata,
+    # business, causal)
     for family, adjacency in (extra_adjacencies or {}).items():
         if adjacency is None:
             continue

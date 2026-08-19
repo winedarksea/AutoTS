@@ -49,6 +49,13 @@ DEFAULT_FACTOR_CONFIG = {
     # proximal soft-threshold on model.loadings after each stage-A step,
     # without which 600 Adam steps wash the identified zeros back out
     'w_prox_loadings': 0.0,
+    # ---- user loading-graph prior (0.0 == exact no-op) ---------------------
+    # A prior on which series share factors IS a prior on the loading matrix.
+    # `prior_adjacency` is an (N, N) signed graph; at w_prior_loadings > 0 a
+    # penalty pulls linked series' normalized loading rows together and pushes
+    # negatively-linked ones apart. At weight 0 the term is never constructed.
+    'w_prior_loadings': 0.0,
+    'prior_adjacency': None,
     # ---- C4: per-factor split-half stability (0 == not computed) ----------
     # Feeds coherence.resolve_signs' long-dead `stability` argument, so a
     # factor nobody can reproduce cannot partition the panel.
@@ -1150,6 +1157,46 @@ if HAS_TORCH:
 
     # ---- training -------------------------------------------------------------
 
+    def _loading_prior_penalty(model, prior_adj) -> 'torch.Tensor':
+        """Graph-smoothness penalty on the normalized loading rows.
+
+        ``sum_ij |A_ij| * ||u_i - sign(A_ij) * u_j||^2 / (2 * sum_ij |A_ij|)``
+        with ``u`` the row-normalized loadings. Linked series are pulled
+        toward the same loading profile, negatively linked ones apart.
+        Normalizing by ``sum |A|`` keeps the weight scale-free in the number
+        of prior edges, so the same ``w_prior_loadings`` means the same thing
+        on a 2-edge and a 200-edge prior.
+
+        Backprops before the ``w_prox_loadings`` proximal step, so the
+        sparsity behaviour is unchanged.
+        """
+        lam = model.loadings
+        n = lam.shape[0]
+        adjacency = torch.as_tensor(
+            np.asarray(prior_adj, dtype=np.float32),
+            dtype=lam.dtype,
+            device=lam.device,
+        )
+        if adjacency.ndim != 2 or adjacency.shape != (n, n):
+            return lam.sum() * 0.0
+        adjacency = 0.5 * (adjacency + adjacency.T)
+        adjacency = adjacency - torch.diag(torch.diag(adjacency))
+        # guard zero rows: a gated/unloaded series has no profile to align,
+        # and dividing by its ~zero norm would explode the gradient. Drop it
+        # from both the penalty and its normalizer.
+        norms = lam.norm(dim=1, keepdim=True)
+        good = (norms > 1e-6).to(lam.dtype)
+        u = lam / norms.clamp(min=1e-6) * good
+        magnitude = adjacency.abs() * (good @ good.T)
+        total = magnitude.sum()
+        if float(total.detach().cpu().item()) <= 0:
+            return lam.sum() * 0.0
+        sign = torch.sign(adjacency)
+        # ||u_i - s_ij u_j||^2 = 2 - 2 s_ij <u_i, u_j>  (rows are unit norm)
+        gram = u @ u.T
+        sq = 2.0 - 2.0 * sign * gram
+        return (magnitude * sq).sum() / (2.0 * total)
+
     def _aux_penalties(model, cfg: dict):
         """Lag and loading penalties (the factor prior lives in the prox step)."""
         w = model.lag_weights()
@@ -1162,6 +1209,10 @@ if HAS_TORCH:
             + cfg['w_lag_entropy'] * entropy
             + cfg['w_l1_loadings'] * model.loadings.abs().mean()
         )
+        w_prior = float(cfg.get('w_prior_loadings') or 0.0)
+        prior_adj = cfg.get('prior_adjacency')
+        if w_prior > 0 and prior_adj is not None:
+            penalty = penalty + w_prior * _loading_prior_penalty(model, prior_adj)
         if cfg.get('w_decorr'):
             paths = model.factor_paths()
             d = paths[1:] - paths[:-1]
@@ -1869,6 +1920,19 @@ if HAS_TORCH:
         anchor_kwargs['n_factors'] = int(
             max(1, min(int(base_kwargs['n_factors']), len(anchor_idx)))
         )
+        # a loading prior is indexed by panel column; stage 1 sees only the
+        # anchor columns, so slice it to match. Responders get their loadings
+        # by masked least squares in _expand_to_full_panel and are correctly
+        # unaffected -- short-history series do not shape the shared trend.
+        prior_adj = cfg.get('prior_adjacency')
+        if prior_adj is not None:
+            sliced = np.asarray(prior_adj, dtype=np.float32)
+            sub_cfg = dict(anchor_kwargs.get('config') or {})
+            if sliced.ndim == 2 and sliced.shape == (N, N):
+                sub_cfg['prior_adjacency'] = sliced[np.ix_(anchor_idx, anchor_idx)]
+            else:
+                sub_cfg['prior_adjacency'] = None
+            anchor_kwargs['config'] = sub_cfg
         sub = arr[:, anchor_idx]
         # anchors may still carry short gaps; fill only within their observed
         # span, never past it

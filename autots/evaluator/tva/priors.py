@@ -6,6 +6,8 @@ Acts as the 'world tree' for the forecasting graph, connecting
 related time series across different domains through shared metadata.
 """
 
+import warnings
+
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass, field
@@ -669,3 +671,164 @@ class YggdrasilPriors:
         if adj is None:
             return 0
         return int(np.count_nonzero(adj - np.diag(np.diag(adj))) // 2)
+
+
+# ---------------------------------------------------------------------------
+# One usable prior format
+# ---------------------------------------------------------------------------
+
+
+def _prior_warn_unknown(unknown, source: str):
+    if not unknown:
+        return
+    warnings.warn(
+        "TVA prior references series not present in the panel and dropped "
+        f"them ({source}): {sorted(unknown)}",
+        RuntimeWarning,
+        stacklevel=3,
+    )
+
+
+def _prior_from_dataframe(prior, series_names, index) -> np.ndarray:
+    unknown = set()
+    for label in list(prior.index) + list(prior.columns):
+        if label not in index:
+            unknown.add(str(label))
+    _prior_warn_unknown(unknown, 'DataFrame labels')
+    aligned = prior.reindex(index=series_names, columns=series_names)
+    return aligned.astype(float).fillna(0.0).to_numpy()
+
+
+def _prior_from_edge_list(prior, series_names, index) -> np.ndarray:
+    n = len(series_names)
+    adjacency = np.zeros((n, n), dtype=float)
+    unknown = set()
+    for row in prior:
+        source = row.get('source', row.get('from'))
+        target = row.get('target', row.get('to'))
+        if source is None or target is None:
+            continue
+        if source not in index:
+            unknown.add(str(source))
+        if target not in index:
+            unknown.add(str(target))
+        if source not in index or target not in index:
+            continue
+        i, j = index[source], index[target]
+        if i == j:
+            continue
+        try:
+            weight = float(row.get('weight', 1.0))
+        except (TypeError, ValueError):
+            weight = 1.0
+        if not np.isfinite(weight) or weight == 0.0:
+            continue
+        adjacency[i, j] = weight
+        if not bool(row.get('directed', False)):
+            adjacency[j, i] = weight
+    _prior_warn_unknown(unknown, 'edge list')
+    return adjacency
+
+
+def _prior_from_groups(prior, series_names, index) -> np.ndarray:
+    n = len(series_names)
+    adjacency = np.zeros((n, n), dtype=float)
+    unknown = set()
+    for group in prior:
+        if isinstance(group, dict):
+            members = group.get('series', group.get('members', []))
+            try:
+                weight = float(group.get('weight', 1.0))
+            except (TypeError, ValueError):
+                weight = 1.0
+        else:
+            members, weight = group, 1.0
+        if isinstance(members, str):
+            members = [members]
+        idx = []
+        for name in members or []:
+            if name not in index:
+                unknown.add(str(name))
+                continue
+            idx.append(index[name])
+        idx = sorted(set(idx))
+        if len(idx) < 2 or not np.isfinite(weight) or weight == 0.0:
+            continue
+        block = np.asarray(idx, dtype=int)
+        sub = adjacency[np.ix_(block, block)]
+        adjacency[np.ix_(block, block)] = np.where(
+            np.abs(sub) >= abs(weight), sub, weight
+        )
+    _prior_warn_unknown(unknown, 'group list')
+    np.fill_diagonal(adjacency, 0.0)
+    return adjacency
+
+
+def coerce_prior_adjacency(prior, series_names) -> Optional[np.ndarray]:
+    """Normalize any supported user prior spec into a signed (N, N) matrix.
+
+    The single entry point for user-supplied graph priors, so every downstream
+    consumer reads one shape regardless of how the prior was expressed.
+
+    Supported forms:
+
+    * ``None`` -> ``None``
+    * ``(N, N)`` array-like -> validated and passed through
+    * ``pd.DataFrame`` -> reindexed onto ``series_names`` (order-safe)
+    * list of ``{'source', 'target', 'weight', 'directed'}`` dicts -> symmetric
+      unless the row sets ``directed: True``
+    * list of name groups (``[['a', 'b'], ...]``) -> each group is a clique at
+      weight 1.0; ``{'series': [...], 'weight': 0.6}`` for a weaker group
+
+    Unknown series names raise a ``RuntimeWarning`` naming them and are
+    dropped, never silently ignored.
+
+    Args:
+        prior: user-supplied prior in any of the forms above.
+        series_names: panel column order defining the matrix axes.
+
+    Returns:
+        (N, N) float32, signed, clipped to [-1, 1], hollow diagonal; or None.
+    """
+    if prior is None:
+        return None
+    series_names = list(series_names or [])
+    n = len(series_names)
+    if n == 0:
+        return None
+    index = {name: i for i, name in enumerate(series_names)}
+
+    if isinstance(prior, pd.DataFrame):
+        adjacency = _prior_from_dataframe(prior, series_names, index)
+    elif isinstance(prior, dict):
+        # {'a': {'b': 0.8}} nested mapping -- a DataFrame in disguise
+        adjacency = _prior_from_dataframe(
+            pd.DataFrame(prior).T, series_names, index
+        )
+    elif isinstance(prior, (list, tuple)) and len(prior) and isinstance(
+        prior[0], dict
+    ) and (
+        'source' in prior[0] or 'from' in prior[0]
+    ):
+        adjacency = _prior_from_edge_list(prior, series_names, index)
+    elif isinstance(prior, (list, tuple)) and len(prior) and isinstance(
+        prior[0], (list, tuple, set, dict)
+    ):
+        adjacency = _prior_from_groups(prior, series_names, index)
+    else:
+        adjacency = np.asarray(prior, dtype=float)
+
+    adjacency = np.asarray(adjacency, dtype=float)
+    if adjacency.ndim != 2 or adjacency.shape != (n, n):
+        warnings.warn(
+            "TVA prior_adjacency could not be interpreted as an "
+            f"({n}, {n}) matrix over the panel (got shape "
+            f"{getattr(adjacency, 'shape', None)}); ignoring it.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        return None
+    adjacency = np.nan_to_num(adjacency, nan=0.0, posinf=0.0, neginf=0.0)
+    adjacency = np.clip(adjacency, -1.0, 1.0)
+    np.fill_diagonal(adjacency, 0.0)
+    return adjacency.astype(np.float32)

@@ -46,7 +46,19 @@ class TVAModel(ModelObject):
         lr: Learning rate for AdamW optimizer.
         batch_size: Training batch size.
         window_size: Input trend window length (must be <= training length - forecast_length).
+        series_metadata: Optional list of SeriesMetadata (or plain dicts with
+            the same keys, so it round-trips as JSON) describing each series'
+            attributes and hierarchy path. A real hierarchy here is what lets
+            the MinT reconciliation auto-enable.
+        prior_adjacency: Optional graph prior. Accepts an (N, N) matrix, a
+            labelled DataFrame, a list of ``{'source', 'target', 'weight'}``
+            edge dicts, or a list of name groups (each group a clique). See
+            ``tva.priors.coerce_prior_adjacency``.
+        causal_prior: Optional directed prior in the same forms, kept as its
+            own edge family.
         prior_confidence: Weight of prior adjacency matrix (0=ignore priors, 1=rigid).
+            Also the merge weight the prior edge families get in discovery,
+            against 1.0 for the data-derived families.
         prototype_assignment_method: Bottleneck assignment ('cosine', 'l2', or 'linear').
         prototype_assignment_temperature: Softmax temperature for prototype assignment.
         loss_weights: Dict of TVA loss component weights.
@@ -84,6 +96,9 @@ class TVAModel(ModelObject):
         lr: float = 1e-3,
         batch_size: int = 32,
         window_size: int = 91,
+        series_metadata: list = None,
+        prior_adjacency=None,
+        causal_prior=None,
         prior_confidence: float = 0.3,
         prototype_assignment_method: str = "cosine",
         prototype_assignment_temperature: float = 1.0,
@@ -128,6 +143,9 @@ class TVAModel(ModelObject):
         self.lr = lr
         self.batch_size = batch_size
         self.window_size = window_size
+        self.series_metadata = series_metadata
+        self.prior_adjacency = prior_adjacency
+        self.causal_prior = causal_prior
         self.prior_confidence = prior_confidence
         self.prototype_assignment_method = prototype_assignment_method
         self.prototype_assignment_temperature = prototype_assignment_temperature
@@ -203,6 +221,9 @@ class TVAModel(ModelObject):
             window_size=effective_window,
             forecast_horizon=self.forecast_length,
             loss_weights=self.loss_weights,
+            series_metadata=self._coerced_series_metadata(),
+            prior_adjacency=self.prior_adjacency,
+            causal_prior=self.causal_prior,
             prior_confidence=self.prior_confidence,
             prototype_assignment_method=self.prototype_assignment_method,
             prototype_assignment_temperature=self.prototype_assignment_temperature,
@@ -320,6 +341,32 @@ class TVAModel(ModelObject):
                 * (2.0**0.5)
             )
 
+    def _coerced_series_metadata(self):
+        """SeriesMetadata objects from whatever the user supplied.
+
+        Plain dicts are accepted so a template stays JSON-serializable;
+        ``SeriesMetadata`` already takes exactly these as kwargs.
+        """
+        metadata = self.series_metadata
+        if not metadata:
+            return None
+        from autots.evaluator.tva.priors import SeriesMetadata
+
+        coerced = []
+        for entry in metadata:
+            if isinstance(entry, SeriesMetadata):
+                coerced.append(entry)
+            elif isinstance(entry, dict):
+                coerced.append(SeriesMetadata(**entry))
+            else:
+                warnings.warn(
+                    "TVAModel: series_metadata entries must be SeriesMetadata "
+                    f"or dicts; dropping {type(entry).__name__}.",
+                    UserWarning,
+                    stacklevel=3,
+                )
+        return coerced or None
+
     def get_params(self):
         """Return dict of current parameters."""
         return {
@@ -340,6 +387,9 @@ class TVAModel(ModelObject):
             "lr": self.lr,
             "batch_size": self.batch_size,
             "window_size": self.window_size,
+            "series_metadata": self.series_metadata,
+            "prior_adjacency": self.prior_adjacency,
+            "causal_prior": self.causal_prior,
             "prior_confidence": self.prior_confidence,
             "prototype_assignment_method": self.prototype_assignment_method,
             "prototype_assignment_temperature": self.prototype_assignment_temperature,
@@ -523,6 +573,14 @@ class TVAModel(ModelObject):
         # group_refits extra fits, so it is rare and never sampled in fast mode
         if not fast_mode and random.random() < 0.12:
             cfg["group_factors"] = True
+        # D: pull prior-linked series toward a shared loading profile. Inert
+        # unless the caller also supplied `prior_adjacency`, which is a dataset
+        # fact the search never invents -- so this is only ever a live knob on
+        # panels where a prior exists, and costs nothing everywhere else.
+        if random.random() < 0.1:
+            cfg["w_prior_loadings"] = random.choices(
+                [0.01, 0.05, 0.2], weights=[0.4, 0.4, 0.2]
+            )[0]
 
         return cfg
 

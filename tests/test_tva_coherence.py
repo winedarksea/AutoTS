@@ -513,3 +513,84 @@ class TestStabilityVeto(unittest.TestCase):
         self.assertLess(meta['sign_confidence'][1], 0.5)
         adj = laplacian_graph(self.LAM, cfg)
         self.assertEqual(adj.shape, (4, 4))
+
+
+class TestPriorBlending(unittest.TestCase):
+    """A user prior only ever *adds* candidates; it never rewrites the
+    existing ones, and the blended adjacency keeps the graph's invariants."""
+
+    LAM = np.array([
+        [1.0, 0.05],
+        [0.9, 0.10],
+        [0.05, 1.0],
+        [0.10, 0.9],
+    ])
+
+    def _prior(self):
+        prior = np.zeros((4, 4), dtype=float)
+        prior[0, 3] = prior[3, 0] = 1.0
+        return prior
+
+    def test_no_prior_leaves_the_candidate_dict_unchanged(self):
+        base, base_meta = build_candidates(self.LAM)
+        again, _ = build_candidates(self.LAM, prior=None)
+        self.assertEqual(sorted(base), sorted(again))
+        for name, graph in base.items():
+            if isinstance(graph, np.ndarray):
+                np.testing.assert_allclose(graph, again[name], atol=1e-12)
+        self.assertIn('n_series', base_meta)
+
+    def test_prior_adds_candidates_without_altering_the_originals(self):
+        base, _ = build_candidates(self.LAM)
+        primed, _ = build_candidates(self.LAM, prior=self._prior())
+        self.assertTrue(set(base).issubset(set(primed)))
+        for name, graph in base.items():
+            if isinstance(graph, np.ndarray):
+                np.testing.assert_allclose(graph, primed[name], atol=1e-12)
+        added = set(primed) - set(base)
+        self.assertIn('prior_only', added)
+        self.assertTrue(any(n.endswith('_prior') for n in added))
+
+    def test_prior_candidates_can_be_switched_off(self):
+        base, _ = build_candidates(self.LAM)
+        primed, _ = build_candidates(
+            self.LAM, {'prior_candidates': False}, prior=self._prior()
+        )
+        self.assertEqual(sorted(base), sorted(primed))
+        zero_weight, _ = build_candidates(
+            self.LAM, {'prior_weight': 0.0}, prior=self._prior()
+        )
+        self.assertEqual(sorted(base), sorted(zero_weight))
+
+    def test_blended_adjacency_stays_signed_symmetric_hollow(self):
+        prior = self._prior()
+        prior[1, 2] = prior[2, 1] = -1.0  # a substitution link
+        adj = laplacian_graph(
+            self.LAM, {'prior_weight': 0.8}, n_neighbors=3, prior=prior
+        )
+        np.testing.assert_allclose(adj, adj.T, atol=1e-12)
+        np.testing.assert_allclose(np.diag(adj), 0.0, atol=1e-12)
+        self.assertLess(float(adj.min()), 0.0)
+        self.assertGreater(float(adj.max()), 0.0)
+
+    def test_blend_moves_the_graph_toward_the_prior(self):
+        prior = self._prior()
+        plain = laplacian_graph(self.LAM, n_neighbors=1)
+        blended = laplacian_graph(
+            self.LAM, {'prior_weight': 0.9}, n_neighbors=1, prior=prior
+        )
+        # s0 and s3 sit on opposite factors, so the unblended graph does not
+        # link them; a confident prior does.
+        self.assertAlmostEqual(float(plain[0, 3]), 0.0)
+        self.assertGreater(float(blended[0, 3]), 0.0)
+
+    def test_defaults_carry_the_new_keys(self):
+        self.assertIn('prior_weight', DEFAULT_COHERENCE_CONFIG)
+        self.assertIn('prior_candidates', DEFAULT_COHERENCE_CONFIG)
+
+    def test_degenerate_priors_are_ignored(self):
+        base, _ = build_candidates(self.LAM)
+        for bad in (np.zeros((4, 4)), np.zeros((3, 3)), np.full((4, 4), np.nan)):
+            with self.subTest(prior=bad.shape):
+                primed, _ = build_candidates(self.LAM, prior=bad)
+                self.assertEqual(sorted(base), sorted(primed))
