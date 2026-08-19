@@ -1,9 +1,19 @@
 # -*- coding: utf-8 -*-
 """
-BifrostOptimizer — What-If Scenario Planning.
+What-If Scenario Planning.
 
-Freezes all network weights and optimizes a latent perturbation to satisfy
-user-specified constraints while minimizing disruption to the forecast.
+Two solvers for one problem — satisfy a user constraint while minimizing
+disruption to the rest of the forecast.
+
+:class:`BifrostOptimizer` freezes the trend network's weights and optimizes a
+latent perturbation by gradient descent. It needs a network, so it serves
+``trend_network='v1'`` and ``'v2'``.
+
+:class:`ClosedFormScenario` serves ``'factor'`` and ``'none'``, where there is
+no network. Those forecasts are linear in a few factor paths, so the
+minimum-disruption update is a Gaussian conditioning solve against the
+forecast covariance — deterministic, torch-free, and cross-series aware
+through the same ``Sigma`` that weights MinT reconciliation.
 """
 
 import numpy as np
@@ -17,6 +27,61 @@ try:
     HAS_TORCH = True
 except Exception:
     HAS_TORCH = False
+
+
+# ---------------------------------------------------------------------------
+# Shared, torch-free hierarchy helpers
+# ---------------------------------------------------------------------------
+
+
+def _resolve_hierarchy(tva, hierarchy_matrix=None):
+    """(L, M) summing matrix from an explicit argument or the fitted priors."""
+    if hierarchy_matrix is not None:
+        return np.asarray(hierarchy_matrix, dtype=np.float64)
+    if tva._priors is not None:
+        return tva._priors.build_hierarchy_matrix().astype(np.float64)
+    return None
+
+
+def _aggregate_row_index(tva, level_name):
+    """Row of S for ``level_name``, or None when the name is not a node.
+
+    Rebuilds the sorted aggregate-node list ``build_hierarchy_matrix`` uses so
+    the row order matches; matches on either the last path component or the
+    full slash-joined path, shallowest first.
+    """
+    if tva._priors is None or not tva._priors.series_metadata:
+        return None
+    paths = [
+        m.hierarchy_path for m in tva._priors.series_metadata if m.hierarchy_path
+    ]
+    aggregate_nodes = set()
+    for path in paths:
+        for depth in range(1, len(path)):
+            aggregate_nodes.add(tuple(path[:depth]))
+    aggregate_nodes = sorted(aggregate_nodes, key=lambda x: (len(x), x))
+    for i, node in enumerate(aggregate_nodes):
+        if node[-1] == level_name or '/'.join(node) == level_name:
+            return i
+    return None
+
+
+def _proportional_split(values, constituent_indices, target_value):
+    """Set the constituent sum to ``target_value``, split by current share.
+
+    The pre-covariance behaviour, kept as the fallback for when no forecast
+    covariance is available. When the current aggregate is near zero the delta
+    is split equally instead.
+    """
+    for t in range(values.shape[0]):
+        total = values[t, constituent_indices].sum()
+        delta = target_value - total
+        if abs(total) > 1e-10:
+            shares = values[t, constituent_indices] / total
+        else:
+            shares = np.ones(len(constituent_indices)) / len(constituent_indices)
+        values[t, constituent_indices] += delta * shares
+    return values
 
 
 class BifrostOptimizer:
@@ -122,69 +187,30 @@ class BifrostOptimizer:
         columns = list(base_forecast.columns)
         N = len(columns)
 
-        # resolveS matrix
-        if hierarchy_matrix is not None:
-            S = np.asarray(hierarchy_matrix, dtype=np.float64)
-        elif self.tva._priors is not None:
-            S = self.tva._priors.build_hierarchy_matrix().astype(np.float64)
-        else:
+        S = _resolve_hierarchy(self.tva, hierarchy_matrix)
+        if S is None:
             return base_forecast  # no hierarchy available
 
         n_bottom = S.shape[1]
-        n_all = S.shape[0]
-        n_agg = n_all - n_bottom
-
+        n_agg = S.shape[0] - n_bottom
         if n_agg == 0 or n_bottom != N:
             # flat hierarchy, or S doesn't align with forecast columns
             return base_forecast
 
-        # identify which aggregate row corresponds to level_name by rebuilding
-        # the sorted aggregate node list used in build_hierarchy_matrix
-        agg_row_idx = None
-        if self.tva._priors is not None and self.tva._priors.series_metadata:
-            paths = [
-                m.hierarchy_path
-                for m in self.tva._priors.series_metadata
-                if m.hierarchy_path
-            ]
-            _aggregate_nodes = set()
-            for path in paths:
-                for depth in range(1, len(path)):
-                    _aggregate_nodes.add(tuple(path[:depth]))
-            _aggregate_nodes = sorted(_aggregate_nodes, key=lambda x: (len(x), x))
-
-            for i, node in enumerate(_aggregate_nodes):
-                if node[-1] == level_name or '/'.join(node) == level_name:
-                    agg_row_idx = i
-                    break
-
+        agg_row_idx = _aggregate_row_index(self.tva, level_name)
         if agg_row_idx is None:
             return base_forecast  # level_name not found in hierarchy
 
         # S row for this aggregate is a binary mask over bottom-level series
-        constituent_mask = S[agg_row_idx, :].astype(bool)  # (M,)
-        constituent_indices = np.where(constituent_mask)[0]
-
+        constituent_indices = np.where(S[agg_row_idx, :].astype(bool))[0]
         if len(constituent_indices) == 0:
             return base_forecast
 
-        # bottom forecasts: (T, N)
-        adjusted_values = base_forecast.values.copy().astype(np.float64)
-
-        # current aggregate per timestep
-        current_agg = adjusted_values[:, constituent_indices].sum(axis=1)  # (T,)
-
-        for t in range(len(current_agg)):
-            delta = target_value - current_agg[t]
-            total = current_agg[t]
-            if abs(total) > 1e-10:
-                # proportional to each series' share of the current aggregate
-                shares = adjusted_values[t, constituent_indices] / total
-            else:
-                # equal split when aggregate is near zero
-                shares = np.ones(len(constituent_indices)) / len(constituent_indices)
-            adjusted_values[t, constituent_indices] += delta * shares
-
+        adjusted_values = _proportional_split(
+            base_forecast.values.copy().astype(np.float64),
+            constituent_indices,
+            target_value,
+        )
         return pd.DataFrame(adjusted_values, index=base_forecast.index, columns=columns)
 
     def _optimize(self, constraints: list) -> pd.DataFrame:
@@ -345,3 +371,202 @@ class BifrostOptimizer:
     def _rainbow_bridge_strength(self) -> float:
         """Hidden: how much the bridge was perturbed."""
         return float(self.n_steps * self.lr)
+
+
+class ClosedFormScenario:
+    """Covariance-weighted what-if solver for the factor and torch-free modes.
+
+    :class:`BifrostOptimizer` backpropagates a perturbation through the trend
+    network, which is unavailable in ``trend_network='factor'`` and ``'none'``
+    (``tva._network is None`` there, so the optimizer dereferences None and
+    raises). Those modes do not need backprop: their forecast is linear in a
+    small set of factor paths, so any user constraint is a linear functional of
+    the forecast vector and the minimum-disruption update has a closed form —
+    the same Gaussian-conditioning / MinT-shaped solve::
+
+        delta = Sigma A' (A Sigma A')^-1 (b - A y_hat)
+
+    This is the minimum-``Sigma``-norm correction satisfying ``A(y+delta) = b``
+    exactly, is deterministic, needs no optimizer steps, and reads the *same*
+    covariance object as reconciliation — which is what makes the adjustment
+    genuinely cross-series aware instead of a proportional top-down split.
+
+    Non-factor components (seasonality, holidays, level shifts) need no special
+    handling: they are additive offsets already inside the base forecast, so
+    they enter only through the residual ``b - A y_hat``. Declared ratio
+    identities are re-applied last, matching ``_predict_factor``'s ordering.
+
+    The solve happens in raw forecast units. When the factor model was fit in
+    log space, :meth:`TVA.forecast_covariance` has already carried that
+    geometry across with a delta-method Jacobian; solving in raw units keeps
+    linear aggregate constraints (which a log-space solve would not preserve)
+    exactly satisfied.
+
+    Args:
+        tva_model: Fitted TVA instance.
+        covariance: Optional precomputed (N, N) covariance. Fetched from
+            ``tva_model.forecast_covariance()`` when omitted.
+    """
+
+    def __init__(self, tva_model, covariance: np.ndarray = None):
+        self.tva = tva_model
+        self._sigma = covariance
+        self._sigma_resolved = covariance is not None
+        self.covariance_info = None
+
+    # -- covariance ---------------------------------------------------------
+
+    def covariance(self, n_series: int = None):
+        """(N, N) forecast covariance, or None when unavailable."""
+        if not self._sigma_resolved:
+            self._sigma_resolved = True
+            result = self.tva.forecast_covariance()
+            if result is not None:
+                self._sigma, self.covariance_info = result
+        sigma = self._sigma
+        if sigma is None:
+            return None
+        sigma = np.asarray(sigma, dtype=np.float64)
+        if n_series is not None and sigma.shape != (n_series, n_series):
+            return None
+        return sigma
+
+    # -- core solve ---------------------------------------------------------
+
+    def _solve(self, base_forecast: pd.DataFrame, constraints: list) -> pd.DataFrame:
+        """Apply ``(timestep, a_vector, target)`` constraints in closed form.
+
+        Constraints sharing a timestep are solved jointly, so a set of
+        simultaneous requirements is satisfied together rather than in
+        sequence.
+        """
+        values = base_forecast.values.astype(np.float64).copy()
+        T, N = values.shape
+        sigma = self.covariance(N)
+        # Sigma = I is the honest degenerate case: with no cross-series
+        # information the minimum-norm correction touches only the series the
+        # constraint names, which is the pre-existing behaviour.
+        S_use = np.eye(N) if sigma is None else sigma
+
+        grouped = {}
+        for timestep, a_vec, target in constraints:
+            t = int(timestep) % T if T else 0
+            grouped.setdefault(t, []).append(
+                (np.asarray(a_vec, dtype=np.float64).ravel(), float(target))
+            )
+
+        for t, items in grouped.items():
+            A = np.stack([item[0] for item in items])  # (m, N)
+            b = np.array([item[1] for item in items])  # (m,)
+            residual = b - A @ values[t]
+            SA = S_use @ A.T  # (N, m)
+            M = A @ SA  # (m, m)
+            try:
+                lam = np.linalg.solve(M, residual)
+            except np.linalg.LinAlgError:
+                lam = np.linalg.lstsq(M, residual, rcond=None)[0]
+            values[t] = values[t] + SA @ lam
+
+        result = pd.DataFrame(
+            values, index=base_forecast.index, columns=base_forecast.columns
+        )
+        return self.tva._apply_derived_identities(result)
+
+    # -- public API (mirrors BifrostOptimizer) ------------------------------
+
+    def apply_constraint(
+        self, series_name: str, timestep: int, target_value: float
+    ) -> pd.DataFrame:
+        """Pin a series at a timestep; other series move along ``Sigma``.
+
+        Args:
+            series_name: Column name of the series to constrain.
+            timestep: Forecast timestep index (0-based).
+            target_value: Desired value at that timestep.
+
+        Returns:
+            Adjusted forecast DataFrame for ALL series.
+        """
+        base = self.tva.predict()
+        columns = list(base.columns)
+        a = np.zeros(len(columns))
+        a[columns.index(series_name)] = 1.0
+        return self._solve(base, [(timestep, a, target_value)])
+
+    def apply_growth_constraint(
+        self, series_name: str, growth_rate: float
+    ) -> pd.DataFrame:
+        """Constrain a series to a growth rate over the forecast horizon.
+
+        Args:
+            series_name: Column name.
+            growth_rate: Desired growth rate (e.g. 0.05 for 5% growth).
+
+        Returns:
+            Adjusted forecast DataFrame.
+        """
+        base = self.tva.predict()
+        columns = list(base.columns)
+        a = np.zeros(len(columns))
+        a[columns.index(series_name)] = 1.0
+        last_val = float(self.tva._df_original[series_name].iloc[-1])
+        target_end = last_val * (1.0 + growth_rate)
+        return self._solve(base, [(len(base) - 1, a, target_end)])
+
+    def apply_hierarchical_adjustment(
+        self,
+        level_name: str,
+        target_value: float,
+        hierarchy_matrix: np.ndarray = None,
+    ) -> pd.DataFrame:
+        """Set an aggregate to ``target_value`` at every timestep.
+
+        With a forecast covariance available the delta is distributed by the
+        covariance-weighted solve — series that co-move with the rest of the
+        aggregate absorb more of it than their raw share would suggest. Without
+        one, this falls back to the proportional split
+        :class:`BifrostOptimizer` performs.
+
+        Args:
+            level_name: Aggregate node name, matched against the last component
+                of hierarchy path tuples (e.g. 'global', 'NA') or the full
+                slash-joined path. Shallowest match wins.
+            target_value: Desired flat aggregate value across all timesteps.
+            hierarchy_matrix: (L, M) summing matrix S. Built from the fitted
+                priors when omitted.
+
+        Returns:
+            Adjusted forecast DataFrame whose constituent series sum to
+            ``target_value`` at every timestep.
+        """
+        base = self.tva.predict()
+        N = base.shape[1]
+
+        S = _resolve_hierarchy(self.tva, hierarchy_matrix)
+        if S is None:
+            return base
+        n_bottom = S.shape[1]
+        if S.shape[0] - n_bottom == 0 or n_bottom != N:
+            return base
+
+        agg_row_idx = _aggregate_row_index(self.tva, level_name)
+        if agg_row_idx is None:
+            return base
+        a = np.asarray(S[agg_row_idx, :], dtype=np.float64)
+        constituent_indices = np.where(a.astype(bool))[0]
+        if len(constituent_indices) == 0:
+            return base
+
+        if self.covariance(N) is None:
+            adjusted = _proportional_split(
+                base.values.copy().astype(np.float64),
+                constituent_indices,
+                target_value,
+            )
+            return self.tva._apply_derived_identities(
+                pd.DataFrame(adjusted, index=base.index, columns=base.columns)
+            )
+
+        return self._solve(
+            base, [(t, a, target_value) for t in range(len(base))]
+        )

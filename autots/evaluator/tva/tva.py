@@ -54,6 +54,27 @@ except Exception:
         return x
 
 
+# What ``reconciliation_covariance='auto'`` resolves to. Before this, the
+# factor and torch-free modes reached MinT with no residual matrix at all, so W
+# fell back to the identity and "MinT" was plain OLS reconciliation.
+#
+# Set to 'structural' on the strength of examples/tva_reconciliation_gate.py:
+# over 10 seeds of a factor-grouped synthetic hierarchy, the structural arm
+# scored an aggregate MASE ratio of 0.846 against the identity arm (winning on
+# 8 of 10 seeds, worst seed 1.043) at identical, exact coherence. A
+# variance-only control (the same W with its off-diagonals deleted) scored
+# 1.409 against structural's 1.385, so most of the gain is ordinary variance
+# weighting and roughly 1.7% is the cross-series covariance itself.
+#
+# Note what this does *not* change: when ``reconcile`` synthesizes the
+# aggregate rows by summing the bottom level -- what every in-library caller
+# does -- the input already lies in the coherent subspace MinT projects onto,
+# so no W moves any number and the structural W is not even assembled. This
+# setting bites only for a caller supplying independently-produced
+# aggregate-level forecasts.
+RECONCILIATION_COVARIANCE_AUTO = 'structural'
+
+
 class TVA:
     """Time Variant Architecture — end-to-end coherent forecasting graph.
 
@@ -118,6 +139,13 @@ class TVA:
         forecast_horizon: Output forecast length.
         loss_weights: Dict overriding loss component weights.
         reconciliation_method: None, 'mint', 'erm', etc.
+        reconciliation_covariance: how MinT's W is obtained when no per-node
+            residual matrix is available (the 'factor' and 'none' modes, where
+            the network-based residual estimator returns None and W therefore
+            falls back to the identity). 'auto' (default) follows the module
+            constant ``RECONCILIATION_COVARIANCE_AUTO``, 'structural' uses
+            ``S @ forecast_covariance() @ S.T``, 'identity' forces the
+            previous behaviour.
         min_anchor_history: Minimum periods for a series to be an anchor.
         device: 'cpu', 'cuda', or None (auto-detects cuda if available, else cpu).
         random_seed: Reproducibility seed.
@@ -186,6 +214,7 @@ class TVA:
         coherence_config: dict = None,
         derived_definitions: dict = None,
         factor_deconfound_edges: bool = False,
+        reconciliation_covariance: str = 'auto',
     ):
         if not HAS_TORCH and str(trend_network) != 'none':
             raise ImportError(
@@ -251,6 +280,7 @@ class TVA:
         self.recency_halflife_days = recency_halflife_days
         self.loss_weights = loss_weights
         self.reconciliation_method = reconciliation_method
+        self.reconciliation_covariance = reconciliation_covariance
         self.min_anchor_history = min_anchor_history
         self.holiday_country = holiday_country
         self.holiday_countries = holiday_countries
@@ -2223,11 +2253,332 @@ class TVA:
         result = self._apply_derived_identities(result)
         return result
 
-    def what_if(self, **constraints) -> pd.DataFrame:
-        """Scenario planning via BifrostOptimizer.
+    # ---- forecast covariance -------------------------------------------
+    def forecast_covariance(self, horizon: int = None):
+        """(N, N) raw-unit cross-series forecast-error covariance, or None.
+
+        One covariance object for the callers that each otherwise invent their
+        own weighting: MinT's ``W``, the closed-form what-if solver, and (later)
+        interval coherence. It is built from the rolling-origin residual matrix
+        the trend model already forms, blended toward a low-rank
+        ``Lambda Sigma_f Lambda' + diag(psi)`` target, and floored at the same
+        per-series sigma the shipped prediction intervals use.
+
+        Only the modes whose trend model is linear in a small set of factors
+        are served: ``trend_network='factor'`` (loadings from the fitted factor
+        model) and ``'none'`` (loadings from structure discovery, residuals
+        from rolling the damped-trend rule). ``'v1'``/``'v2'`` return None —
+        those already have :meth:`_compute_recent_reconciliation_residuals` for
+        reconciliation and the backprop scenario solver for what-if, and a
+        covariance built from a *different* model than the one forecasting
+        would misdescribe them.
 
         Args:
-            **constraints: Passed to BifrostOptimizer methods.
+            horizon: forecast horizon the covariance should describe. Defaults
+                to ``forecast_horizon``.
+
+        Returns:
+            ``(sigma, info)`` with ``sigma`` an (N, N) covariance in the raw
+            units of the input data and ``info`` a diagnostics dict carrying
+            ``alpha`` (shrinkage intensity), ``beta`` (structural scale),
+            ``psi``, ``floor_binding`` and ``n_samples``. Returns ``None`` when
+            unfitted, when the mode is not served, or when no usable residual
+            matrix or loadings exist — callers degrade to their previous
+            behaviour rather than seeing an exception.
+        """
+        if self._components is None or self._df_original is None:
+            return None
+        H = int(horizon) if horizon else int(self.forecast_horizon)
+        H = max(H, 1)
+        try:
+            if self.trend_network_type == 'factor' and self._factor_network is not None:
+                return self._factor_forecast_covariance(H)
+            if self.trend_network_type == 'none':
+                return self._numpy_forecast_covariance(H)
+        except Exception as exc:  # pragma: no cover - never fail a forecast
+            warnings.warn(
+                f"TVA forecast covariance could not be assembled; callers will "
+                f"fall back to their uncorrelated behaviour. {exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+        return None
+
+    def _factor_residual_matrix(self, horizon: int) -> Optional[np.ndarray]:
+        """(n_samples, N) rolling-origin residuals in the factor model's space.
+
+        Prefers the matrix the fit already produced (``info['residual_matrix']``,
+        kept rather than reduced to its per-series std) and recomputes only when
+        that one does not describe this panel at this horizon — a different
+        horizon than the fit's, or an anchor/responder fit whose stored matrix
+        covers the anchor sub-panel only.
+        """
+        N = self._df_original.shape[1]
+        info = self._factor_info or {}
+        stored = info.get('residual_matrix')
+        if stored is not None and int(horizon) == int(self.forecast_horizon):
+            stored = np.asarray(stored, dtype=float)
+            if stored.ndim == 2 and stored.shape[1] == N and stored.shape[0] >= 2:
+                return np.where(np.isfinite(stored), stored, 0.0)
+
+        model = self._factor_network
+        space = self._factor_scale.get('space', 'level')
+        center = self._factor_scale['center']
+        scale = self._factor_scale['scale']
+        panel = self._to_factor_space(self._factor_input_panel(), space)
+        norm = (panel - center[np.newaxis, :]) / scale[np.newaxis, :]
+        T = norm.shape[0]
+        H = max(int(horizon), 1)
+
+        span = max(min(300, T // 3), 1)
+        lo = max(T - span, int(getattr(model, 'slope_window', 2)))
+        hi = T - H - 1
+        if hi < lo:
+            return None
+        origins = np.arange(lo, hi + 1)
+        if origins.size > 128:
+            origins = origins[np.linspace(0, origins.size - 1, 128).astype(int)]
+
+        with torch.no_grad():
+            pred = (
+                model.rolling_forecast(
+                    torch.tensor(origins, device=self.device, dtype=torch.long), H
+                )
+                .cpu()
+                .numpy()
+            )  # (O, H, N)
+        target = norm[origins[:, None] + np.arange(1, H + 1)[None, :]]  # (O, H, N)
+        resid = (pred - target).reshape(-1, N)
+        return np.where(np.isfinite(resid), resid, 0.0)
+
+    def _factor_sigma_floor(self, jacobian: np.ndarray) -> np.ndarray:
+        """(N,) raw-unit sigma floor, matching ``_predict_factor``'s intervals.
+
+        The factor model's idiosyncratic term is capped at 2 degrees of freedom
+        by design, so its own residual spread is structurally over-confident
+        (this is why ``factor_variance_share`` reads 1.00 even on factor-free
+        panels). Floor at the sigma the prediction intervals are already built
+        from: the model residual combined in quadrature with the
+        decomposition's.
+        """
+        scale = self._factor_scale['scale']
+        model_sigma = (
+            np.asarray(self._factor_info['sigma'], dtype=float) * scale * jacobian
+        )
+        resid_sigma = None
+        if hasattr(self._decomposer, 'get_residual_sigma'):
+            resid_sigma = self._decomposer.get_residual_sigma()
+        if resid_sigma is not None:
+            model_sigma = np.sqrt(
+                model_sigma**2 + np.asarray(resid_sigma, dtype=float) ** 2
+            )
+        return model_sigma
+
+    def _factor_forecast_covariance(self, horizon: int):
+        """Forecast covariance for ``trend_network='factor'``."""
+        from autots.evaluator.tva.covariance import (
+            assemble_covariance,
+            damped_accumulated_variance,
+        )
+
+        resid = self._factor_residual_matrix(horizon)
+        if resid is None or resid.shape[0] < 2:
+            return None
+
+        model = self._factor_network
+        loadings = model.fitted_loadings()  # (N, k), pruned + sign-fixed
+        keep = model.live_factors()
+        with torch.no_grad():
+            phi = model.phi().detach().cpu().numpy().ravel()[keep]
+        factor_var = damped_accumulated_variance(phi, horizon)
+
+        scale = self._factor_scale['scale']
+        space = self._factor_scale.get('space', 'level')
+        jacobian = np.ones_like(np.asarray(scale, dtype=float))
+        if str(space) == 'log':
+            # signed log1p: x = sign(y) expm1(|y|), so d x / d y = exp(|y|).
+            # Evaluated at the horizon-mean forecast, which is where the
+            # covariance is being asked about.
+            deltas = self._selected_continuation(horizon)
+            with torch.no_grad():
+                fc_norm = (
+                    model.forecast(horizon, deltas=deltas).cpu().numpy()
+                )  # (N, H)
+            y_model = fc_norm.T * scale[np.newaxis, :] + self._factor_scale['center']
+            jacobian = np.exp(np.clip(np.abs(y_model).mean(axis=0), None, 700.0))
+
+        sigma, info = assemble_covariance(
+            resid,
+            loadings=loadings,
+            factor_var=factor_var,
+            scale=scale,
+            jacobian=jacobian,
+            floor_sd=self._factor_sigma_floor(jacobian),
+        )
+        info['loadings'] = loadings
+        info['space'] = space
+        info['horizon'] = int(horizon)
+        info['source'] = 'factor'
+        return sigma, info
+
+    def _numpy_residual_matrix(self, horizon: int) -> Optional[np.ndarray]:
+        """(n_samples, N) rolling-origin residuals of the torch-free trend rule.
+
+        Rolls exactly the rule :meth:`_predict_numpy` ships — OLS slope over the
+        last ``L`` trend steps, damped 0.9, anchored at the last trend value —
+        so the covariance describes the forecast that is actually produced.
+        """
+        trend = self._components['trend'].values
+        T, N = trend.shape
+        H = max(int(horizon), 1)
+        L = max(min(self.window_size, 4 * self.forecast_horizon), 2)
+        L = min(L, T)
+        if T - H < L:
+            return None
+        origins = np.arange(L, T - H + 1)
+        if origins.size > 128:
+            origins = origins[np.linspace(0, origins.size - 1, 128).astype(int)]
+
+        t_idx = np.arange(L) - (L - 1) / 2.0
+        denom = max(float(np.sum(t_idx**2)), 1e-8)
+        damp = np.cumsum(0.9 ** np.arange(1, H + 1))[:, np.newaxis]
+        rows = []
+        for o in origins:
+            x = trend[o - L : o]
+            slope = (x * t_idx[:, np.newaxis]).sum(axis=0) / denom
+            fc = trend[o - 1][np.newaxis, :] + damp * slope[np.newaxis, :]
+            rows.append(fc - trend[o : o + H])
+        resid = np.concatenate(rows, axis=0)
+        return np.where(np.isfinite(resid), resid, 0.0)
+
+    def _numpy_forecast_covariance(self, horizon: int):
+        """Forecast covariance for ``trend_network='none'`` (torch-free)."""
+        from autots.evaluator.tva.covariance import (
+            assemble_covariance,
+            damped_accumulated_variance,
+        )
+
+        disc = self._discovery
+        if not disc:
+            return None
+        loadings = np.asarray(disc.get('loadings'), dtype=float)
+        factors = np.asarray(disc.get('factors'), dtype=float)
+        if (
+            loadings.ndim != 2
+            or loadings.size == 0
+            or not np.any(loadings)
+            or factors.ndim != 2
+            or factors.shape[1] != loadings.shape[1]
+            or loadings.shape[0] != self._df_original.shape[1]
+        ):
+            return None
+
+        resid = self._numpy_residual_matrix(horizon)
+        if resid is None or resid.shape[0] < 2:
+            return None
+
+        # discovery loadings are in standardized-difference units; the scalar
+        # beta fitted in structural_target absorbs the unit mismatch, so only
+        # the *relative* per-factor variance has to be right here.
+        inc_var = np.nanvar(np.diff(factors, axis=0), axis=0)
+        inc_var = np.where(np.isfinite(inc_var) & (inc_var > 0), inc_var, 1.0)
+        factor_var = (
+            damped_accumulated_variance(np.full(loadings.shape[1], 0.9), horizon)
+            * inc_var
+        )
+
+        floor = None
+        if hasattr(self._decomposer, 'get_residual_sigma'):
+            floor = self._decomposer.get_residual_sigma()
+
+        sigma, info = assemble_covariance(
+            resid,
+            loadings=loadings,
+            factor_var=factor_var,
+            floor_sd=floor,
+        )
+        info['loadings'] = loadings
+        info['space'] = 'level'
+        info['horizon'] = int(horizon)
+        info['source'] = 'discovery'
+        return sigma, info
+
+    def _structural_reconciliation_W(
+        self, S: np.ndarray, aggregate_sigma=None
+    ) -> Optional[np.ndarray]:
+        """(L, L) MinT weighting from the forecast covariance, or None.
+
+        The model produces a bottom-level covariance; MinT wants one over every
+        hierarchy node, which for a summing matrix S is ``S Sigma S'`` plus
+        whatever error the *aggregate-level* base forecasts carry on their own.
+
+        That second term is not optional. ``S Sigma S'`` has rank M < L, and
+        ``mint_reconcile`` needs a positive-definite W, so the obvious fix is a
+        numerical ridge — but with only a ridge the estimator collapses::
+
+            G = (S' W^-1 S)^-1 S' W^-1  ->  (S' S)^-1 S'    as ridge -> 0
+
+        i.e. exactly the OLS reconciler that ``W = I`` already gives. Sigma
+        cancels out entirely (verified numerically to 1e-12). Sigma changes the
+        answer only when the aggregate nodes carry variance that is *not* the
+        aggregated bottom variance — which is the case precisely when the
+        aggregate forecasts were made independently rather than summed up from
+        the bottom level.
+
+        Args:
+            S: (L, M) summing matrix.
+            aggregate_sigma: optional (n_agg,) standard deviations of the
+                independently-produced aggregate-level base forecasts. Without
+                it the returned W is the rank-deficient form plus a numerical
+                ridge, which reconciles identically to ``W = I``.
+
+        Returns:
+            (L, L) covariance, or None when the mode is off or no forecast
+            covariance is available.
+        """
+        mode = str(getattr(self, 'reconciliation_covariance', 'auto') or 'auto').lower()
+        if mode == 'auto':
+            mode = RECONCILIATION_COVARIANCE_AUTO
+        if mode != 'structural':
+            return None
+        cov = self.forecast_covariance()
+        if cov is None:
+            return None
+        sigma = np.asarray(cov[0], dtype=np.float64)
+        S = np.asarray(S, dtype=np.float64)
+        if sigma.shape[0] != S.shape[1]:
+            return None
+        W = S @ sigma @ S.T
+        L, M = S.shape
+        n_agg = L - M
+        if aggregate_sigma is not None and n_agg > 0:
+            extra = np.zeros(L)
+            agg = np.asarray(aggregate_sigma, dtype=np.float64).ravel()
+            if agg.shape[0] != n_agg:
+                raise ValueError(
+                    f"aggregate_sigma must have {n_agg} entries; got {agg.shape[0]}"
+                )
+            extra[:n_agg] = np.maximum(agg, 0.0) ** 2
+            W = W + np.diag(extra)
+        trace = float(np.trace(W))
+        ridge = 1e-6 * (trace / L if trace > 0 else 1.0)
+        return W + np.eye(L) * ridge
+
+    def what_if(self, **constraints) -> pd.DataFrame:
+        """Scenario planning: adjust the forecast to satisfy user constraints.
+
+        Two solvers behind one signature, picked by what the fit produced.
+        ``trend_network='v1'``/``'v2'`` backpropagate a latent perturbation
+        through the trend network (:class:`~.scenario.BifrostOptimizer`).
+        ``'factor'`` and ``'none'`` have no network to backprop through — the
+        optimizer used to dereference ``self._network`` and raise there — but
+        their forecast is linear in the factor paths, so
+        :class:`~.scenario.ClosedFormScenario` solves the same
+        minimum-disruption problem in closed form under
+        :meth:`forecast_covariance`.
+
+        Args:
+            **constraints: Passed to the solver's methods.
                 Supported keys:
                 - series_name, timestep, target_value -> apply_constraint
                 - series_name, growth_rate -> apply_growth_constraint
@@ -2236,9 +2587,14 @@ class TVA:
         Returns:
             Adjusted forecast DataFrame.
         """
-        from autots.evaluator.tva.scenario import BifrostOptimizer
+        if self._network is None:
+            from autots.evaluator.tva.scenario import ClosedFormScenario
 
-        optimizer = BifrostOptimizer(self)
+            optimizer = ClosedFormScenario(self)
+        else:
+            from autots.evaluator.tva.scenario import BifrostOptimizer
+
+            optimizer = BifrostOptimizer(self)
 
         if 'growth_rate' in constraints:
             if 'series_name' not in constraints:
@@ -2266,15 +2622,33 @@ class TVA:
         self,
         forecasts: pd.DataFrame = None,
         residuals: np.ndarray = None,
+        aggregate_sigma=None,
     ) -> pd.DataFrame:
         """Apply hierarchical reconciliation if configured.
 
+        .. note::
+            When ``forecasts`` holds only the bottom level, this method builds
+            the aggregate rows by summing it through S — which places the input
+            *exactly* in the coherent subspace MinT projects onto, so
+            reconciliation returns it unchanged for any W, in any trend mode.
+            Reconciliation can only move a number when the aggregate levels
+            carry a forecast that was not derived from the bottom one; pass a
+            full (L-column) ``forecasts`` frame, ordered aggregates-then-bottom,
+            to supply one.
+
         Args:
             forecasts: Forecast DataFrame. If None, generates fresh predictions.
+                Bottom-level columns only, or all L hierarchy levels with the
+                aggregate columns first (see the note above).
             residuals: Optional historical residual matrix for all hierarchy levels.
                 If omitted, TVA estimates recent one-step residuals from the last
                 30-90 training windows so covariance-aware reconciliation methods
                 can use a meaningful W matrix.
+            aggregate_sigma: Optional (n_agg,) forecast-error standard deviations
+                for independently-produced aggregate forecasts. Only consulted on
+                the structural-covariance path, where it is what stops Sigma from
+                cancelling out of MinT's estimator (see
+                :meth:`_structural_reconciliation_W`).
 
         Returns:
             Reconciled DataFrame.
@@ -2311,7 +2685,8 @@ class TVA:
         n_all = S.shape[0]
         n_agg = n_all - n_bottom
 
-        if forecasts.shape[1] == n_bottom and n_agg > 0:
+        synthesized_aggregates = forecasts.shape[1] == n_bottom and n_agg > 0
+        if synthesized_aggregates:
             agg_values = (S[:n_agg] @ forecasts.values.T).T  # (T, n_agg)
             agg_cols = [f'_agg_{i}' for i in range(n_agg)]
             full_df = pd.concat(
@@ -2324,12 +2699,26 @@ class TVA:
         else:
             full_df = forecasts
 
+        W = None
         if residuals is None:
             residuals = self._compute_recent_reconciliation_residuals(S)
+            if residuals is None and not synthesized_aggregates:
+                # the network-based estimator has nothing to offer in the
+                # factor and torch-free modes; without this the bridge falls
+                # back to W = I, which makes "MinT" plain OLS reconciliation.
+                # Skipped entirely when the aggregate rows were synthesized
+                # from the bottom level: that input is already coherent, so no
+                # W can move it and assembling one would be pure cost.
+                W = self._structural_reconciliation_W(
+                    S, aggregate_sigma=aggregate_sigma
+                )
         elif isinstance(residuals, pd.DataFrame):
             residuals = residuals.values
 
-        reconciled = self._reconciler.reconcile(full_df, S, residuals=residuals)
+        if W is None:
+            reconciled = self._reconciler.reconcile(full_df, S, residuals=residuals)
+        else:
+            reconciled = self._reconciler.reconcile(full_df, S, W=W)
         # Return only the original bottom-level columns
         return reconciled[list(forecasts.columns)]
 

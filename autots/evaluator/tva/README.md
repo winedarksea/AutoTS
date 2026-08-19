@@ -88,9 +88,25 @@ TVA is a **sparse dynamic factor model with a residual lead-lag graph**:
 5. Predict: window-anchored de-normalization, calibrated NLL sigma intervals
    (+ decomposition residual in quadrature), MinT reconciliation by default
    whenever metadata yields a hierarchy.
+6. `covariance.py` — one cross-series forecast-error covariance `Sigma`,
+   assembled from the rolling-origin residual matrix the trend model already
+   forms, blended toward a low-rank `Lambda Sigma_f Lambda' + diag(psi)`
+   target by the Ledoit-Wolf shrinkage intensity, and floored at the sigma the
+   prediction intervals use. Exposed as `TVA.forecast_covariance()`; served to
+   MinT's `W` and to the closed-form scenario solver. `None` outside the
+   `'factor'` / `'none'` modes.
+
+Reconciliation caveat worth knowing: when `reconcile()` is handed a
+bottom-level-only forecast it synthesizes the aggregate rows as `S @ bottom`,
+which is already coherent, so MinT returns it unchanged for any `W`. It moves
+numbers only when the aggregate levels carry an independently-produced
+forecast — pass a full L-column frame (aggregates first) plus
+`aggregate_sigma`. See `examples/tva_reconciliation_gate.py`.
 
 Introspection: `TVA.get_edges()`, `TVA.get_factors()`, `TVA.get_graph()`
 (series-level N×N), `TVA.plot_graph()` (drawn over real series names).
+Scenarios: `TVA.what_if()` — backprop through the network in `v1`/`v2`, a
+closed-form `Sigma`-weighted solve in `'factor'` / `'none'`.
 Benchmarks: `examples/tva_benchmark.py`; ablations:
 `examples/tva_graph_ablation.py` (graph must beat shuffled/transposed
 controls by more than the seed spread before it is called load-bearing).

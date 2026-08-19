@@ -63,6 +63,10 @@ class TVAModel(ModelObject):
         prototype_assignment_temperature: Softmax temperature for prototype assignment.
         loss_weights: Dict of TVA loss component weights.
         reconciliation_method: Hierarchical reconciliation — None, 'mint', or 'erm'.
+        reconciliation_covariance: how MinT's W is obtained in the 'factor'
+            and 'none' modes, which produce no per-node residual matrix.
+            'auto' (default) keeps the shipped behaviour, 'structural' uses
+            the forecast covariance, 'identity' forces W = I.
         min_anchor_history: Minimum history length for anchor selection.
         structure_learning_enabled: Whether to learn DAG structure and hierarchy in V2 network.
         structure_learning_config: Additional structure-learning penalties and options.
@@ -104,6 +108,7 @@ class TVAModel(ModelObject):
         prototype_assignment_temperature: float = 1.0,
         loss_weights: dict = None,
         reconciliation_method: str = None,
+        reconciliation_covariance: str = "auto",
         min_anchor_history: int = 180,
         structure_learning_enabled: bool = True,
         structure_learning_config: dict = None,
@@ -151,6 +156,7 @@ class TVAModel(ModelObject):
         self.prototype_assignment_temperature = prototype_assignment_temperature
         self.loss_weights = loss_weights
         self.reconciliation_method = reconciliation_method
+        self.reconciliation_covariance = reconciliation_covariance
         self.min_anchor_history = min_anchor_history
         self.structure_learning_enabled = structure_learning_enabled
         self.structure_learning_config = structure_learning_config
@@ -228,6 +234,7 @@ class TVAModel(ModelObject):
             prototype_assignment_method=self.prototype_assignment_method,
             prototype_assignment_temperature=self.prototype_assignment_temperature,
             reconciliation_method=self.reconciliation_method,
+            reconciliation_covariance=self.reconciliation_covariance,
             min_anchor_history=effective_min_anchor,
             holiday_country=self.holiday_country,
             holiday_countries=self.holiday_countries,
@@ -395,6 +402,7 @@ class TVAModel(ModelObject):
             "prototype_assignment_temperature": self.prototype_assignment_temperature,
             "loss_weights": self.loss_weights,
             "reconciliation_method": self.reconciliation_method,
+            "reconciliation_covariance": self.reconciliation_covariance,
             "min_anchor_history": self.min_anchor_history,
             "structure_learning_enabled": self.structure_learning_enabled,
             "structure_learning_config": self.structure_learning_config,

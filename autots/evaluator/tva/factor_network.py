@@ -1689,9 +1689,15 @@ if HAS_TORCH:
                     - y.T[origins[:, None] + h_off[None, :]]
                 ).reshape(-1, N)
                 sigma = resid.std(dim=0).cpu().numpy()
+                # kept, not discarded: this is the only rolling-origin
+                # cross-series residual matrix the model ever forms, and it is
+                # the raw material for the forecast covariance (covariance.py)
+                residual_matrix = resid.cpu().numpy()
         else:
             with torch.no_grad():
-                sigma = (model() - y).T.std(dim=0).cpu().numpy()
+                in_sample = (model() - y).T
+                sigma = in_sample.std(dim=0).cpu().numpy()
+                residual_matrix = in_sample.cpu().numpy()
         for p in model.parameters():
             p.requires_grad_(True)
 
@@ -1751,6 +1757,7 @@ if HAS_TORCH:
             'stage_a_val': best_val if np.isfinite(best_val) else None,
             'stage_b_loss': stage_b_loss,
             'sigma': np.asarray(sigma, dtype=float),
+            'residual_matrix': np.asarray(residual_matrix, dtype=float),
             'diagnostics': diag,
             'n_factors_fit': model.K,
             'n_factors_live': diag['n_live_factors'],
@@ -1965,6 +1972,14 @@ if HAS_TORCH:
             info['gated_series'] = sorted(
                 set(info['gated_series']) | set(info.get('insufficient_overlap', []))
             )
+        if info.get('residual_matrix') is not None and (
+            np.asarray(info['residual_matrix']).shape[1] != N
+        ):
+            # anchor-local columns: meaningless against the full panel, and
+            # the responder block has its own lag structure. TVA recomputes it
+            # from the expanded model when it needs one (see
+            # TVA._factor_residual_matrix).
+            info['residual_matrix'] = None
         info['anchor_idx'] = anchor_idx
         info['responder_idx'] = responder_idx
         info['observed_counts'] = counts

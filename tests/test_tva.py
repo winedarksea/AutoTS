@@ -2574,5 +2574,125 @@ class TestTVAModelPriorPassthrough(unittest.TestCase):
         self.assertEqual(model._tva._reconciliation_method_effective, 'mint')
 
 
+@SKIP_INTEGRATION
+class TestTVAModelMetadataConsequences(unittest.TestCase):
+    """Everything ``series_metadata`` is supposed to switch on, from the wrapper.
+
+    ``TVAModel`` threads metadata into ``TVA`` (commit 76206eb) but nothing
+    exercised the *consequences* through the AutoTS-facing API. The anchor mask
+    is the sharpest case: an all-ones mask is exactly what you get when metadata
+    never arrived, so a fit that produces one proves nothing. This class uses a
+    cohort with genuinely short history so the mask has to come from
+    ``get_anchor_mask``.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.df = _make_daily_df(n_series=4, n_days=300)
+        # plain dicts, not SeriesMetadata: template JSON-serializability depends
+        # on the dict form surviving _coerced_series_metadata
+        cls.metadata = [
+            {
+                'name': 's0',
+                'hierarchy_path': ['global', 'NA', 's0'],
+                'attribute_values': {'region': 'NA', 'tier': 'core'},
+                'history_periods': 300,
+            },
+            {
+                'name': 's1',
+                'hierarchy_path': ['global', 'NA', 's1'],
+                'attribute_values': {'region': 'NA', 'tier': 'long_tail'},
+                'history_periods': 300,
+            },
+            {
+                'name': 's2',
+                'hierarchy_path': ['global', 'EU', 's2'],
+                'attribute_values': {'region': 'EU', 'tier': 'core'},
+                'history_periods': 300,
+            },
+            {
+                'name': 's3',
+                'hierarchy_path': ['global', 'EU', 's3'],
+                'attribute_values': {'region': 'EU', 'tier': 'long_tail'},
+                # below min_anchor_history: this series must be a responder
+                'history_periods': 40,
+            },
+        ]
+
+    @classmethod
+    def _fit(cls):
+        from autots.models.tva_model import TVAModel
+
+        model = TVAModel(
+            forecast_length=7,
+            epochs=2,
+            window_size=60,
+            trend_network='factor',
+            verbose=0,
+            min_anchor_history=180,
+            series_metadata=cls.metadata,
+        )
+        model.fit(cls.df)
+        return model
+
+    def setUp(self):
+        if not hasattr(type(self), '_model'):
+            type(self)._model = self._fit()
+        self.model = type(self)._model
+        self.tva = self.model._tva
+
+    def test_dict_metadata_is_coerced_to_series_metadata(self):
+        from autots.evaluator.tva.priors import SeriesMetadata
+
+        coerced = self.model._coerced_series_metadata()
+        self.assertEqual(len(coerced), 4)
+        self.assertTrue(all(isinstance(m, SeriesMetadata) for m in coerced))
+        self.assertEqual(coerced[0].hierarchy_path, ['global', 'NA', 's0'])
+        self.assertEqual(coerced[3].history_periods, 40)
+
+    def test_priors_are_built_from_metadata_alone(self):
+        self.assertIsNotNone(self.tva._priors)
+        self.assertEqual(len(self.tva._priors.series_metadata), 4)
+
+    def test_metadata_embeddings_are_populated(self):
+        embeddings = self.tva._metadata_embeddings
+        self.assertIsNotNone(embeddings)
+        self.assertEqual(embeddings.shape[0], 4)
+        # two categorical axes, two values each -> a non-degenerate one-hot block
+        self.assertGreaterEqual(embeddings.shape[1], 4)
+        self.assertTrue(np.any(embeddings != 0))
+
+    def test_anchor_mask_comes_from_get_anchor_mask(self):
+        """The distinguishing assertion: not all-ones."""
+        mask = self.tva._anchor_mask
+        self.assertIsNotNone(mask)
+        self.assertEqual(mask.shape, (4,))
+        np.testing.assert_array_equal(mask, [True, True, True, False])
+
+    def test_hierarchy_is_real_and_mint_auto_enables(self):
+        S = self.tva._priors.build_hierarchy_matrix()
+        self.assertGreater(S.shape[0], S.shape[1])
+        self.assertEqual(self.tva._reconciliation_method_effective, 'mint')
+        self.assertIsNotNone(self.tva._reconciler)
+
+    def test_get_params_round_trips_metadata(self):
+        from autots.models.tva_model import TVAModel
+
+        params = self.model.get_params()
+        self.assertEqual(params['series_metadata'], self.metadata)
+        rebuilt = TVAModel(**params)
+        self.assertEqual(rebuilt.get_params()['series_metadata'], self.metadata)
+        # and the round-tripped model still coerces to the same objects
+        self.assertEqual(
+            [m.name for m in rebuilt._coerced_series_metadata()],
+            ['s0', 's1', 's2', 's3'],
+        )
+
+    def test_forecast_still_produced_end_to_end(self):
+        forecast = self.model.predict(7).forecast
+        self.assertEqual(forecast.shape, (7, 4))
+        self.assertFalse(forecast.isnull().any().any())
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

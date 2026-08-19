@@ -26,7 +26,12 @@ class ReconciliationBridge:
     Args:
         method: Reconciliation method ('mint', 'erm', 'iterative_mint',
             'volatility_mint'). Default 'mint'.
-        covariance_method: How to estimate W ('ledoit_wolf', 'identity', 'sample').
+        covariance_method: How to estimate W ('ledoit_wolf', 'identity',
+            'sample', or 'structural'). 'structural' means the caller supplies
+            W directly (see ``reconcile``'s ``W`` argument) rather than
+            estimating it from a residual matrix — the case for TVA's factor
+            and torch-free modes, which have no per-node residual history but
+            do produce a cross-series forecast covariance.
     """
 
     def __init__(
@@ -37,15 +42,26 @@ class ReconciliationBridge:
         self.method = method
         self.covariance_method = covariance_method
 
-    def _estimate_covariance(self, residuals: np.ndarray) -> np.ndarray:
+    def _estimate_covariance(
+        self, residuals: np.ndarray, W: np.ndarray = None
+    ) -> np.ndarray:
         """Estimate covariance matrix W from forecast residuals.
 
         Args:
-            residuals: (T, L) residual matrix for all nodes.
+            residuals: (T, L) residual matrix for all nodes. May be None when
+                a precomputed ``W`` is supplied.
+            W: optional precomputed (L, L) covariance, used as-is when
+                ``covariance_method == 'structural'``.
 
         Returns:
             (L, L) covariance matrix.
         """
+        if self.covariance_method == 'structural':
+            if W is None:
+                raise ValueError(
+                    "covariance_method='structural' requires a precomputed W."
+                )
+            return np.asarray(W, dtype=np.float64)
         L = residuals.shape[1]
         if self.covariance_method == 'ledoit_wolf':
             return ledoit_wolf_covariance(residuals)
@@ -62,6 +78,7 @@ class ReconciliationBridge:
         forecasts: pd.DataFrame,
         S: np.ndarray,
         residuals: np.ndarray = None,
+        W: np.ndarray = None,
     ) -> pd.DataFrame:
         """Apply hierarchical reconciliation to forecast DataFrame.
 
@@ -72,6 +89,10 @@ class ReconciliationBridge:
             S: (L, M) summing matrix from YggdrasilPriors.build_hierarchy_matrix().
             residuals: (T_hist, L) historical residuals for covariance estimation.
                 If None, uses identity covariance.
+            W: optional precomputed (L, L) covariance, used instead of
+                estimating one from ``residuals``. Supplying it switches the
+                covariance method to 'structural' for this call only, so the
+                default residual-based path is untouched.
 
         Returns:
             Reconciled DataFrame with same shape and columns as input.
@@ -79,7 +100,13 @@ class ReconciliationBridge:
         y_all = forecasts.values  # (T, L)
         L = y_all.shape[1]
 
-        if residuals is not None:
+        if W is not None:
+            W = np.asarray(W, dtype=np.float64)
+            if W.shape != (L, L):
+                raise ValueError(
+                    f"precomputed W must be ({L}, {L}); got {W.shape}"
+                )
+        elif residuals is not None:
             W = self._estimate_covariance(residuals)
         else:
             W = np.eye(L, dtype=np.float64)
