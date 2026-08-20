@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import numpy as np
 
-
 DEFAULT_CONTINUATION_CONFIG = {
     'slope_windows': (28, 56, 90, 180),
     'damping': (0.0, 0.5, 0.9, 0.99, 1.0),
@@ -83,23 +82,32 @@ def build_specs(config: dict = None) -> list:
         # candidates, so validation decides whether the modifier earns its place
         specs.append(
             {
-                'kind': 'regime', 'phi': 1.0, 'trust': False,
+                'kind': 'regime',
+                'phi': 1.0,
+                'trust': False,
                 'halflife': float(cfg['regime_damp_halflife']),
-                'min_age': int(cfg['regime_min_age']), 'name': 'regime',
+                'min_age': int(cfg['regime_min_age']),
+                'name': 'regime',
             }
         )
         specs.append(
             {
-                'kind': 'regime', 'phi': 1.0, 'trust': True,
+                'kind': 'regime',
+                'phi': 1.0,
+                'trust': True,
                 'halflife': float(cfg['regime_damp_halflife']),
-                'min_age': int(cfg['regime_min_age']), 'name': 'regime_trust',
+                'min_age': int(cfg['regime_min_age']),
+                'name': 'regime_trust',
             }
         )
         specs.append(
             {
-                'kind': 'regime', 'phi': 0.9, 'trust': False,
+                'kind': 'regime',
+                'phi': 0.9,
+                'trust': False,
                 'halflife': float(cfg['regime_damp_halflife']),
-                'min_age': int(cfg['regime_min_age']), 'name': 'regime_p0.9',
+                'min_age': int(cfg['regime_min_age']),
+                'name': 'regime_p0.9',
             }
         )
     return specs
@@ -136,7 +144,11 @@ def _ols_slope(path: np.ndarray, origin: int, window: int) -> float:
 
 
 def _ridge_ar_path(
-    path: np.ndarray, origin: int, horizon: int, lags: int, alpha: float,
+    path: np.ndarray,
+    origin: int,
+    horizon: int,
+    lags: int,
+    alpha: float,
     min_history: int,
 ) -> np.ndarray:
     """Recursive ridge-AR continuation on factor first differences.
@@ -191,8 +203,9 @@ def _ridge_ar_path(
     return out
 
 
-def _last_active_knot(coef_k: np.ndarray, knot_times: np.ndarray, origin: int,
-                      tol: float = 1e-8) -> int:
+def _last_active_knot(
+    coef_k: np.ndarray, knot_times: np.ndarray, origin: int, tol: float = 1e-8
+) -> int:
     """Time index of the most recent knot the trend filter actually used.
 
     ``coef_k[0]`` is the global linear term; entries 1.. correspond to
@@ -247,7 +260,11 @@ def continue_factor(
     if kind == 'ridge_ar':
         for i, origin in enumerate(origins):
             out[i] = _ridge_ar_path(
-                path, origin, horizon, spec['lags'], spec['alpha'],
+                path,
+                origin,
+                horizon,
+                spec['lags'],
+                spec['alpha'],
                 spec['min_history'],
             )
         return out
@@ -297,13 +314,15 @@ def candidate_futures(
             if spec['kind'] == 'model':
                 if model_deltas is None:
                     continue
-                out[(k, spec['name'])] = np.asarray(
-                    model_deltas, dtype=float
-                )[:, :, k]
+                out[(k, spec['name'])] = np.asarray(model_deltas, dtype=float)[:, :, k]
             else:
                 out[(k, spec['name'])] = continue_factor(
-                    paths[:, k], origins, horizon, spec,
-                    knot_times=knot_times, coef_k=coef_k,
+                    paths[:, k],
+                    origins,
+                    horizon,
+                    spec,
+                    knot_times=knot_times,
+                    coef_k=coef_k,
                 )
     return out
 
@@ -354,11 +373,18 @@ def select_continuations(
     horizon = max(int(horizon), 1)
 
     futures = candidate_futures(
-        paths, origins, horizon, specs,
-        knot_times=knot_times, coef=coef, model_deltas=model_deltas,
+        paths,
+        origins,
+        horizon,
+        specs,
+        knot_times=knot_times,
+        coef=coef,
+        model_deltas=model_deltas,
     )
     available = [
-        spec['name'] for spec in specs if any((k, spec['name']) in futures for k in range(K))
+        spec['name']
+        for spec in specs
+        if any((k, spec['name']) in futures for k in range(K))
     ]
     if not available:
         return {'choice': {}, 'score': np.nan, 'baseline_score': np.nan, 'scores': {}}
@@ -407,9 +433,8 @@ def select_continuations(
             best_local = finite[best_name]
             # an unmeasurable improvement over the incumbent is not an improvement
             incumbent_score = finite.get(incumbent, np.inf)
-            if (
-                np.isfinite(incumbent_score)
-                and best_local >= incumbent_score * (1.0 - tolerance)
+            if np.isfinite(incumbent_score) and best_local >= incumbent_score * (
+                1.0 - tolerance
             ):
                 best_name, best_local = incumbent, incumbent_score
             if best_name != incumbent:
@@ -469,7 +494,11 @@ def apply_choice(
             coef_arr = np.asarray(coef, dtype=float)
             coef_k = coef_arr[:, k] if coef_arr.ndim == 2 else coef_arr
         out[:, :, k] = continue_factor(
-            paths[:, k], origins, horizon, spec,
-            knot_times=knot_times, coef_k=coef_k,
+            paths[:, k],
+            origins,
+            horizon,
+            spec,
+            knot_times=knot_times,
+            coef_k=coef_k,
         )
     return out

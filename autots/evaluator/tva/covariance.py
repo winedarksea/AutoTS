@@ -174,7 +174,9 @@ def apply_variance_floor(sigma: np.ndarray, floor_sd: np.ndarray) -> tuple:
         marking the series whose variance the floor actually raised.
     """
     sd = np.sqrt(np.maximum(np.diag(sigma), 0.0))
-    floor_sd = np.maximum(np.nan_to_num(np.asarray(floor_sd, dtype=np.float64), nan=0.0), 0.0)
+    floor_sd = np.maximum(
+        np.nan_to_num(np.asarray(floor_sd, dtype=np.float64), nan=0.0), 0.0
+    )
     binding = floor_sd > sd
     if not np.any(binding):
         return sigma, binding
@@ -238,9 +240,7 @@ def assemble_covariance(
     """
     R = np.asarray(residuals, dtype=np.float64)
     if R.ndim != 2 or R.shape[0] < 2 or R.shape[1] == 0:
-        raise ValueError(
-            f"residuals must be (n_samples>=2, N>=1); got {R.shape}"
-        )
+        raise ValueError(f"residuals must be (n_samples>=2, N>=1); got {R.shape}")
     R = R[np.isfinite(R).all(axis=1)]
     if R.shape[0] < 2:
         raise ValueError("residual matrix has fewer than 2 complete rows")

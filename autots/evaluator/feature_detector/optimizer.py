@@ -2227,7 +2227,9 @@ class FeatureDetectionOptimizer:
         detected_components = self.loss_calculator._resolve_components(
             detected_features.get('components'), None
         )
-        true_components = self.loss_calculator._resolve_components(true_components, None)
+        true_components = self.loss_calculator._resolve_components(
+            true_components, None
+        )
 
         series_names = self.loss_calculator._resolve_series_names(
             detected_features, true_labels, None

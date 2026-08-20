@@ -14,33 +14,32 @@ import warnings
 
 import numpy as np
 
-
 DEFAULT_ROBUST_INPUT_CONFIG = {
     # ---- trend basis -------------------------------------------------------
-    'knot_spacing': 30,      # candidate hinge every ~month
-    'max_knots': 120,        # cap; spacing is widened past this
+    'knot_spacing': 30,  # candidate hinge every ~month
+    'max_knots': 120,  # cap; spacing is widened past this
     # l1 penalty on standardized hinge coefficients; 'auto' picks from
     # alpha_grid by held-out error -- the right value varies a lot by panel
     'alpha': 'auto',
     'alpha_grid': (0.002, 0.005, 0.01, 0.02, 0.05, 0.1),
-    'cv_stride': 5,          # hold out every k-th block when picking alpha
-    'cv_block': None,        # holdout block length; defaults to knot_spacing
+    'cv_stride': 5,  # hold out every k-th block when picking alpha
+    'cv_block': None,  # holdout block length; defaults to knot_spacing
     # ---- robustness --------------------------------------------------------
-    'huber_delta': 1.5,      # IRLS downweight starts at 1.5 robust sigma
-    'irls_iters': 3,         # inner reweighting steps per outer pass
-    'floor_frac': 1e-3,      # MAD floor as a fraction of the panel median MAD
+    'huber_delta': 1.5,  # IRLS downweight starts at 1.5 robust sigma
+    'irls_iters': 3,  # inner reweighting steps per outer pass
+    'floor_frac': 1e-3,  # MAD floor as a fraction of the panel median MAD
     # ---- shared / idiosyncratic split -------------------------------------
-    'rank': 3,               # target rank of the shared trend
+    'rank': 3,  # target rank of the shared trend
     # ---- contamination terms ----------------------------------------------
-    'anomaly_k': 3.0,        # soft-threshold at k robust sigma of the residual
-    'max_shifts': 6,         # per series cap on detected level shifts
-    'min_shift_size': 1.0,   # minimum jump, in robust sigma of the residual
+    'anomaly_k': 3.0,  # soft-threshold at k robust sigma of the residual
+    'max_shifts': 6,  # per series cap on detected level shifts
+    'min_shift_size': 1.0,  # minimum jump, in robust sigma of the residual
     'min_shift_frac': 0.4,  # ... and in units of the series' own robust scale
-    'min_shift_len': 30,     # minimum segment length, in steps
-    'shift_stat_k': 6.0,     # step candidate: |diff| in robust sigma of diff
+    'min_shift_len': 30,  # minimum segment length, in steps
+    'shift_stat_k': 6.0,  # step candidate: |diff| in robust sigma of diff
     # ---- outer loop --------------------------------------------------------
     'max_iters': 5,
-    'tol': 1e-3,             # max abs change of the adjusted panel, scaled
+    'tol': 1e-3,  # max abs change of the adjusted panel, scaled
     # ---- nuisance shrinkage (per detector component, in [0, 1]) -----------
     'shrink': {
         'seasonality': 1.0,
@@ -189,9 +188,9 @@ def _lasso_paths(
                 extra_fit[:, j] = add @ gy[1:]
             continue
         penalty = np.full(base.shape[1], float(alpha))
-        beta = _cd_lasso(
-            Br * sw[:, None], (yr / sd) * sw, penalty, max_sweeps, tol
-        ) * sd
+        beta = (
+            _cd_lasso(Br * sw[:, None], (yr / sd) * sw, penalty, max_sweeps, tol) * sd
+        )
         g = gy - GB @ beta
         fitted[:, j] = base @ beta + g[0]
         if add is not None:
@@ -245,7 +244,9 @@ def _select_alpha(design, targets, weights, obs, extra, cfg):
     block = cfg.get('cv_block')
     if not block:
         # long enough to force genuine extrapolation across the gap
-        block = int(np.clip(n_time // 6, 2 * int(cfg['knot_spacing']), max(n_time // 4, 2)))
+        block = int(
+            np.clip(n_time // 6, 2 * int(cfg['knot_spacing']), max(n_time // 4, 2))
+        )
     block = max(int(block), 2)
     t_idx = np.arange(targets.shape[0])
     rows = ((t_idx // block) % stride) == 0
@@ -265,7 +266,8 @@ def _select_alpha(design, targets, weights, obs, extra, cfg):
             resid = targets - fit - step
             sig = _robust_sigma(resid, fit_w)
             w = np.where(
-                holdout, 0.0,
+                holdout,
+                0.0,
                 _huber_weights(resid, obs, sig, float(cfg['huber_delta'])),
             )
         err = np.abs(targets - fit - step)
@@ -335,10 +337,10 @@ def _step_candidates(z_col, weight, cfg):
             break
         if any(abs(cut - a) < min_len for a in accepted):
             continue
-        pre = z_col[max(cut - min_len, 0):cut]
-        pre_w = weight[max(cut - min_len, 0):cut]
-        post = z_col[cut:cut + min_len]
-        post_w = weight[cut:cut + min_len]
+        pre = z_col[max(cut - min_len, 0) : cut]
+        pre_w = weight[max(cut - min_len, 0) : cut]
+        post = z_col[cut : cut + min_len]
+        post_w = weight[cut : cut + min_len]
         if pre_w.sum() < 2 or post_w.sum() < 2:
             continue
         move = float(np.median(post[post_w > 0]) - np.median(pre[pre_w > 0]))
@@ -449,7 +451,11 @@ def robust_adjusted_panel(
         cfg['shrink'].update({k: float(v) for k, v in dict(shrink).items()})
 
     raw = getattr(values, 'to_numpy', None)
-    raw = values.to_numpy(dtype=float) if raw is not None else np.asarray(values, dtype=float)
+    raw = (
+        values.to_numpy(dtype=float)
+        if raw is not None
+        else np.asarray(values, dtype=float)
+    )
     raw = np.atleast_2d(np.asarray(raw, dtype=float))
     if raw.ndim == 1:
         raw = raw.reshape(-1, 1)
@@ -464,7 +470,9 @@ def robust_adjusted_panel(
         m = np.asarray(m)
         if m.ndim == 1:
             m = m.reshape(-1, 1)
-        obs = np.isfinite(raw) & (m.astype(bool) if m.shape == shape else np.isfinite(raw))
+        obs = np.isfinite(raw) & (
+            m.astype(bool) if m.shape == shape else np.isfinite(raw)
+        )
 
     comps = {}
     for key in COMPONENT_KEYS:
@@ -547,8 +555,12 @@ def _estimate(base, obs, cfg, comps):
     alpha = cfg['alpha']
     if isinstance(alpha, str) or alpha is None:
         alpha = _select_alpha(
-            design, Z, mask_f, obs,
-            [_step_design(T, b) for b in breaks], cfg,
+            design,
+            Z,
+            mask_f,
+            obs,
+            [_step_design(T, b) for b in breaks],
+            cfg,
         )
     alpha = float(alpha)
 
@@ -567,9 +579,7 @@ def _estimate(base, obs, cfg, comps):
         fit = np.zeros((T, N), dtype=float)
         step_fit = np.zeros((T, N), dtype=float)
         for _ in range(max(int(cfg['irls_iters']), 1)):
-            fit, step_fit = _lasso_paths(
-                design, target, weights, alpha, extra=extra
-            )
+            fit, step_fit = _lasso_paths(design, target, weights, alpha, extra=extra)
             resid = target - fit - step_fit
             sig = _robust_sigma(resid, mask_f)
             weights = _huber_weights(resid, obs, sig, float(cfg['huber_delta']))
@@ -638,9 +648,7 @@ def _estimate(base, obs, cfg, comps):
         'anomaly_fraction': float(
             (np.abs(anomalies) > 0).sum() / max(anomalies.size, 1)
         ),
-        'shared_share': float(
-            np.sum(shared ** 2) / max(np.sum(trend ** 2), 1e-12)
-        ),
+        'shared_share': float(np.sum(shared**2) / max(np.sum(trend**2), 1e-12)),
         'residual_sigma': _robust_sigma(resid_final, mask_f),
         'rank': int(rank),
         'observed_fraction': float(obs.mean()),
@@ -738,7 +746,9 @@ def compare_inputs(raw, detector_adjusted, robust_adjusted, oracle_trend) -> dic
     raw_a = _to_array(raw)
     candidates = {
         'raw': raw_a,
-        'detector': _to_array(detector_adjusted) if detector_adjusted is not None else raw_a,
+        'detector': (
+            _to_array(detector_adjusted) if detector_adjusted is not None else raw_a
+        ),
         'robust': _to_array(robust_adjusted) if robust_adjusted is not None else raw_a,
         'oracle': oracle,
     }
@@ -757,9 +767,7 @@ def compare_inputs(raw, detector_adjusted, robust_adjusted, oracle_trend) -> dic
     ranked = sorted(
         out.items(),
         key=lambda kv: (
-            -kv[1]['mean_abs_corr']
-            if np.isfinite(kv[1]['mean_abs_corr'])
-            else np.inf
+            -kv[1]['mean_abs_corr'] if np.isfinite(kv[1]['mean_abs_corr']) else np.inf
         ),
     )
     out['ranking'] = [name for name, _ in ranked]

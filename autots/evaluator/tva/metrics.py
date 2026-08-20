@@ -65,7 +65,9 @@ def mase_value(actual, forecast, train, m: int = 7) -> float:
 # ---------------------------------------------------------------------------
 
 
-def correlated_pairs(train, season_m: int = 7, threshold: float = 0.5, max_pairs: int = 200) -> list:
+def correlated_pairs(
+    train, season_m: int = 7, threshold: float = 0.5, max_pairs: int = 200
+) -> list:
     """Pairs of columns whose smoothed, differenced training trends correlate.
 
     Derived from history alone (never the future), so the ground-set pairs
@@ -178,7 +180,9 @@ def directional_coherence(forecast, loadings) -> float:
     for name in columns:
         series = np.asarray(forecast[name].values, dtype=float)
         finite = series[np.isfinite(series)]
-        direction[name] = float(np.sign(finite[-1] - finite[0])) if finite.size >= 2 else 0.0
+        direction[name] = (
+            float(np.sign(finite[-1] - finite[0])) if finite.size >= 2 else 0.0
+        )
 
     agree, total = 0, 0
     for i in range(len(columns)):
@@ -503,8 +507,12 @@ def loading_structure_score(
     }
     try:
         return _loading_structure_score(
-            true_loadings, est_loadings, true_factors, est_factors,
-            asserted_pairs, empty,
+            true_loadings,
+            est_loadings,
+            true_factors,
+            est_factors,
+            asserted_pairs,
+            empty,
         )
     except Exception:  # pragma: no cover - harness metric, never fatal
         return dict(empty)
@@ -573,13 +581,9 @@ def _loading_structure_score(
         # largest matched column.
         est_mag = np.abs(est_lam)
         dom_est_own = est_mag.argmax(axis=1)
-        mapped = np.array(
-            [inverse.get(int(d), -1) for d in dom_est_own], dtype=int
-        )
+        mapped = np.array([inverse.get(int(d), -1) for d in dom_est_own], dtype=int)
         mapped = np.where(est_mag.max(axis=1) > 0, mapped, -1)
-        out["dominant_recovery"] = float(
-            np.mean(mapped[exposed] == dom_true[exposed])
-        )
+        out["dominant_recovery"] = float(np.mean(mapped[exposed] == dom_true[exposed]))
         # The charitable variant: dominance judged only among the columns that
         # matched a true factor. Reported alongside because it is the number a
         # K-correct fit would produce anyway, and because it isolates "wrong
@@ -598,19 +602,14 @@ def _loading_structure_score(
         s_est = np.sign(est_aligned[rows, dom_true])
         usable = exposed & (s_true != 0) & (s_est != 0)
         if usable.any():
-            out["sign_agreement"] = float(
-                np.mean(s_true[usable] == s_est[usable])
-            )
+            out["sign_agreement"] = float(np.mean(s_true[usable] == s_est[usable]))
 
     # ---- pair precision / recall ----------------------------------------
     truth_pairs = _same_group_pairs(true_lam)
     if asserted_pairs is None:
         asserted = _same_group_pairs(est_lam)
     else:
-        asserted = {
-            (i, j) for i, j in _normalize_asserted(asserted_pairs)
-            if j < n
-        }
+        asserted = {(i, j) for i, j in _normalize_asserted(asserted_pairs) if j < n}
     out["n_pairs_true"] = len(truth_pairs)
     out["n_pairs_asserted"] = len(asserted)
     hits = len(asserted & truth_pairs)

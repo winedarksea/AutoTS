@@ -11,6 +11,7 @@ single value by itself, and contextual anomalies are single values
 that do not fall within low-density regions yet are anomalous with
 regard to local values - https://arxiv.org/pdf/1802.04431.pdf
 """
+
 import random
 import numpy as np
 import pandas as pd
@@ -26,7 +27,6 @@ from autots.tools.calendar import (
     gregorian_to_hebrew,
     gregorian_to_hindu,
 )
-
 
 try:
     from joblib import Parallel, delayed

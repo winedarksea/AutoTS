@@ -3669,9 +3669,7 @@ class AnomalyRemoval(EmptyTransformer):
                 keep = strengths.ge(reference, axis=1)
                 suppress = suppress & ~keep.fillna(False)
 
-        self.anomalies = self.anomalies.mask(
-            suppress & (self.anomalies == -1), 1
-        )
+        self.anomalies = self.anomalies.mask(suppress & (self.anomalies == -1), 1)
 
     def _normalized_strengths(self):
         """Uniform higher-is-stronger anomaly scores, or None if unavailable."""

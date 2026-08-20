@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import numpy as np
 
-
 DEFAULT_COHERENCE_CONFIG = {
     # candidate graph family: 'group' | 'laplacian' | 'auto' | 'none'
     'graph': 'auto',
@@ -135,9 +134,7 @@ def resolve_signs(loadings, factors=None, stability=None):
     if stability is not None:
         stab = np.asarray(stability, dtype=float).ravel()
         if stab.size == confidence.size:
-            confidence = confidence * np.clip(
-                np.nan_to_num(stab, nan=0.0), 0.0, 1.0
-            )
+            confidence = confidence * np.clip(np.nan_to_num(stab, nan=0.0), 0.0, 1.0)
     return lam * signs[np.newaxis, :], confidence
 
 
@@ -242,7 +239,7 @@ def group_graph(loadings, config=None) -> dict:
     min_share = float(cfg.get('min_loading_share') or 0.0)
     # squared row norm for the communality-share test; guarded against the
     # all-zero row, which the exposure check below rejects anyway
-    row_energy = np.sum(magnitude ** 2, axis=1)
+    row_energy = np.sum(magnitude**2, axis=1)
     groups: dict = {}
     for i in range(lam.shape[0]):
         if i in gated:
@@ -420,8 +417,7 @@ def net_direction(paths: np.ndarray, window: int = None) -> np.ndarray:
     return np.where(np.isfinite(delta), np.sign(delta), 0.0)
 
 
-def _decisive_groups(trend_fc: np.ndarray, groups: dict, floor: float,
-                     window=None):
+def _decisive_groups(trend_fc: np.ndarray, groups: dict, floor: float, window=None):
     """Split ``groups`` into those that may be shrunk and those that may not.
 
     Shrinking a group whose members genuinely disagree doesn't make them
@@ -481,7 +477,9 @@ def _resolve_graph(trend_fc: np.ndarray, graph, cfg: dict):
                 kept[key] = members
             groups = kept
         groups, dropped = _decisive_groups(
-            trend_fc, groups, cfg.get('decisiveness_floor'),
+            trend_fc,
+            groups,
+            cfg.get('decisiveness_floor'),
             cfg.get('direction_window'),
         )
         skipped = sorted(set(skipped) | set(dropped))
@@ -670,9 +668,7 @@ def _evaluation_pairs(graph_candidates: dict, n_series: int) -> list:
     for graph in (graph_candidates or {}).values():
         for i, j, s in _graph_pairs(graph, n_series):
             votes[(i, j)] = votes.get((i, j), 0.0) + s
-    return [
-        (i, j, 1.0 if v >= 0 else -1.0) for (i, j), v in sorted(votes.items())
-    ]
+    return [(i, j, 1.0 if v >= 0 else -1.0) for (i, j), v in sorted(votes.items())]
 
 
 def _coherence_error(preds: list, actuals: list, pairs: list, window=None) -> float:
@@ -708,8 +704,9 @@ def _coherence_error(preds: list, actuals: list, pairs: list, window=None) -> fl
     return float(abs(np.mean(fc_rate) - np.mean(ac_rate)))
 
 
-def select_coherence(trend_folds, actual_folds, graph_candidates, scale,
-                     config=None) -> dict:
+def select_coherence(
+    trend_folds, actual_folds, graph_candidates, scale, config=None
+) -> dict:
     """Choose ``(graph, strength)`` on inner rolling origins. Accuracy vetoes.
 
     Two stages: (1) reject any candidate whose pooled scaled MAE exceeds the
@@ -758,9 +755,7 @@ def select_coherence(trend_folds, actual_folds, graph_candidates, scale,
 
         strengths = tuple(cfg.get('strengths') or ())
         strengths = tuple(sorted({0.0} | {float(s) for s in strengths}))
-        graphs = {
-            k: v for k, v in (graph_candidates or {}).items() if v is not None
-        }
+        graphs = {k: v for k, v in (graph_candidates or {}).items() if v is not None}
         window = cfg.get('direction_window')
 
         base_mae = _scaled_mae(preds, acts, scale)
@@ -778,13 +773,15 @@ def select_coherence(trend_folds, actual_folds, graph_candidates, scale,
 
         guard = float(cfg.get('mase_guardrail') or 0.0)
         limit = base_mae * (1.0 + guard)
-        table = [{
-            'graph': None,
-            'strength': 0.0,
-            'mae': float(base_mae),
-            'coherence_error': float(base_coh) if np.isfinite(base_coh) else None,
-            'admissible': True,
-        }]
+        table = [
+            {
+                'graph': None,
+                'strength': 0.0,
+                'mae': float(base_mae),
+                'coherence_error': float(base_coh) if np.isfinite(base_coh) else None,
+                'admissible': True,
+            }
+        ]
         best = (base_coh if np.isfinite(base_coh) else np.inf, 0.0, None)
         n_admissible = 1
         for name in sorted(graphs):
@@ -797,13 +794,15 @@ def select_coherence(trend_folds, actual_folds, graph_candidates, scale,
                 mae = _scaled_mae(adj_preds, acts, scale)
                 coh = _coherence_error(adj_preds, acts, pairs, window)
                 ok = bool(np.isfinite(mae) and mae <= limit)
-                table.append({
-                    'graph': str(name),
-                    'strength': float(s),
-                    'mae': float(mae) if np.isfinite(mae) else None,
-                    'coherence_error': float(coh) if np.isfinite(coh) else None,
-                    'admissible': ok,
-                })
+                table.append(
+                    {
+                        'graph': str(name),
+                        'strength': float(s),
+                        'mae': float(mae) if np.isfinite(mae) else None,
+                        'coherence_error': float(coh) if np.isfinite(coh) else None,
+                        'admissible': ok,
+                    }
+                )
                 if not ok or not np.isfinite(coh):
                     continue
                 n_admissible += 1
@@ -826,8 +825,7 @@ def select_coherence(trend_folds, actual_folds, graph_candidates, scale,
                 table=table,
             )
         chosen = [
-            r for r in table
-            if r['graph'] == best[2] and r['strength'] == best[1]
+            r for r in table if r['graph'] == best[2] and r['strength'] == best[1]
         ]
         return {
             'graph': best[2],
@@ -906,7 +904,9 @@ def apply_selection(trend_fc, selection, graphs, config=None):
 
         out = coherence_shrink(arr, graph, strength, config=cfg)
         delta = np.asarray(out, dtype=float) - arr
-        info['adjustment_rms'] = float(np.sqrt(np.nanmean(delta**2))) if delta.size else 0.0
+        info['adjustment_rms'] = (
+            float(np.sqrt(np.nanmean(delta**2))) if delta.size else 0.0
+        )
         info['applied'] = bool(info['adjustment_rms'] > 0.0)
         return out, info
     except Exception:  # pragma: no cover - never fail a forecast

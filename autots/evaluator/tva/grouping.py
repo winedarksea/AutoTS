@@ -8,7 +8,6 @@ metadata, so a block only enters the model if it reproduces out of sample.
 
 import numpy as np
 
-
 DEFAULT_GROUPING_CONFIG = {
     'refits': 8,
     'stability_threshold': 0.70,
@@ -27,6 +26,7 @@ DEFAULT_GROUPING_CONFIG = {
 # ---------------------------------------------------------------------------
 # clustering primitives
 # ---------------------------------------------------------------------------
+
 
 def _unit_rows(mat: np.ndarray) -> np.ndarray:
     """Row-normalize to the unit sphere; zero rows stay zero.
@@ -61,9 +61,7 @@ def average_linkage_clusters(sim: np.ndarray, threshold: float) -> np.ndarray:
     members = {i: [i] for i in range(n)}
     active = np.ones(n, dtype=bool)
     while active.sum() > 1:
-        masked = np.where(
-            active[:, None] & active[None, :], sim, -np.inf
-        )
+        masked = np.where(active[:, None] & active[None, :], sim, -np.inf)
         i, j = np.unravel_index(np.argmax(masked), masked.shape)
         if not np.isfinite(masked[i, j]) or masked[i, j] < threshold:
             break
@@ -84,6 +82,7 @@ def average_linkage_clusters(sim: np.ndarray, threshold: float) -> np.ndarray:
 # ---------------------------------------------------------------------------
 # stability-screened group discovery
 # ---------------------------------------------------------------------------
+
 
 def _residual_panel(values: np.ndarray, factors: np.ndarray) -> np.ndarray:
     """Panel with the (already fitted) global factor span projected out."""
@@ -136,8 +135,11 @@ def discover_groups(
     labels = np.full(N, -1, dtype=int)
     if N < 2 * int(cfg['min_group_size']) or T < 30:
         return {
-            'labels': labels, 'groups': {}, 'co_membership': np.zeros((N, N)),
-            'n_refits': 0, 'residual': resid,
+            'labels': labels,
+            'groups': {},
+            'co_membership': np.zeros((N, N)),
+            'n_refits': 0,
+            'residual': resid,
         }
 
     rng = np.random.default_rng(seed)
@@ -150,7 +152,7 @@ def discover_groups(
     for _ in range(max(int(cfg['refits']), 1)):
         start = int(rng.integers(0, max(T - block, 1)))
         cols = np.sort(rng.choice(N, size=min(n_sub, N), replace=False))
-        chunk = resid[start:start + block][:, cols]
+        chunk = resid[start : start + block][:, cols]
         if chunk.shape[0] < 20:  # pragma: no cover - guarded by block floor
             continue
         try:
@@ -166,7 +168,7 @@ def discover_groups(
         # invents a group out of the noise remainder
         centered = chunk - chunk.mean(axis=0, keepdims=True)
         recon = fit['factors'] @ fit['loadings'].T
-        denom = np.maximum((centered ** 2).sum(axis=0), 1e-12)
+        denom = np.maximum((centered**2).sum(axis=0), 1e-12)
         explained = 1.0 - ((centered - recon) ** 2).sum(axis=0) / denom
         # adaptive floor: r factors fit to m noise series still "explain"
         # ~r/m of each series' variance, so a fixed threshold isn't enough
@@ -176,9 +178,7 @@ def discover_groups(
             2.0 * fit['loadings'].shape[1] / max(chunk.shape[1], 1),
         )
         sub_labels = np.where(explained >= floor, sub_labels, -1)
-        same = (sub_labels[:, None] == sub_labels[None, :]) & (
-            sub_labels[:, None] >= 0
-        )
+        same = (sub_labels[:, None] == sub_labels[None, :]) & (sub_labels[:, None] >= 0)
         idx = np.ix_(cols, cols)
         together[idx] += same.astype(float)
         seen[idx] += 1.0
@@ -198,9 +198,7 @@ def discover_groups(
         if comp.size < int(cfg['min_group_size']):
             continue
         block = freq[np.ix_(comp, comp)]
-        internal = (block.sum() - np.trace(block)) / max(
-            comp.size * (comp.size - 1), 1
-        )
+        internal = (block.sum() - np.trace(block)) / max(comp.size * (comp.size - 1), 1)
         if internal < threshold:
             continue
         labels[comp] = gid
@@ -219,18 +217,21 @@ def discover_groups(
 # rank selection by inner rolling-origin validation
 # ---------------------------------------------------------------------------
 
-def _damped_slope_forecast(path: np.ndarray, horizon: int, window: int = 90,
-                           phi: float = 0.9) -> np.ndarray:
+
+def _damped_slope_forecast(
+    path: np.ndarray, horizon: int, window: int = 90, phi: float = 0.9
+) -> np.ndarray:
     """(H, K) damped local-linear continuation of each column of ``path``."""
     arr = np.atleast_2d(np.asarray(path, dtype=float))
     if arr.shape[0] == 0:
         return np.zeros((horizon, 0))
-    seg = arr[-min(window, arr.shape[0]):]
+    seg = arr[-min(window, arr.shape[0]) :]
     t = np.arange(seg.shape[0], dtype=float)
     t = t - t.mean()
-    denom = float((t ** 2).sum())
+    denom = float((t**2).sum())
     slope = (
-        (seg * t[:, None]).sum(axis=0) / denom if denom > 1e-12
+        (seg * t[:, None]).sum(axis=0) / denom
+        if denom > 1e-12
         else np.zeros(arr.shape[1])
     )
     damp = np.cumsum(np.power(float(phi), np.arange(1, horizon + 1, dtype=float)))
@@ -283,7 +284,7 @@ def rolling_origin_score(
         if origin < max(180, 3 * H // 2):
             break
         train = arr[: origin + 1]
-        actual = arr[origin + 1: origin + 1 + H]
+        actual = arr[origin + 1 : origin + 1 + H]
         if actual.shape[0] < H:  # pragma: no cover
             break
         fitted = np.zeros_like(train)
@@ -316,8 +317,7 @@ def rolling_origin_score(
         damp = np.cumsum(np.power(0.9, np.arange(1, H + 1, dtype=float)))
         idio_last = line[0] + line[1] * t_train[-1]
         idio_future = (
-            idio_last[None, :]
-            + (line[1] / float(n_train))[None, :] * damp[:, None]
+            idio_last[None, :] + (line[1] / float(n_train))[None, :] * damp[:, None]
         )
         pred = fitted[-1][None, :] - idio_last[None, :] + future + idio_future
         mae = np.nanmean(np.abs(pred - actual), axis=0)
@@ -372,17 +372,19 @@ def select_rank(
         r = int(r)
         if r >= arr.shape[1]:
             continue
-        score = rolling_origin_score(
-            arr, r, horizon, n_origins=n_origins, **fit_kwargs
-        )
+        score = rolling_origin_score(arr, r, horizon, n_origins=n_origins, **fit_kwargs)
         if r == 0:
             stab = 1.0
         else:
             stab = split_half_stability(arr, r, n_reps=3, seed=seed, **fit_kwargs)
         admissible = r == 0 or (np.isfinite(stab) and stab >= stability_threshold)
         table.append(
-            {'rank': r, 'score': score, 'stability': float(stab),
-             'admissible': bool(admissible)}
+            {
+                'rank': r,
+                'score': score,
+                'stability': float(stab),
+                'admissible': bool(admissible),
+            }
         )
     ok = [row for row in table if row['admissible'] and np.isfinite(row['score'])]
     if not ok:
@@ -391,8 +393,9 @@ def select_rank(
     return {'rank': int(best['rank']), 'table': table}
 
 
-def loading_graph(loadings: np.ndarray, labels=None, series_names=None,
-                  factor_names=None) -> dict:
+def loading_graph(
+    loadings: np.ndarray, labels=None, series_names=None, factor_names=None
+) -> dict:
     """The series x factor loading matrix as the panel's structural graph.
 
     A factor-to-series bipartite graph (N x K) instead of series->series
@@ -412,18 +415,19 @@ def loading_graph(loadings: np.ndarray, labels=None, series_names=None,
     lam = np.asarray(loadings, dtype=float)
     n, k = lam.shape if lam.ndim == 2 else (0, 0)
     dominant = (
-        np.abs(lam).argmax(axis=1).astype(int) if n and k
-        else np.full(n, -1, dtype=int)
+        np.abs(lam).argmax(axis=1).astype(int) if n and k else np.full(n, -1, dtype=int)
     )
     return {
         'loadings': lam,
         'group_assignment': (
-            np.asarray(labels, dtype=int) if labels is not None
+            np.asarray(labels, dtype=int)
+            if labels is not None
             else np.full(n, -1, dtype=int)
         ),
         'series': list(series_names) if series_names is not None else None,
         'factors': (
-            list(factor_names) if factor_names is not None
+            list(factor_names)
+            if factor_names is not None
             else [f'factor_{i + 1}' for i in range(k)]
         ),
         'dominant_factor': dominant,

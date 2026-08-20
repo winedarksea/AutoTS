@@ -103,9 +103,7 @@ class ReconciliationBridge:
         if W is not None:
             W = np.asarray(W, dtype=np.float64)
             if W.shape != (L, L):
-                raise ValueError(
-                    f"precomputed W must be ({L}, {L}); got {W.shape}"
-                )
+                raise ValueError(f"precomputed W must be ({L}, {L}); got {W.shape}")
         elif residuals is not None:
             W = self._estimate_covariance(residuals)
         else:

@@ -18,7 +18,6 @@ from typing import Any, Dict
 import numpy as np
 import pandas as pd
 
-
 _AUTOLOG_CONFIG: Dict[str, Any] = {
     "enabled": False,
     "tried_models_logging": "single",  # single | individual | none

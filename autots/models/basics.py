@@ -50,7 +50,6 @@ from autots.evaluator.metrics import wasserstein
 from autots.models.sklearn import rolling_x_regressor_regressor
 from autots.tools.kalman import kalman_fusion_forecasts
 
-
 # these are all optional packages
 try:
     from scipy.spatial.distance import cdist

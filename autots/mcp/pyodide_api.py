@@ -93,6 +93,7 @@ async def _ensure_live_deps(progress_cb=None):
     _live_ready = True
     return None
 
+
 # ---------------------------------------------------------------------------
 # Pyodide-safe model sets
 # ---------------------------------------------------------------------------

@@ -174,9 +174,7 @@ class NornDecomposer:
         if self.detector is None or self._df_original is None:
             return None
         try:
-            return self.detector._forecast_residual_sigma(
-                self._df_original.columns
-            )
+            return self.detector._forecast_residual_sigma(self._df_original.columns)
         except Exception:
             return None
 

@@ -470,9 +470,9 @@ class TVAModel(ModelObject):
             }
             cfg["reanchor"] = random.choices([True, False], weights=[0.4, 0.6])[0]
             cfg["error_cap"] = random.choices([True, False], weights=[0.3, 0.7])[0]
-            cfg["conformal_sigma"] = random.choices(
-                [True, False], weights=[0.3, 0.7]
-            )[0]
+            cfg["conformal_sigma"] = random.choices([True, False], weights=[0.3, 0.7])[
+                0
+            ]
 
         if profile in ("arm_f", "arm_f_sparse"):
             cfg["seasonal_arbitration"] = True
@@ -549,13 +549,11 @@ class TVAModel(ModelObject):
 
         # ---- lower-weight knobs, each measured and each still plausible ----
         # 1d: quarantine series whose recent tail is numerically constant
-        cfg["frozen_tail_gate"] = random.choices([True, False], weights=[0.35, 0.65])[
+        cfg["frozen_tail_gate"] = random.choices([True, False], weights=[0.35, 0.65])[0]
+        # 1a: pick the factor continuation rule by held-out reconstruction
+        cfg["continuation_select"] = random.choices([True, False], weights=[0.3, 0.7])[
             0
         ]
-        # 1a: pick the factor continuation rule by held-out reconstruction
-        cfg["continuation_select"] = random.choices(
-            [True, False], weights=[0.3, 0.7]
-        )[0]
         # 1c: zero loadings of series the factor model forecasts worse than a
         # damped local-linear baseline on their own raw target (None == off)
         cfg["gate_forecast_margin"] = random.choices(
@@ -628,9 +626,7 @@ class TVAModel(ModelObject):
         n_factors = random.choices(
             ["auto", 1, 2, 3, 4, 6], weights=[0.35, 0.05, 0.15, 0.2, 0.15, 0.1]
         )[0]
-        factor_knot_spacing = random.choices(
-            [7, 14, 28], weights=[0.6, 0.25, 0.15]
-        )[0]
+        factor_knot_spacing = random.choices([7, 14, 28], weights=[0.6, 0.25, 0.15])[0]
         factor_max_lag = random.choices([0, 7, 14], weights=[0.8, 0.1, 0.1])[0]
         fusion = random.choices(
             ["attention", "additive", "direct"], weights=[0.35, 0.45, 0.15]

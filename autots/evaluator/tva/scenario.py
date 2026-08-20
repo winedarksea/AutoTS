@@ -52,9 +52,7 @@ def _aggregate_row_index(tva, level_name):
     """
     if tva._priors is None or not tva._priors.series_metadata:
         return None
-    paths = [
-        m.hierarchy_path for m in tva._priors.series_metadata if m.hierarchy_path
-    ]
+    paths = [m.hierarchy_path for m in tva._priors.series_metadata if m.hierarchy_path]
     aggregate_nodes = set()
     for path in paths:
         for depth in range(1, len(path)):
@@ -567,6 +565,4 @@ class ClosedFormScenario:
                 pd.DataFrame(adjusted, index=base.index, columns=base.columns)
             )
 
-        return self._solve(
-            base, [(t, a, target_value) for t in range(len(base))]
-        )
+        return self._solve(base, [(t, a, target_value) for t in range(len(base))])

@@ -351,9 +351,7 @@ class SyntheticDailyGenerator:
             scale_log_range = (lo, hi)
         self.scale_log_range = scale_log_range
         self.frozen_tail = dict(frozen_tail or {})
-        self.derived_ratio_specs = [
-            tuple(spec) for spec in (derived_ratio_specs or [])
-        ]
+        self.derived_ratio_specs = [tuple(spec) for spec in (derived_ratio_specs or [])]
         self.derived_ratio_columns = []
         self.frozen_tail_applied = {}
 
@@ -1298,9 +1296,7 @@ class SyntheticDailyGenerator:
                 values[at:stop] = np.nan
                 placed += newly
             data_arrays[name] = values
-            self.missing_mask_applied[name] = int(
-                np.sum(np.isnan(values[start:]))
-            )
+            self.missing_mask_applied[name] = int(np.sum(np.isnan(values[start:])))
         self.template['missing_mask'] = dict(self.missing_mask_applied)
 
     def _apply_frozen_tails(self, data_arrays):
@@ -3061,9 +3057,7 @@ class SyntheticDailyGenerator:
                 dominant[name] = int(np.abs(row).argmax())
 
         # edge = shared dominant factor + target responds strictly later
-        adjacency = pd.DataFrame(
-            0, index=series_order, columns=series_order, dtype=int
-        )
+        adjacency = pd.DataFrame(0, index=series_order, columns=series_order, dtype=int)
         edges = []
         for source, source_factor in dominant.items():
             for target, target_factor in dominant.items():
@@ -3072,9 +3066,7 @@ class SyntheticDailyGenerator:
                 delay = int(lags.get(target, 0)) - int(lags.get(source, 0))
                 if delay > 0:
                     adjacency.loc[source, target] = delay
-                    edges.append(
-                        {'source': source, 'target': target, 'lag': delay}
-                    )
+                    edges.append({'source': source, 'target': target, 'lag': delay})
 
         try:
             emitted = self.get_data()
@@ -4830,9 +4822,8 @@ def generate_metric_surface_geo_panel(
                 idio = np.cumsum(rng.normal(0.0, 0.01, n_days))
                 idio = idio - idio.mean()
                 trend = (
-                    (1.0 - factor_strength) * idio
-                    + factor_strength * loading * factors[:, s_idx]
-                )
+                    1.0 - factor_strength
+                ) * idio + factor_strength * loading * factors[:, s_idx]
                 for event in events:
                     if event['surface'] != surface:
                         continue
@@ -5197,7 +5188,9 @@ def make_svar_panel(
             )
         for i in range(n_series):
             j = i % n_factors
-            loadings[i, j] = rng.uniform(0.6, 1.3) * rng.choice([1.0, -1.0], p=[0.8, 0.2])
+            loadings[i, j] = rng.uniform(0.6, 1.3) * rng.choice(
+                [1.0, -1.0], p=[0.8, 0.2]
+            )
 
     # sparse directed lagged edges over the residual processes (j < i: acyclic
     # contemporaneous ordering keeps the lagged system stable)

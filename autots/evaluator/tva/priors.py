@@ -467,9 +467,7 @@ class YggdrasilPriors:
                 # every series belongs to the shared factor, not to pairwise
                 # edges. Keeping it would re-inject the common-driver
                 # confounder the factor layer just removed.
-                market_wide_fraction = float(
-                    config.get('market_wide_fraction', 0.8)
-                )
+                market_wide_fraction = float(config.get('market_wide_fraction', 0.8))
                 if n >= 4 and len(per_series) >= market_wide_fraction * n:
                     continue
 
@@ -802,17 +800,18 @@ def coerce_prior_adjacency(prior, series_names) -> Optional[np.ndarray]:
         adjacency = _prior_from_dataframe(prior, series_names, index)
     elif isinstance(prior, dict):
         # {'a': {'b': 0.8}} nested mapping -- a DataFrame in disguise
-        adjacency = _prior_from_dataframe(
-            pd.DataFrame(prior).T, series_names, index
-        )
-    elif isinstance(prior, (list, tuple)) and len(prior) and isinstance(
-        prior[0], dict
-    ) and (
-        'source' in prior[0] or 'from' in prior[0]
+        adjacency = _prior_from_dataframe(pd.DataFrame(prior).T, series_names, index)
+    elif (
+        isinstance(prior, (list, tuple))
+        and len(prior)
+        and isinstance(prior[0], dict)
+        and ('source' in prior[0] or 'from' in prior[0])
     ):
         adjacency = _prior_from_edge_list(prior, series_names, index)
-    elif isinstance(prior, (list, tuple)) and len(prior) and isinstance(
-        prior[0], (list, tuple, set, dict)
+    elif (
+        isinstance(prior, (list, tuple))
+        and len(prior)
+        and isinstance(prior[0], (list, tuple, set, dict))
     ):
         adjacency = _prior_from_groups(prior, series_names, index)
     else:

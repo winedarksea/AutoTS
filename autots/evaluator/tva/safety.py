@@ -18,10 +18,9 @@ from __future__ import annotations
 
 import numpy as np
 
-
 DEFAULT_SAFETY_CONFIG = {
-    'blend_grid': (0.0, 0.25, 0.5, 0.75, 1.0),   # weight on the TVA forecast
-    'blend_tie_tolerance': 0.01,                  # ties prefer smaller TVA weight
+    'blend_grid': (0.0, 0.25, 0.5, 0.75, 1.0),  # weight on the TVA forecast
+    'blend_tie_tolerance': 0.01,  # ties prefer smaller TVA weight
     'error_cap_mult': 3.0,
     'error_cap_quantile': 0.99,
     'horizon_buckets': ((1, 28), (29, 90), (91, 180)),
@@ -164,7 +163,7 @@ def seasonal_naive_forecast(history, horizon: int, season_m: int = 7) -> np.ndar
         if finite.size:
             last_finite[j] = col[finite[-1]]
 
-    tail = arr[n_time - season:, :]
+    tail = arr[n_time - season :, :]
     out = np.empty((horizon, n_series), dtype=float)
     for h in range(horizon):
         row = tail[h % season, :]
@@ -195,7 +194,9 @@ def blend_forecasts(tva_fc, sn_fc, weights) -> np.ndarray:
         w = np.repeat(w, tva.shape[1])
     row = w[np.newaxis, :] if tva.ndim == 2 else w
     # exact identity at the endpoints, not just numerically close
-    out = np.where(row == 1.0, tva, np.where(row == 0.0, sn, row * tva + (1.0 - row) * sn))
+    out = np.where(
+        row == 1.0, tva, np.where(row == 0.0, sn, row * tva + (1.0 - row) * sn)
+    )
     return np.asarray(out, dtype=float)
 
 
@@ -320,8 +321,11 @@ def error_cap_bounds(
     # per-series half-width source: either given directly, or pooled from folds
     q = None
     if inner_abs_errors is not None:
-        direct = np.asarray(inner_abs_errors, dtype=float) \
-            if not isinstance(inner_abs_errors, (list, tuple)) else None
+        direct = (
+            np.asarray(inner_abs_errors, dtype=float)
+            if not isinstance(inner_abs_errors, (list, tuple))
+            else None
+        )
         if direct is not None and direct.ndim == 1 and direct.size == n_series:
             q = np.abs(direct.astype(float, copy=True))
         else:
@@ -444,7 +448,7 @@ def horizon_bucket_scales(residuals_by_h, config=None, quantile=None) -> np.ndar
 
     abs_res = np.abs(arr)
     raw = []
-    for (start, stop) in buckets:
+    for start, stop in buckets:
         lo = max(int(start) - 1, 0)
         hi = min(int(stop), n_h)
         if hi <= lo:
@@ -624,7 +628,9 @@ def _json_list(values):
 
 
 def _mean_or_none(values):
-    arr = np.asarray(values, dtype=float).ravel() if values is not None else np.array([])
+    arr = (
+        np.asarray(values, dtype=float).ravel() if values is not None else np.array([])
+    )
     arr = arr[np.isfinite(arr)]
     return float(arr.mean()) if arr.size else None
 
@@ -662,13 +668,21 @@ def summarize(
     Returns:
         dict of json-serializable values; NaN becomes ``None``.
     """
-    weights = np.asarray(blend_weights, dtype=float).ravel() \
-        if blend_weights is not None else np.array([])
-    alphas = np.asarray(reanchor_alphas, dtype=float).ravel() \
-        if reanchor_alphas is not None else np.array([])
+    weights = (
+        np.asarray(blend_weights, dtype=float).ravel()
+        if blend_weights is not None
+        else np.array([])
+    )
+    alphas = (
+        np.asarray(reanchor_alphas, dtype=float).ravel()
+        if reanchor_alphas is not None
+        else np.array([])
+    )
     out = {
-        'n_series': int(n_series) if n_series is not None else (
-            int(weights.size) if weights.size else None
+        'n_series': (
+            int(n_series)
+            if n_series is not None
+            else (int(weights.size) if weights.size else None)
         ),
         'horizon': int(horizon) if horizon is not None else None,
         'blend_weight_mean': _mean_or_none(weights),

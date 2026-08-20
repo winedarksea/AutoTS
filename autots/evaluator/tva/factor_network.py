@@ -158,9 +158,7 @@ DEFAULT_FACTOR_CONFIG = {
 }
 
 
-def hinge_design(
-    n_time: int, knot_spacing: int, max_knots: int = 200
-) -> np.ndarray:
+def hinge_design(n_time: int, knot_spacing: int, max_knots: int = 200) -> np.ndarray:
     """Trend-filtering basis: ``[t/T, (t-k)_+/T]`` for knots every ``spacing``.
 
     ``B @ c`` is piecewise linear with breakpoints only where ``c`` is nonzero,
@@ -234,8 +232,10 @@ def _rolling_mean(arr: np.ndarray, window: int) -> np.ndarray:
     padded = np.pad(arr, ((half, half), (0, 0)), mode='edge')
     kern = np.ones(w) / w
     out = np.vstack(
-        [np.convolve(padded[:, i], kern, mode='valid')[: arr.shape[0]]
-         for i in range(arr.shape[1])]
+        [
+            np.convolve(padded[:, i], kern, mode='valid')[: arr.shape[0]]
+            for i in range(arr.shape[1])
+        ]
     ).T
     return out
 
@@ -280,7 +280,9 @@ def select_n_factors(values: np.ndarray, cap: int = 6, window: int = 181) -> int
     """
     arr = np.asarray(values, dtype=float)
     cap = max(int(cap), 1)
-    sm = _rolling_mean(arr - arr.mean(axis=0, keepdims=True), min(window, max(len(arr) // 4, 1)))
+    sm = _rolling_mean(
+        arr - arr.mean(axis=0, keepdims=True), min(window, max(len(arr) // 4, 1))
+    )
     sm = sm - sm.mean(axis=0, keepdims=True)
     try:
         s = np.linalg.svd(sm, compute_uv=False)
@@ -292,8 +294,13 @@ def select_n_factors(values: np.ndarray, cap: int = 6, window: int = 181) -> int
     return int(np.clip(int(np.argmax(ratios[:cap])) + 1, 1, cap))
 
 
-def _fit_loadings(factors: np.ndarray, yc: np.ndarray, l1: float = 0.0,
-                  adaptive: bool = True, relax: bool = True) -> np.ndarray:
+def _fit_loadings(
+    factors: np.ndarray,
+    yc: np.ndarray,
+    l1: float = 0.0,
+    adaptive: bool = True,
+    relax: bool = True,
+) -> np.ndarray:
     """Solve the loading matrix given fixed factor paths. Returns (K, N).
 
     ``l1 == 0`` is the plain least-squares solve the alternating estimator has
@@ -379,6 +386,7 @@ def estimate_factors_alternating(
         dict with 'factors' (T, K), 'loadings' (N, K), 'coefs' (P, K),
         'design' (T, P), 'weights' (N,).
     """
+
     def solve(F, Y):
         return _fit_loadings(
             F, Y, l1=loading_l1, adaptive=loading_l1_adaptive, relax=loading_relax
@@ -442,7 +450,7 @@ def _kaiser_normalize(lam: np.ndarray):
     from dominating the varimax criterion, so a rotation is chosen for the
     structure of the panel rather than for its loudest few members.
     """
-    norms = np.sqrt(np.sum(lam ** 2, axis=1))
+    norms = np.sqrt(np.sum(lam**2, axis=1))
     norms = np.where(np.isfinite(norms) & (norms > 1e-12), norms, 1.0)
     return lam / norms[:, None], norms
 
@@ -526,8 +534,9 @@ def identify_factors(values, n_factors, cfg, seed=42, device='cpu'):
     return ident
 
 
-def rotate_identification(ident: dict, method: str = 'varimax',
-                          kaiser: bool = True) -> dict:
+def rotate_identification(
+    ident: dict, method: str = 'varimax', kaiser: bool = True
+) -> dict:
     """Re-express an identification result in a simple-structure basis.
 
     Nothing upstream breaks the factor model's rotational indeterminacy: the
@@ -579,7 +588,7 @@ def rotate_identification(ident: dict, method: str = 'varimax',
 
         factors = np.asarray(ident['factors'], dtype=float)
         loadings = np.asarray(ident['loadings'], dtype=float)  # (N, K)
-        coefs = np.asarray(ident['coefs'], dtype=float)        # (P, K)
+        coefs = np.asarray(ident['coefs'], dtype=float)  # (P, K)
         K = loadings.shape[1]
         if K < 2 or factors.size == 0 or loadings.size == 0:
             R = np.eye(max(K, 0))
@@ -658,7 +667,7 @@ def split_half_stability(
     scores = []
     for _ in range(max(int(n_reps), 1)):
         perm = rng.permutation(n_series)
-        left, right = perm[: n_series // 2], perm[n_series // 2:]
+        left, right = perm[: n_series // 2], perm[n_series // 2 :]
         try:
             fa = estimate_factors_alternating(arr[:, left], n_factors, **kwargs)
             fb = estimate_factors_alternating(arr[:, right], n_factors, **kwargs)
@@ -720,7 +729,7 @@ def split_half_factor_stability(
     per_rep = []
     for _ in range(max(int(n_reps), 1)):
         perm = rng.permutation(n_series)
-        halves = (perm[: n_series // 2], perm[n_series // 2:])
+        halves = (perm[: n_series // 2], perm[n_series // 2 :])
         scores = []
         for cols in halves:
             try:
@@ -1041,8 +1050,7 @@ if HAS_TORCH:
             idio_at = self.idio_level[None, :] + self.idio_slope[None, :] * t_o[:, None]
             per_step = self.idio_slope / float(self.T)
             idio = (
-                idio_at[:, None, :]
-                + per_step[None, None, :] * idio_damp[None, :, None]
+                idio_at[:, None, :] + per_step[None, None, :] * idio_damp[None, :, None]
             )
             return idio + shared
 
@@ -1244,11 +1252,13 @@ if HAS_TORCH:
             coef, *_ = np.linalg.lstsq(design, target[:, drop], rcond=None)
             model.loadings[drop] = 0.0
             model.idio_level[drop] = torch.tensor(
-                coef[0], dtype=model.idio_level.dtype,
+                coef[0],
+                dtype=model.idio_level.dtype,
                 device=model.idio_level.device,
             )
             model.idio_slope[drop] = torch.tensor(
-                coef[1], dtype=model.idio_slope.dtype,
+                coef[1],
+                dtype=model.idio_slope.dtype,
                 device=model.idio_slope.device,
             )
         return [int(i) for i in drop]
@@ -1305,13 +1315,17 @@ if HAS_TORCH:
                 held, dtype=model.idio_level.dtype, device=model.idio_level.device
             )
             model.idio_slope[drop] = torch.zeros(
-                drop.size, dtype=model.idio_slope.dtype,
+                drop.size,
+                dtype=model.idio_slope.dtype,
                 device=model.idio_slope.device,
             )
         return [int(i) for i in drop]
 
     def _damped_linear_baseline(
-        target: np.ndarray, origins: np.ndarray, horizon: int, window: int = 90,
+        target: np.ndarray,
+        origins: np.ndarray,
+        horizon: int,
+        window: int = 90,
         phi: float = 0.9,
     ) -> np.ndarray:
         """(O, H, N) damped local-linear continuation of the raw target.
@@ -1333,14 +1347,18 @@ if HAS_TORCH:
             t = t - t.mean()
             denom = float((t**2).sum())
             slope = (
-                (seg * t[:, None]).sum(axis=0) / denom if denom > 1e-12
+                (seg * t[:, None]).sum(axis=0) / denom
+                if denom > 1e-12
                 else np.zeros(target.shape[1])
             )
             out[i] = target[int(origin)][None, :] + damp[:, None] * slope[None, :]
         return out
 
     def _gate_underperforming_series(
-        model, y: 'torch.Tensor', origins: np.ndarray, horizon: int,
+        model,
+        y: 'torch.Tensor',
+        origins: np.ndarray,
+        horizon: int,
         margin: float,
     ) -> list:
         """Retire series the factor model forecasts worse than a naive line.
@@ -1361,15 +1379,15 @@ if HAS_TORCH:
             pred = model.rolling_forecast(idx, H).cpu().numpy()  # (O, H, N)
             h_off = np.arange(1, H + 1)
             actual = target[valid[:, None] + h_off[None, :]]  # (O, H, N)
-            base = _damped_linear_baseline(
-                target, valid, H, window=model.slope_window
-            )
+            base = _damped_linear_baseline(target, valid, H, window=model.slope_window)
             mae_model = np.nanmean(np.abs(pred - actual), axis=(0, 1))
             mae_base = np.nanmean(np.abs(base - actual), axis=(0, 1))
             drop = np.where(mae_model > float(margin) * mae_base)[0]
         return _zero_and_refit_idio(model, target, drop)
 
-    def _inner_origins(n_time: int, horizon: int, n_origins: int, floor: int) -> np.ndarray:
+    def _inner_origins(
+        n_time: int, horizon: int, n_origins: int, floor: int
+    ) -> np.ndarray:
         """Non-overlapping validation origins ending just before ``n_time``.
 
         Oldest first. Origins needing less history than ``floor`` are dropped
@@ -1385,9 +1403,7 @@ if HAS_TORCH:
             out.append(origin)
         return np.array(sorted(out), dtype=int)
 
-    def _select_continuation(
-        model, y: 'torch.Tensor', horizon: int, cfg: dict
-    ) -> dict:
+    def _select_continuation(model, y: 'torch.Tensor', horizon: int, cfg: dict) -> dict:
         """Plan item 1a: pick a continuation rule per factor by validation.
 
         Scored on reconstructed-series MASE (scaled by each series' in-sample
@@ -1411,9 +1427,7 @@ if HAS_TORCH:
         actual = target[origins[:, None] + h_off[None, :]]  # (O, H, N)
         season = 7
         if target.shape[0] > season:
-            scale = np.nanmean(
-                np.abs(target[season:] - target[:-season]), axis=0
-            )
+            scale = np.nanmean(np.abs(target[season:] - target[:-season]), axis=0)
         else:
             scale = np.nanmean(np.abs(np.diff(target, axis=0)), axis=0)
         scale = np.where(np.isfinite(scale) & (scale > 1e-9), scale, np.nan)
@@ -1447,7 +1461,10 @@ if HAS_TORCH:
         return result
 
     def selected_continuation_deltas(
-        model, horizon: int, continuation: dict, origin: int = None,
+        model,
+        horizon: int,
+        continuation: dict,
+        origin: int = None,
         config: dict = None,
     ):
         """(1, H, K) factor deltas for a validation-selected continuation.
@@ -1546,12 +1563,16 @@ if HAS_TORCH:
             if level is None or np.shape(level) != (N,):
                 level = arr.mean(axis=0)
             model.idio_level.copy_(
-                torch.tensor(np.asarray(level, dtype=float), dtype=torch.float32, device=dev)
+                torch.tensor(
+                    np.asarray(level, dtype=float), dtype=torch.float32, device=dev
+                )
             )
             slope = ident.get('idio_slope')
             if slope is not None and np.shape(slope) == (N,):
                 model.idio_slope.copy_(
-                    torch.tensor(np.asarray(slope, dtype=float), dtype=torch.float32, device=dev)
+                    torch.tensor(
+                        np.asarray(slope, dtype=float), dtype=torch.float32, device=dev
+                    )
                 )
         # Support the sparse identification found, if any. Stage A's
         # w_l1_loadings is a subgradient term that never actually reaches zero,
@@ -1559,16 +1580,22 @@ if HAS_TORCH:
         # gone long before fitted_loadings() -- and fitted_loadings() is what
         # _apply_coherence builds the graph from.
         support_mask = None
-        if cfg.get('sparse_freeze_support') and ident.get('identification_method', '').startswith('sparse'):
+        if cfg.get('sparse_freeze_support') and ident.get(
+            'identification_method', ''
+        ).startswith('sparse'):
             support_mask = torch.tensor(
-                (np.abs(np.asarray(ident['loadings'], dtype=float)) > 0).astype('float32'),
+                (np.abs(np.asarray(ident['loadings'], dtype=float)) > 0).astype(
+                    'float32'
+                ),
                 device=dev,
             )
 
         # ---- stage A: refine loadings, lags and the idiosyncratic line ------
         val_mask = torch.zeros(T, dtype=torch.bool, device=dev)
         n_val = int(np.clip(int(cfg['val_frac'] * T), 1, max(T - 2, 1)))
-        val_mask[torch.tensor(np.sort(rng.choice(T, n_val, replace=False)), device=dev)] = True
+        val_mask[
+            torch.tensor(np.sort(rng.choice(T, n_val, replace=False)), device=dev)
+        ] = True
         train_mask = ~val_mask
 
         param_groups = []
@@ -1711,7 +1738,10 @@ if HAS_TORCH:
         )
         gated = _gate_trendless_series(model, y, cfg['min_trend_to_noise'])
         underperforming = _gate_underperforming_series(
-            model, y, pool if pool.size else np.array([], dtype=int), H,
+            model,
+            y,
+            pool if pool.size else np.array([], dtype=int),
+            H,
             cfg.get('gate_forecast_margin'),
         )
 
@@ -1800,8 +1830,12 @@ if HAS_TORCH:
         return out
 
     def _responder_sigma(
-        model, arr: np.ndarray, obs: np.ndarray, cols: np.ndarray,
-        horizon: int, device,
+        model,
+        arr: np.ndarray,
+        obs: np.ndarray,
+        cols: np.ndarray,
+        horizon: int,
+        device,
     ) -> np.ndarray:
         """Rolling-origin residual sigma for projected series, observed rows only.
 
@@ -1893,14 +1927,10 @@ if HAS_TORCH:
             model, info = fit_latent_factor_model(values, **base_kwargs)
             info.setdefault('anchor_idx', np.arange(model.N))
             info.setdefault('responder_idx', np.array([], dtype=int))
-            info.setdefault(
-                'observed_counts', observed_mask(values, mask).sum(axis=0)
-            )
+            info.setdefault('observed_counts', observed_mask(values, mask).sum(axis=0))
             info.setdefault('insufficient_overlap', [])
         else:
-            model, info = _fit_with_anchors(
-                values, mask, anchors, cfg, base_kwargs
-            )
+            model, info = _fit_with_anchors(values, mask, anchors, cfg, base_kwargs)
 
         if cfg.get('group_factors'):
             _attach_group_factors(model, values, mask, cfg, info, horizon, seed)
@@ -1947,14 +1977,23 @@ if HAS_TORCH:
         anchor_model, info = fit_latent_factor_model(sub, **anchor_kwargs)
         dev = torch.device(base_kwargs['device'])
 
-        if responder_idx.size == 0 and len(anchor_idx) == N and np.array_equal(
-            anchor_idx, np.arange(N)
+        if (
+            responder_idx.size == 0
+            and len(anchor_idx) == N
+            and np.array_equal(anchor_idx, np.arange(N))
         ):
             model = anchor_model  # negative control: identical to the flat fit
         else:
             model = _expand_to_full_panel(
-                anchor_model, arr, obs, anchor_idx, responder_idx, cfg,
-                base_kwargs, info, dev,
+                anchor_model,
+                arr,
+                obs,
+                anchor_idx,
+                responder_idx,
+                cfg,
+                base_kwargs,
+                info,
+                dev,
             )
             sigma = np.zeros(N, dtype=float)
             sigma[anchor_idx] = np.asarray(info['sigma'], dtype=float)
@@ -1965,7 +2004,9 @@ if HAS_TORCH:
             info['sigma'] = sigma
             # gate indices were anchor-local; lift them to panel columns
             for key in (
-                'gated_series', 'gated_trendless', 'gated_frozen',
+                'gated_series',
+                'gated_trendless',
+                'gated_frozen',
                 'gated_underperforming',
             ):
                 info[key] = sorted(int(anchor_idx[i]) for i in info.get(key, []))
@@ -2005,12 +2046,19 @@ if HAS_TORCH:
             out[span, j] = fill.astype(np.float32)
             # outside the observed span, hold the nearest observed edge
             out[:lo, j] = out[lo, j]
-            out[hi + 1:, j] = out[hi, j]
+            out[hi + 1 :, j] = out[hi, j]
         return out
 
     def _expand_to_full_panel(
-        anchor_model, arr, obs, anchor_idx, responder_idx, cfg, base_kwargs,
-        info, dev,
+        anchor_model,
+        arr,
+        obs,
+        anchor_idx,
+        responder_idx,
+        cfg,
+        base_kwargs,
+        info,
+        dev,
     ):
         """Copy the anchor fit into an N-series model and project responders."""
         T, N = arr.shape
@@ -2036,9 +2084,7 @@ if HAS_TORCH:
             t_norm = model.time_index.detach().cpu().numpy().astype(float)
 
         target = arr.astype(float)
-        min_overlap = max(
-            int(cfg['min_responder_overlap']), anchor_model.K + 3
-        )
+        min_overlap = max(int(cfg['min_responder_overlap']), anchor_model.K + 3)
         loadings = np.zeros((responder_idx.size, anchor_model.K))
         lags = np.zeros(responder_idx.size, dtype=int)
         levels = np.zeros(responder_idx.size)
@@ -2055,7 +2101,11 @@ if HAS_TORCH:
                 short.append(int(col))
                 continue
             w, d, level, slope, _ = _fit_series_on_frozen_factors(
-                paths, target[:, col], column_obs, t_norm, model.max_lag,
+                paths,
+                target[:, col],
+                column_obs,
+                t_norm,
+                model.max_lag,
                 ridge=float(cfg['responder_ridge']),
                 cap=float(cfg['responder_loading_cap']),
             )
@@ -2108,9 +2158,14 @@ if HAS_TORCH:
             'stability_threshold': threshold,
         }
         found = grouping.discover_groups(
-            arr, global_factors=paths, config=group_cfg, seed=seed,
-            knot_spacing=cfg['knot_spacing'], alpha=cfg['alpha'],
-            iters=cfg['alt_iters'], init_window=cfg['init_window'],
+            arr,
+            global_factors=paths,
+            config=group_cfg,
+            seed=seed,
+            knot_spacing=cfg['knot_spacing'],
+            alpha=cfg['alpha'],
+            iters=cfg['alt_iters'],
+            init_window=cfg['init_window'],
             gls=cfg['gls'],
         )
         labels = found['labels']
@@ -2120,9 +2175,14 @@ if HAS_TORCH:
         info['group_consensus'] = found['co_membership']
 
         flat_score = grouping.rolling_origin_score(
-            arr, model.K, horizon, n_origins=cfg['inner_folds'],
-            knot_spacing=cfg['knot_spacing'], alpha=cfg['alpha'],
-            iters=cfg['alt_iters'], init_window=cfg['init_window'],
+            arr,
+            model.K,
+            horizon,
+            n_origins=cfg['inner_folds'],
+            knot_spacing=cfg['knot_spacing'],
+            alpha=cfg['alpha'],
+            iters=cfg['alt_iters'],
+            init_window=cfg['init_window'],
             gls=cfg['gls'],
         )
         info['group_flat_score'] = flat_score
@@ -2147,8 +2207,10 @@ if HAS_TORCH:
                 horizon=horizon,
                 n_origins=cfg['inner_folds'],
                 seed=seed,
-                knot_spacing=cfg['knot_spacing'], alpha=cfg['alpha'],
-                iters=cfg['alt_iters'], init_window=cfg['init_window'],
+                knot_spacing=cfg['knot_spacing'],
+                alpha=cfg['alpha'],
+                iters=cfg['alt_iters'],
+                init_window=cfg['init_window'],
                 gls=cfg['gls'],
             )
             rank_table[int(gid)] = sel
@@ -2156,9 +2218,13 @@ if HAS_TORCH:
             if r <= 0:
                 continue
             fit = estimate_factors_alternating(
-                sub, n_factors=r, knot_spacing=cfg['knot_spacing'],
-                alpha=cfg['alpha'], iters=cfg['alt_iters'],
-                init_window=cfg['init_window'], gls=cfg['gls'],
+                sub,
+                n_factors=r,
+                knot_spacing=cfg['knot_spacing'],
+                alpha=cfg['alpha'],
+                iters=cfg['alt_iters'],
+                init_window=cfg['init_window'],
+                gls=cfg['gls'],
             )
             for k in range(r):
                 col = np.zeros(N)
@@ -2178,10 +2244,16 @@ if HAS_TORCH:
 
         # ---- held-out comparison: grouped layer vs the flat rank ------------
         grouped_score = grouping.rolling_origin_score(
-            arr, model.K + len(extra_coefs), horizon, n_origins=cfg['inner_folds'],
-            membership=labels, n_global=model.K,
-            knot_spacing=cfg['knot_spacing'], alpha=cfg['alpha'],
-            iters=cfg['alt_iters'], init_window=cfg['init_window'],
+            arr,
+            model.K + len(extra_coefs),
+            horizon,
+            n_origins=cfg['inner_folds'],
+            membership=labels,
+            n_global=model.K,
+            knot_spacing=cfg['knot_spacing'],
+            alpha=cfg['alpha'],
+            iters=cfg['alt_iters'],
+            init_window=cfg['init_window'],
             gls=cfg['gls'],
         )
         info['group_score'] = grouped_score
@@ -2200,8 +2272,11 @@ if HAS_TORCH:
             return
 
         _append_factor_columns(
-            model, np.column_stack(extra_coefs), np.column_stack(extra_loadings),
-            arr, obs,
+            model,
+            np.column_stack(extra_coefs),
+            np.column_stack(extra_loadings),
+            arr,
+            obs,
         )
         info['group_applied'] = True
         info['group_factor_of'] = member_of
@@ -2223,22 +2298,25 @@ if HAS_TORCH:
         with torch.no_grad():
             model.coef = nn.Parameter(
                 torch.cat(
-                    [model.coef.detach(),
-                     torch.tensor(coefs, dtype=torch.float32, device=dev)],
+                    [
+                        model.coef.detach(),
+                        torch.tensor(coefs, dtype=torch.float32, device=dev),
+                    ],
                     dim=1,
                 )
             )
             model.loadings = nn.Parameter(
                 torch.cat(
-                    [model.loadings.detach(),
-                     torch.tensor(loadings, dtype=torch.float32, device=dev)],
+                    [
+                        model.loadings.detach(),
+                        torch.tensor(loadings, dtype=torch.float32, device=dev),
+                    ],
                     dim=1,
                 )
             )
             model.phi_logit = nn.Parameter(
                 torch.cat(
-                    [model.phi_logit.detach(),
-                     torch.full((K_new,), 1.4922, device=dev)]
+                    [model.phi_logit.detach(), torch.full((K_new,), 1.4922, device=dev)]
                 )
             )
             model.K = model.K + K_new
@@ -2257,7 +2335,6 @@ if HAS_TORCH:
                 )
                 model.idio_level[j] = float(coef[0])
                 model.idio_slope[j] = float(coef[1])
-
 
 else:  # pragma: no cover - torch-free environments
 
@@ -2285,11 +2362,13 @@ else:  # pragma: no cover - torch-free environments
                 coef, *_ = np.linalg.lstsq(design, target[:, drop], rcond=None)
                 model.loadings[drop] = 0.0
                 model.idio_level[drop] = torch.tensor(
-                    coef[0], dtype=model.idio_level.dtype,
+                    coef[0],
+                    dtype=model.idio_level.dtype,
                     device=model.idio_level.device,
                 )
                 model.idio_slope[drop] = torch.tensor(
-                    coef[1], dtype=model.idio_slope.dtype,
+                    coef[1],
+                    dtype=model.idio_slope.dtype,
                     device=model.idio_slope.device,
                 )
         return [int(i) for i in drop]

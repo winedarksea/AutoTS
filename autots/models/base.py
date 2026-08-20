@@ -4,6 +4,7 @@ Base model information
 
 @author: Colin
 """
+
 import json
 import random
 import warnings

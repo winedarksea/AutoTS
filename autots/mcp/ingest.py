@@ -289,9 +289,13 @@ def smart_load(
     report["row_count"] = int(df_wide.shape[0])
     report["inferred_frequency"] = None if freq is None else str(freq)
     report["series_names"] = [str(c) for c in df_wide.columns]
-    report["date_range"] = {
-        "start": df_wide.index.min().strftime("%Y-%m-%d"),
-        "end": df_wide.index.max().strftime("%Y-%m-%d"),
-    } if len(df_wide) else None
+    report["date_range"] = (
+        {
+            "start": df_wide.index.min().strftime("%Y-%m-%d"),
+            "end": df_wide.index.max().strftime("%Y-%m-%d"),
+        }
+        if len(df_wide)
+        else None
+    )
 
     return df_wide, report

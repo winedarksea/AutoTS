@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import numpy as np
 
-
 DEFAULT_SEASONAL_CONFIG = {
     'season_m': 7,
     'yearly_m': 365,

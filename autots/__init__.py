@@ -31,7 +31,6 @@ from autots.models.cassandra import Cassandra
 from autots.tools.impute import FillNA
 from autots.evaluator.feature_detector import TimeSeriesFeatureDetector
 
-
 __version__ = '1.0.4'
 
 TransformTS = GeneralTransformer

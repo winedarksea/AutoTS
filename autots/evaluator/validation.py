@@ -8,6 +8,7 @@ Created on Mon Jan 16 11:36:01 2023
 
 @author: Colin
 """
+
 import warnings
 import numpy as np
 from autots.tools.transform import GeneralTransformer
@@ -115,7 +116,10 @@ def generate_validation_indices(
     # A normal forecast-length holdout is impossible here. The shared splitter
     # will create the degraded half-history split instead, so avoid specialized
     # index generators that require a full requested-horizon window.
-    if forecast_length > df_wide_numeric.shape[0] and validation_method != "mixed_length":
+    if (
+        forecast_length > df_wide_numeric.shape[0]
+        and validation_method != "mixed_length"
+    ):
         return [df_wide_numeric.index]
 
     # generate similarity matching indices (so it can fail now, not after all the generations)

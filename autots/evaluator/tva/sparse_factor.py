@@ -90,9 +90,9 @@ DEFAULT_SPARSE_FACTOR_CONFIG = {
     # see the module note in _solve_codes.
     'idio': True,
     # ---- dead atoms -------------------------------------------------------
-    'min_atom_users': 2,     # an atom used by one series asserts no pairs
-    'aux_k': 2,              # dead atoms given residual gradient per step
-    'aux_weight': 0.03125,   # 1/32, the published AuxK default
+    'min_atom_users': 2,  # an atom used by one series asserts no pairs
+    'aux_k': 2,  # dead atoms given residual gradient per step
+    'aux_weight': 0.03125,  # 1/32, the published AuxK default
     'dead_steps': 50,
     # Stop reviving dead atoms after this fraction of the schedule. Revival
     # exists to escape a collapse early; near convergence a dead atom is a
@@ -103,8 +103,8 @@ DEFAULT_SPARSE_FACTOR_CONFIG = {
     # oscillated; gated, it stays dead.
     'aux_until': 0.6,
     # ---- optimization -----------------------------------------------------
-    'alt_iters': 6,          # 'sparse_alt' only
-    'steps': 1000,           # 'sparse_ae' only
+    'alt_iters': 6,  # 'sparse_alt' only
+    'steps': 1000,  # 'sparse_ae' only
     'lr': 5e-2,
     'huber_delta': 1.0,
     'use_gls_weights': True,
@@ -233,7 +233,9 @@ def _solve_codes(factors, arr, k, idio=True, min_code_share=0.0):
     for j in range(n_series):
         y = panel[:, j]
         if not np.isfinite(y).all():
-            y = np.nan_to_num(y, nan=float(np.nanmean(y)) if np.isfinite(y).any() else 0.0)
+            y = np.nan_to_num(
+                y, nan=float(np.nanmean(y)) if np.isfinite(y).any() else 0.0
+            )
         y_r = y - base @ (base_pinv @ y)
         chosen = []
         resid = y_r.copy()
@@ -333,7 +335,10 @@ def _finalize(factors, coefs, arr, design, weights, cfg, method):
     coe = coe / sd[None, :]
 
     loadings, level, slope = _solve_codes(
-        fac, arr, cfg['code_topk'], idio=bool(cfg['idio']),
+        fac,
+        arr,
+        cfg['code_topk'],
+        idio=bool(cfg['idio']),
         min_code_share=float(cfg['min_code_share']),
     )
     # Orient by the same magnitude-weighted mass vote coherence.resolve_signs
@@ -422,7 +427,10 @@ def _sparse_alt(arr, init, cfg, alpha):
         # dense during warmup so the span settles before the support does
         k_now = n_fac if it < n_warm else k_target
         loadings, level, slope = _solve_codes(
-            factors, arr, k_now, idio=bool(cfg['idio']),
+            factors,
+            arr,
+            k_now,
+            idio=bool(cfg['idio']),
             min_code_share=0.0,  # abstention is applied once, at exit
         )
         base = _idio_basis(arr.shape[0], bool(cfg['idio']))
@@ -447,8 +455,16 @@ def _sparse_alt(arr, init, cfg, alpha):
     return _finalize(factors, coefs, arr, design, weights, cfg, 'sparse_alt')
 
 
-def identify(values, n_factors, init, method='sparse_alt', config=None,
-             alpha=1e-3, seed=42, device='cpu'):
+def identify(
+    values,
+    n_factors,
+    init,
+    method='sparse_alt',
+    config=None,
+    alpha=1e-3,
+    seed=42,
+    device='cpu',
+):
     """Refine an alternating identification into a sparse-code one.
 
     Args:
@@ -522,7 +538,10 @@ def identify(values, n_factors, init, method='sparse_alt', config=None,
     # the question worth asking is whether the learned dictionary beats the
     # initializer's dictionary when both are held to k nonzeros per series.
     ref_lam, ref_lev, ref_slo = _solve_codes(
-        init['factors'], arr, cfg['code_topk'], idio=bool(cfg['idio']),
+        init['factors'],
+        arr,
+        cfg['code_topk'],
+        idio=bool(cfg['idio']),
         min_code_share=float(cfg['min_code_share']),
     )
     ref_idio = base @ np.vstack([ref_lev, ref_slo])[: base.shape[1]]
@@ -554,9 +573,7 @@ if HAS_TORCH:
 
         def __init__(self, design, n_series, n_factors, code_topk=1, idio=True):
             super().__init__()
-            self.register_buffer(
-                'design', torch.as_tensor(design, dtype=torch.float32)
-            )
+            self.register_buffer('design', torch.as_tensor(design, dtype=torch.float32))
             self.T, self.P = int(self.design.shape[0]), int(self.design.shape[1])
             self.N = int(n_series)
             self.K = int(n_factors)
@@ -622,16 +639,25 @@ if HAS_TORCH:
         n_fac = int(init['loadings'].shape[1])
 
         model = SparseFactorAutoencoder(
-            design, n_series, n_fac,
-            code_topk=int(cfg['code_topk']), idio=bool(cfg['idio']),
+            design,
+            n_series,
+            n_fac,
+            code_topk=int(cfg['code_topk']),
+            idio=bool(cfg['idio']),
         ).to(dev)
         with torch.no_grad():
-            model.coef.copy_(torch.as_tensor(init['coefs'], dtype=torch.float32, device=dev))
-            model.z.copy_(torch.as_tensor(init['loadings'], dtype=torch.float32, device=dev))
-            model.level.copy_(torch.as_tensor(arr.mean(axis=0), dtype=torch.float32, device=dev))
+            model.coef.copy_(
+                torch.as_tensor(init['coefs'], dtype=torch.float32, device=dev)
+            )
+            model.z.copy_(
+                torch.as_tensor(init['loadings'], dtype=torch.float32, device=dev)
+            )
+            model.level.copy_(
+                torch.as_tensor(arr.mean(axis=0), dtype=torch.float32, device=dev)
+            )
             model.renormalize_()
 
-        y = torch.as_tensor(arr, dtype=torch.float32, device=dev)          # (T, N)
+        y = torch.as_tensor(arr, dtype=torch.float32, device=dev)  # (T, N)
         w = torch.as_tensor(weights, dtype=torch.float32, device=dev)[None, :]
         steps = max(int(cfg['steps']), 1)
         n_warm = int(round(float(cfg['warmup_frac']) * steps))
@@ -676,7 +702,7 @@ if HAS_TORCH:
             if aux_k > 0 and n_warm <= step < int(float(cfg['aux_until']) * steps):
                 dead = (model.since_used > dead_steps).nonzero().flatten()
                 if dead.numel():
-                    pick = dead[: aux_k]
+                    pick = dead[:aux_k]
                     resid = (y - recon).detach()
                     aux = model.atoms()[:, pick] @ model.z[:, pick].t()
                     loss = loss + aux_weight * _loss(aux, resid, train_mask)
@@ -696,7 +722,9 @@ if HAS_TORCH:
                     val = float(_loss(model(), y, val_mask))
                 if val < best_val - 1e-9:
                     best_val, bad = val, 0
-                    best_state = {k: v.detach().clone() for k, v in model.state_dict().items()}
+                    best_state = {
+                        k: v.detach().clone() for k, v in model.state_dict().items()
+                    }
                 else:
                     bad += 1
                     if bad * check_every >= patience:

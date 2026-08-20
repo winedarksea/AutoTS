@@ -2252,7 +2252,9 @@ class WindowRegression(ModelObject):
         # a short history can't support a long window: the window maker returns
         # zero slices and the regressors then fail on empty arrays
         max_window = (
-            df.shape[0] - (1 if self.output_dim == '1step' else self.forecast_length) - 1
+            df.shape[0]
+            - (1 if self.output_dim == '1step' else self.forecast_length)
+            - 1
         )
         if max_window >= 1 and self.window_size > max_window:
             if self.verbose > 0:

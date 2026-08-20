@@ -99,6 +99,7 @@ form 1 to 3 as long as they are reasonable from the point of view of matrix
 multiplication and numpy broadcasting rules. Matrix operations are applied on
 the *last* two axes of the arrays.
 """
+
 import numpy as np
 from functools import wraps
 

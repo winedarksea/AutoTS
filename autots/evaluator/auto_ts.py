@@ -1996,11 +1996,9 @@ class AutoTS(object):
                     .iloc[(n - 1) : n][template_cols]
                 )
             except IndexError:
-                raise ValueError(
-                    """No models available from validation.
+                raise ValueError("""No models available from validation.
     Try increasing models_to_validate, max_per_model_class
-    or otherwise increase models available."""
-                )
+    or otherwise increase models available.""")
         return best_model
 
     def parse_best_model(self):

@@ -465,9 +465,9 @@ def build_graph_snapshot(
     # positions of anchors within the full series list, used to map anchor-
     # indexed assignment rows onto series-level level-0 nodes
     if anchor_mask is not None and full_series_names:
-        anchor_positions = np.where(
-            np.asarray(anchor_mask, dtype=bool).reshape(-1)
-        )[0].tolist()
+        anchor_positions = np.where(np.asarray(anchor_mask, dtype=bool).reshape(-1))[
+            0
+        ].tolist()
     else:
         anchor_positions = None
 
@@ -497,7 +497,10 @@ def build_graph_snapshot(
                         else f'series_{node_index}'
                     )
                     kind = 'anchor'
-                    if anchor_positions is not None and node_index not in anchor_positions:
+                    if (
+                        anchor_positions is not None
+                        and node_index not in anchor_positions
+                    ):
                         kind = 'responder'
                 else:
                     label = (
@@ -555,9 +558,9 @@ def build_graph_snapshot(
                     continue
                 edge_table.append(
                     {
-                        'source': node_table[level_offsets[level_index] + source_offset][
-                            'node_id'
-                        ],
+                        'source': node_table[
+                            level_offsets[level_index] + source_offset
+                        ]['node_id'],
                         'target': node_table[
                             level_offsets[level_index + 1] + upper_idx
                         ]['node_id'],
@@ -1113,12 +1116,8 @@ if HAS_TORCH:
             n_edges = len(edges)
             self.n_edges = n_edges
 
-            src = torch.tensor(
-                [int(e['source']) for e in edges], dtype=torch.long
-            )
-            dst = torch.tensor(
-                [int(e['target']) for e in edges], dtype=torch.long
-            )
+            src = torch.tensor([int(e['source']) for e in edges], dtype=torch.long)
+            dst = torch.tensor([int(e['target']) for e in edges], dtype=torch.long)
             lag = torch.tensor([int(e.get('lag', 0)) for e in edges], dtype=torch.long)
             sign = torch.tensor(
                 [float(e.get('sign', 1)) for e in edges], dtype=torch.float32
@@ -1154,9 +1153,7 @@ if HAS_TORCH:
         def adjacency(self) -> torch.Tensor:
             """(N, N) dense non-negative adjacency A[src, dst], clamped to [0, 1]."""
             device = self.edge_delta.device
-            adjacency = torch.zeros(
-                self.n_series, self.n_series, device=device
-            )
+            adjacency = torch.zeros(self.n_series, self.n_series, device=device)
             if self.n_edges:
                 weights = self.edge_weights().clamp(max=1.0)
                 adjacency.index_put_(
@@ -1169,9 +1166,7 @@ if HAS_TORCH:
         def signed_adjacency(self) -> torch.Tensor:
             """(N, N) signed adjacency (discovered signs applied)."""
             device = self.edge_delta.device
-            adjacency = torch.zeros(
-                self.n_series, self.n_series, device=device
-            )
+            adjacency = torch.zeros(self.n_series, self.n_series, device=device)
             if self.n_edges:
                 weights = (self.edge_weights() * self.edge_sign).clamp(-1.0, 1.0)
                 adjacency.index_put_(

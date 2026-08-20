@@ -829,9 +829,7 @@ if HAS_TORCH:
             for assignment in assignments:
                 P = assignment if P is None else P @ assignment
             if P is None or P.shape[0] != anchor_adj.shape[0]:
-                return torch.zeros(
-                    latent_size, latent_size, device=adjacency.device
-                )
+                return torch.zeros(latent_size, latent_size, device=adjacency.device)
             latent_adj = P.transpose(0, 1) @ anchor_adj @ P
             row_sum = latent_adj.sum(dim=-1, keepdim=True).clamp(min=1e-6)
             latent_adj = latent_adj / row_sum
@@ -902,9 +900,7 @@ if HAS_TORCH:
                 meso, glob, skip = self.encoder(anchor_tokens)
                 glob = self.sparse_attn(
                     glob,
-                    torch.zeros(
-                        glob.shape[1], glob.shape[1], device=glob.device
-                    ),
+                    torch.zeros(glob.shape[1], glob.shape[1], device=glob.device),
                 )
                 glob_conditioned, usage_weights_global = self.prototype(glob)
                 regime_weights = self._regime_gate(

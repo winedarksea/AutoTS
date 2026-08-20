@@ -19,7 +19,6 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-
 DEFAULT_DISCOVERY_CONFIG = {
     # factor extraction
     'variance_target': 0.6,  # smallest r explaining >= this share of variance
@@ -125,8 +124,9 @@ def _difference_and_standardize(trend_values: np.ndarray) -> tuple:
 # ---------------------------------------------------------------------------
 
 
-def _varimax(loadings: np.ndarray, gamma: float = 1.0, max_iter: int = 100,
-             tol: float = 1e-8) -> np.ndarray:
+def _varimax(
+    loadings: np.ndarray, gamma: float = 1.0, max_iter: int = 100, tol: float = 1e-8
+) -> np.ndarray:
     """Varimax rotation (numpy only). Returns the rotation matrix R."""
     n, k = loadings.shape
     R = np.eye(k)
@@ -182,9 +182,7 @@ def extract_factors(X: np.ndarray, config: dict) -> tuple:
         pa_rng = np.random.default_rng(0)
         null_tops = []
         for _ in range(3):
-            Xp = np.column_stack(
-                [pa_rng.permutation(Xc[:, j]) for j in range(N)]
-            )
+            Xp = np.column_stack([pa_rng.permutation(Xc[:, j]) for j in range(N)])
             null_tops.append(np.linalg.svd(Xp, compute_uv=False)[0])
         threshold = float(np.mean(null_tops))
         r = int(np.sum(s > threshold))
@@ -218,8 +216,9 @@ def extract_factors(X: np.ndarray, config: dict) -> tuple:
     return factors_level, loadings, scores
 
 
-def name_factors(loadings: np.ndarray, series_names: list,
-                 series_metadata: Optional[list]) -> list:
+def name_factors(
+    loadings: np.ndarray, series_names: list, series_metadata: Optional[list]
+) -> list:
     """Name each factor by the modal shared metadata attribute of its top loaders."""
     r = loadings.shape[1]
     metadata_lookup = {}
@@ -270,7 +269,9 @@ def name_factors(loadings: np.ndarray, series_names: list,
 
 
 def deconfound(
-    X: np.ndarray, scores: np.ndarray, factor_lags=(0, 1),
+    X: np.ndarray,
+    scores: np.ndarray,
+    factor_lags=(0, 1),
     shared: np.ndarray = None,
 ) -> np.ndarray:
     """Regress each series on the factors at the given lags; return residuals.
@@ -322,8 +323,11 @@ def shared_component_columns(components: dict, columns=None) -> np.ndarray:
         if comp is None:
             continue
         values = np.asarray(
-            comp[columns].values if columns is not None and hasattr(comp, 'columns')
-            else (comp.values if hasattr(comp, 'values') else comp),
+            (
+                comp[columns].values
+                if columns is not None and hasattr(comp, 'columns')
+                else (comp.values if hasattr(comp, 'values') else comp)
+            ),
             dtype=float,
         )
         if values.ndim != 2 or values.size == 0:
@@ -337,7 +341,10 @@ def shared_component_columns(components: dict, columns=None) -> np.ndarray:
 
 
 def circular_shift_null(
-    residuals: np.ndarray, screen_fn, n_reps: int = 20, seed: int = 42,
+    residuals: np.ndarray,
+    screen_fn,
+    n_reps: int = 20,
+    seed: int = 42,
     quantile: float = 0.95,
 ) -> dict:
     """How many edges does this screening procedure invent on coupling-free data?
@@ -650,7 +657,7 @@ def leadlag_edges(R: np.ndarray, config: dict) -> list:
     T, N = R.shape
     if T <= L * 3 or N < 2:
         return []
-    Rw = R[-min(T, window):]
+    Rw = R[-min(T, window) :]
     Rw = (Rw - Rw.mean(axis=0)) / np.maximum(Rw.std(axis=0), 1e-12)
     rows = Rw.shape[0]
     edges = []
@@ -800,34 +807,36 @@ def discover_structure(
         # loadings for ALL series by regression on the factor scores
         gram = scores.T @ scores
         loadings = (X_factor.T @ scores) @ np.linalg.pinv(gram)
-        tau = float(cfg['soft_threshold']) * np.abs(loadings).max(
-            axis=0, keepdims=True
-        )
+        tau = float(cfg['soft_threshold']) * np.abs(loadings).max(axis=0, keepdims=True)
         loadings = np.sign(loadings) * np.maximum(np.abs(loadings) - tau, 0.0)
         factors = np.concatenate(
             [np.zeros((1, scores.shape[1])), np.cumsum(scores, axis=0)], axis=0
         )
     elif external_factors is not None:
         supplied = np.asarray(
-            external_factors.values
-            if hasattr(external_factors, 'values')
-            else external_factors,
+            (
+                external_factors.values
+                if hasattr(external_factors, 'values')
+                else external_factors
+            ),
             dtype=float,
         )
         if supplied.ndim == 1:
             supplied = supplied[:, None]
         scores = np.diff(supplied, axis=0)
         if scores.shape[0] != X.shape[0]:  # align to the differenced panel
-            scores = scores[-X.shape[0]:] if scores.shape[0] > X.shape[0] else np.pad(
-                scores, ((X.shape[0] - scores.shape[0], 0), (0, 0)), mode='edge'
+            scores = (
+                scores[-X.shape[0] :]
+                if scores.shape[0] > X.shape[0]
+                else np.pad(
+                    scores, ((X.shape[0] - scores.shape[0], 0), (0, 0)), mode='edge'
+                )
             )
         sd = scores.std(axis=0, keepdims=True)
         scores = np.divide(scores, sd, out=np.zeros_like(scores), where=sd > 1e-12)
         gram = scores.T @ scores
         loadings = (X_factor.T @ scores) @ np.linalg.pinv(gram)
-        tau = float(cfg['soft_threshold']) * np.abs(loadings).max(
-            axis=0, keepdims=True
-        )
+        tau = float(cfg['soft_threshold']) * np.abs(loadings).max(axis=0, keepdims=True)
         loadings = np.sign(loadings) * np.maximum(np.abs(loadings) - tau, 0.0)
         factors = np.concatenate(
             [np.zeros((1, scores.shape[1])), np.cumsum(scores, axis=0)], axis=0
@@ -851,6 +860,7 @@ def discover_structure(
     # diagnostic only -- never drops edges, just reports the acceptance floor
     null_calibration = None
     if int(cfg.get('null_calibration_reps', 0) or 0) > 0:
+
         def _screen(shifted):
             cands = conditional_candidates(
                 shifted, top_k=int(cfg['top_k']), max_lag=int(cfg['max_lag'])
@@ -858,7 +868,10 @@ def discover_structure(
             return len(stability_selected_edges(shifted, cands, cfg, rng))
 
         null_calibration = circular_shift_null(
-            R, _screen, n_reps=int(cfg['null_calibration_reps']), seed=seed,
+            R,
+            _screen,
+            n_reps=int(cfg['null_calibration_reps']),
+            seed=seed,
             quantile=float(cfg.get('null_quantile', 0.95)),
         )
 
@@ -920,9 +933,7 @@ def discover_structure(
                 'family': edge['family'],
                 'stability': float(edge['stability']),
                 'delta_mse': (
-                    None
-                    if edge.get('delta_mse') is None
-                    else float(edge['delta_mse'])
+                    None if edge.get('delta_mse') is None else float(edge['delta_mse'])
                 ),
             }
         )

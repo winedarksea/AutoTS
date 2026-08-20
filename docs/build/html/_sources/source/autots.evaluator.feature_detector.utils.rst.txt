@@ -9,21 +9,21 @@ autots.evaluator.feature\_detector.utils.formatting module
 
 .. automodule:: autots.evaluator.feature_detector.utils.formatting
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 autots.evaluator.feature\_detector.utils.rescaling module
 ---------------------------------------------------------
 
 .. automodule:: autots.evaluator.feature_detector.utils.rescaling
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 Module contents
 ---------------
 
 .. automodule:: autots.evaluator.feature_detector.utils
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:

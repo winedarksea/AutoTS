@@ -8,6 +8,7 @@ Thrown around a lot of np.nan_to_num before pinv to prevent the following crash:
 On entry to DLASCL parameter number  4 had an illegal value
 
 """
+
 import datetime
 import random
 import numpy as np

@@ -314,7 +314,9 @@ class GluonTS(ModelObject):
                 try:
                     from gluonts.mx import SimpleFeedForwardEstimator
                 except Exception:
-                    from gluonts.model.simple_feedforward import SimpleFeedForwardEstimator
+                    from gluonts.model.simple_feedforward import (
+                        SimpleFeedForwardEstimator,
+                    )
 
                 estimator = SimpleFeedForwardEstimator(
                     prediction_length=ts_metadata['forecast_length'],

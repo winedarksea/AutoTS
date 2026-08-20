@@ -607,8 +607,12 @@ class TVA:
         X_tr = X[:n_train]
 
         dataset = TensorDataset(
-            X_tr, Y[:n_train], S_sea[:n_train], S_hol[:n_train],
-            S_lvl[:n_train], S_ano[:n_train],
+            X_tr,
+            Y[:n_train],
+            S_sea[:n_train],
+            S_hol[:n_train],
+            S_lvl[:n_train],
+            S_ano[:n_train],
         )
         # sample weights are computed AFTER the split so the sampler indices
         # align with the training subset rather than the full window set
@@ -835,9 +839,9 @@ class TVA:
             comp = self._components.get(key)
             if comp is None:
                 continue
-            comp = comp.reindex(
-                index=adjusted.index, columns=adjusted.columns
-            ).fillna(0.0)
+            comp = comp.reindex(index=adjusted.index, columns=adjusted.columns).fillna(
+                0.0
+            )
             slow = comp.rolling(window, center=True, min_periods=1).mean()
             adjusted = adjusted - (comp - slow)
         shifts = self._components.get('level_shifts')
@@ -964,8 +968,11 @@ class TVA:
             }
             cfg = (self.factor_config or {}).get('input_config') or {}
             result = robust_adjusted_panel(
-                values, mask=mask, components=components,
-                shrink=cfg.get('shrink'), config=cfg.get('config'),
+                values,
+                mask=mask,
+                components=components,
+                shrink=cfg.get('shrink'),
+                config=cfg.get('config'),
             )
             adjusted = np.asarray(result['adjusted'], dtype=float)
             if adjusted.shape != values.shape or not np.isfinite(adjusted).any():
@@ -984,8 +991,7 @@ class TVA:
     def _factor_input_panel(self) -> np.ndarray:
         """The adjusted panel the factor stage is fit on, per config (2b)."""
         estimator = str(
-            (self.factor_config or {}).get('input_estimator', 'detector')
-            or 'detector'
+            (self.factor_config or {}).get('input_estimator', 'detector') or 'detector'
         )
         if estimator == 'robust':
             return self._robust_adjusted_panel()
@@ -1071,9 +1077,7 @@ class TVA:
         ``fitted_loadings()`` rather than failing the fit.
         """
         self._structure_loadings = None
-        requested = str(
-            (self.factor_config or {}).get('structure_input') or ''
-        ).lower()
+        requested = str((self.factor_config or {}).get('structure_input') or '').lower()
         if requested != 'robust' or self._factor_network is None:
             return
         try:
@@ -1113,9 +1117,7 @@ class TVA:
             )
             self._structure_agreement = agreement
             if agreement >= float(cfg.get('structure_min_agreement', 0.4) or 0.4):
-                self._structure_loadings = np.asarray(
-                    ident['loadings'], dtype=float
-                )
+                self._structure_loadings = np.asarray(ident['loadings'], dtype=float)
         except Exception as exc:  # pragma: no cover - never fail a fit
             warnings.warn(
                 f"TVA structure-only factor fit failed; the coherence graph "
@@ -1207,9 +1209,7 @@ class TVA:
         if self._priors is not None:
             structural_config = self._priors._resolve_structural_config()
             if structural_config:
-                event_adj = self._priors._build_event_prior_adjacency(
-                    structural_config
-                )
+                event_adj = self._priors._build_event_prior_adjacency(structural_config)
                 if event_adj is not None:
                     extra_adjacencies['event'] = event_adj
             metadata_adj = self._priors._build_metadata_prior_adjacency()
@@ -1517,9 +1517,7 @@ class TVA:
                         verbose=0,
                     )
                 self._factor_network, self._factor_info = model, info
-                self._factor_scale = {
-                    'center': center, 'scale': scale, 'space': space
-                }
+                self._factor_scale = {'center': center, 'scale': scale, 'space': space}
                 folds = self._factor_inner_folds(horizon, 2)
                 if not folds:
                     score = np.inf
@@ -1539,8 +1537,13 @@ class TVA:
                     score = np.inf
             except Exception:  # pragma: no cover - a failed space is not a crash
                 continue
-            state = (score, space, self._factor_network, self._factor_info,
-                     dict(self._factor_scale))
+            state = (
+                score,
+                space,
+                self._factor_network,
+                self._factor_info,
+                dict(self._factor_scale),
+            )
             if best is None or score < best[0]:
                 best = state
         if best is None:
@@ -1681,10 +1684,7 @@ class TVA:
 
         adjusted = self._factor_input_panel()
         cfg_all = (self._factor_info or {}).get('config') or {}
-        window = int(
-            ((self.factor_config or {}).get('reanchor_window'))
-            or 14
-        )
+        window = int(((self.factor_config or {}).get('reanchor_window')) or 14)
 
         origins = []
         for i in range(max(int(n_folds), 0)):
@@ -1742,9 +1742,7 @@ class TVA:
             # that it persists
             add_back = periodic + shift_level[origin][np.newaxis, :]
             tva_folds.append(trend + add_back)
-            sn_folds.append(
-                seasonal_naive_forecast(values[: origin + 1], H, season)
-            )
+            sn_folds.append(seasonal_naive_forecast(values[: origin + 1], H, season))
             actual_folds.append(values[window_slice])
             recent = adjusted[max(origin + 1 - window, 0) : origin + 1]
             anchor_levels.append(np.nanmedian(recent, axis=0))
@@ -1768,8 +1766,9 @@ class TVA:
             'season_m': season,
         }
 
-    def _seasonal_candidates(self, horizon: int, datepart_future: np.ndarray,
-                             upto: int = None) -> dict:
+    def _seasonal_candidates(
+        self, horizon: int, datepart_future: np.ndarray, upto: int = None
+    ) -> dict:
         """{name: (H, N)} seasonal-path candidates for one forecast window.
 
         ``upto`` restricts history used for the empirical/amplitude
@@ -1817,9 +1816,7 @@ class TVA:
         window = season * int(cfg.get('amplitude_window_cycles', 2))
         fitted_in = comp('seasonality')[:end]
         if fitted_in.shape[0] >= window:
-            alpha = sn.amplitude_scale(
-                fitted_in[-window:], residual[-window:], cfg
-            )
+            alpha = sn.amplitude_scale(fitted_in[-window:], residual[-window:], cfg)
             candidates['amplitude'] = (
                 np.asarray(datepart_future, dtype=float) * alpha[np.newaxis, :]
             )
@@ -1873,13 +1870,14 @@ class TVA:
             actual = values[window]
             train = values[: origin + 1]
             if train.shape[0] > season:
-                scale = np.nanmean(
-                    np.abs(train[season:] - train[:-season]), axis=0
-                )
+                scale = np.nanmean(np.abs(train[season:] - train[:-season]), axis=0)
             else:
                 scale = np.nanmean(np.abs(np.diff(train, axis=0)), axis=0)
             selection = sn.select_seasonal_paths(
-                assembled, actual, scale, default='datepart',
+                assembled,
+                actual,
+                scale,
+                default='datepart',
                 config=cfg_all.get('seasonal_config'),
             )
             future_candidates = self._seasonal_candidates(H, datepart_future)
@@ -1956,16 +1954,18 @@ class TVA:
             if not folds:
                 return normalized_fc, {'reason': 'insufficient history'}
             selection = ch.select_coherence(
-                folds['trend_folds'], folds['actual_folds'], graphs,
-                folds['scale'], cconf,
+                folds['trend_folds'],
+                folds['actual_folds'],
+                graphs,
+                folds['scale'],
+                cconf,
             )
             trend = np.asarray(normalized_fc, dtype=float).T  # (H, N)
             adjusted, info = ch.apply_selection(trend, selection, graphs, cconf)
             return np.asarray(adjusted, dtype=float).T, info
         except Exception as exc:  # pragma: no cover - never fail a forecast
             warnings.warn(
-                f"TVA coherence shrink failed; returning the unshrunk trend. "
-                f"{exc}",
+                f"TVA coherence shrink failed; returning the unshrunk trend. " f"{exc}",
                 RuntimeWarning,
                 stacklevel=2,
             )
@@ -2009,17 +2009,13 @@ class TVA:
                 actual_folds.append(std_panel[origin + 1 : origin + 1 + H])
             train = std_panel[: min(origins) + 1]
             if train.shape[0] > season:
-                denom = np.nanmean(
-                    np.abs(train[season:] - train[:-season]), axis=0
-                )
+                denom = np.nanmean(np.abs(train[season:] - train[:-season]), axis=0)
             else:
                 denom = np.nanmean(np.abs(np.diff(train, axis=0)), axis=0)
             return {
                 'trend_folds': trend_folds,
                 'actual_folds': actual_folds,
-                'scale': np.where(
-                    np.isfinite(denom) & (denom > 1e-12), denom, np.nan
-                ),
+                'scale': np.where(np.isfinite(denom) & (denom > 1e-12), denom, np.nan),
             }
         except Exception:  # pragma: no cover
             return {}
@@ -2042,8 +2038,7 @@ class TVA:
             except Exception:
                 continue
             if any(
-                name not in result.columns
-                for name in (column, numerator, denominator)
+                name not in result.columns for name in (column, numerator, denominator)
             ):
                 continue
             den_fc = result[denominator].to_numpy(dtype=float)
@@ -2097,15 +2092,20 @@ class TVA:
         alpha = np.zeros(values.shape[1], dtype=float)
         if cfg.get('reanchor'):
             alpha = sf.select_reanchor_alpha(
-                tva_folds, folds['actual_folds'], folds['anchor_levels'],
-                folds['origin_levels'], scale, sconf,
+                tva_folds,
+                folds['actual_folds'],
+                folds['anchor_levels'],
+                folds['origin_levels'],
+                scale,
+                sconf,
             )
             window = int(sconf.get('reanchor_window', 14) or 14)
             adjusted = self._factor_input_panel()
             anchor_now = np.nanmedian(adjusted[-window:], axis=0)
-            offset = anchor_now - self._factor_trend_at_origin(
-                len(values) - 1 - horizon, horizon
-            )[0]
+            offset = (
+                anchor_now
+                - self._factor_trend_at_origin(len(values) - 1 - horizon, horizon)[0]
+            )
             offsets_by_fold = folds['anchor_levels'] - folds['origin_levels']
             tva_folds = [
                 sf.apply_reanchor(f, offsets_by_fold[i], alpha)
@@ -2140,7 +2140,10 @@ class TVA:
                 for i in range(len(tva_folds))
             ]
             lower, upper = sf.error_cap_bounds(
-                sn_fc, abs_errors, horizon, sconf,
+                sn_fc,
+                abs_errors,
+                horizon,
+                sconf,
                 bucket_scales=bucket_scales if cfg.get('conformal_sigma') else None,
             )
             capped = sf.count_capped(forecast_values, lower, upper)
@@ -2148,15 +2151,17 @@ class TVA:
             info['capped_cells'] = int(capped)
 
         info['summary'] = sf.summarize(
-            blend_weights=weights, reanchor_alphas=alpha,
-            bucket_scales=bucket_scales, capped_cells=capped,
-            scale=scale, n_series=values.shape[1], horizon=horizon,
+            blend_weights=weights,
+            reanchor_alphas=alpha,
+            bucket_scales=bucket_scales,
+            capped_cells=capped,
+            scale=scale,
+            n_series=values.shape[1],
+            horizon=horizon,
         )
         # only hand a bucket profile to sigma when the flag asked for it; the
         # JSON-safe copy of it lives in info['summary']
-        info['bucket_scales'] = (
-            bucket_scales if cfg.get('conformal_sigma') else None
-        )
+        info['bucket_scales'] = bucket_scales if cfg.get('conformal_sigma') else None
         return forecast_values, info
 
     def _predict_factor(self, forecast_length: int) -> pd.DataFrame:
@@ -2229,9 +2234,7 @@ class TVA:
         from autots.evaluator.tva.safety import conformal_sigma
 
         self._last_sigma = pd.DataFrame(
-            conformal_sigma(
-                model_sigma, forecast_length, safety.get('bucket_scales')
-            ),
+            conformal_sigma(model_sigma, forecast_length, safety.get('bucket_scales')),
             index=future_index,
             columns=self._df_original.columns,
         )
@@ -2401,9 +2404,7 @@ class TVA:
             # covariance is being asked about.
             deltas = self._selected_continuation(horizon)
             with torch.no_grad():
-                fc_norm = (
-                    model.forecast(horizon, deltas=deltas).cpu().numpy()
-                )  # (N, H)
+                fc_norm = model.forecast(horizon, deltas=deltas).cpu().numpy()  # (N, H)
             y_model = fc_norm.T * scale[np.newaxis, :] + self._factor_scale['center']
             jacobian = np.exp(np.clip(np.abs(y_model).mean(axis=0), None, 700.0))
 
@@ -2801,9 +2802,7 @@ class TVA:
         # V2's graph is series-level (N x N): draw the DAG over real series
         # names (W-7). Legacy latent-sized graphs keep the top-level view.
         dag_level = (
-            'series'
-            if graph.shape[0] == len(self._df_original.columns)
-            else 'top'
+            'series' if graph.shape[0] == len(self._df_original.columns) else 'top'
         )
         snapshot = build_graph_snapshot(
             adjacency_dense=graph,
@@ -2892,7 +2891,13 @@ class TVA:
         bipartite edges (family 'factor') are appended; see get_factor_graph.
         """
         columns = [
-            'source', 'target', 'lag', 'sign', 'weight', 'family', 'stability',
+            'source',
+            'target',
+            'lag',
+            'sign',
+            'weight',
+            'family',
+            'stability',
             'delta_mse',
         ]
         series_edges = (
@@ -2922,7 +2927,9 @@ class TVA:
         info = getattr(self, '_factor_info', None) or {}
         safety = getattr(self, '_safety_info', None) or {}
         seasonal = getattr(self, '_seasonal_info', None) or {}
-        columns = list(self._df_original.columns) if self._df_original is not None else []
+        columns = (
+            list(self._df_original.columns) if self._df_original is not None else []
+        )
 
         def names(indices):
             if indices is None:
@@ -2953,8 +2960,12 @@ class TVA:
                 'baseline_score': cont.get('baseline_score'),
             }
         for key in (
-            'anchor_idx', 'responder_idx', 'insufficient_overlap',
-            'observed_counts', 'loading_graph', 'group_assignment',
+            'anchor_idx',
+            'responder_idx',
+            'insufficient_overlap',
+            'observed_counts',
+            'loading_graph',
+            'group_assignment',
             'stability',
         ):
             if info.get(key) is not None:
@@ -2967,12 +2978,10 @@ class TVA:
         if safety:
             out['safety'] = {
                 'origins': safety.get('origins'),
-                'blend_weights': dict(
-                    zip(columns, safety.get('blend_weights', []))
-                ) or None,
-                'reanchor_alpha': dict(
-                    zip(columns, safety.get('reanchor_alpha', []))
-                ) or None,
+                'blend_weights': dict(zip(columns, safety.get('blend_weights', [])))
+                or None,
+                'reanchor_alpha': dict(zip(columns, safety.get('reanchor_alpha', [])))
+                or None,
                 'capped_cells': safety.get('capped_cells'),
                 'summary': safety.get('summary'),
             }
@@ -3004,9 +3013,7 @@ class TVA:
             return {'factors': None, 'loadings': None, 'factor_names': []}
         names = self._discovery['factor_names']
         index = self._components['trend'].index if self._components else None
-        factors = pd.DataFrame(
-            self._discovery['factors'], index=index, columns=names
-        )
+        factors = pd.DataFrame(self._discovery['factors'], index=index, columns=names)
         loadings = pd.DataFrame(
             self._discovery['loadings'],
             index=list(self._df_original.columns),
@@ -3194,7 +3201,11 @@ class TVA:
         resulting residual matrix is expanded to include aggregate hierarchy nodes
         so MinT/ERM-style reconciliation can estimate a non-identity covariance.
         """
-        if self._network is None or self._components is None or self._df_original is None:
+        if (
+            self._network is None
+            or self._components is None
+            or self._df_original is None
+        ):
             return None
 
         trend_data = self._components['trend'].values
@@ -3364,7 +3375,9 @@ class TVA:
         for i in range(n_windows):
             anchor = data[i + self.window_size - 1]  # (N,)
             windows[i] = ((data[i : i + self.window_size] - anchor) / scale).T
-            targets[i] = ((data[i + self.window_size : i + total_len] - anchor) / scale).T
+            targets[i] = (
+                (data[i + self.window_size : i + total_len] - anchor) / scale
+            ).T
 
         return windows, targets
 
@@ -3415,9 +3428,7 @@ class TVA:
                 sigma_v = out.get('sigma')
                 if sigma_v is None:
                     return
-                residuals.append(
-                    (out['trend_forecast'] - y_v).cpu().numpy()
-                )
+                residuals.append((out['trend_forecast'] - y_v).cpu().numpy())
                 sigmas.append(sigma_v.cpu().numpy())
         resid = np.concatenate(residuals, axis=0)  # (B, N, H)
         sig = np.concatenate(sigmas, axis=0)

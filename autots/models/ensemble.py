@@ -12,7 +12,6 @@ from autots.models.sklearn import retrieve_classifier
 from autots.tools.profile import profile_time_series, summarize_series
 from autots.tools.kalman import kalman_fusion_forecasts
 
-
 horizontal_aliases = [
     'horizontal',
     'probabilistic',

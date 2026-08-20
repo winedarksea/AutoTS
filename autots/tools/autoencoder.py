@@ -4,6 +4,7 @@ Autoencoder tools for anomaly detection
 
 Variational Autoencoder (VAE) implementation for time series anomaly detection
 """
+
 import numpy as np
 import pandas as pd
 
