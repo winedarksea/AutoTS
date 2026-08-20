@@ -1864,9 +1864,10 @@ class FeatureDetectionOptimizer:
         Curriculum Learning (sigma annealing)
             Three stages with decreasing sigma drive the search from coarse to
             fine sensitivity:
-              Stage 1: sigma=14 days — wide window builds initial recall
-              Stage 2: sigma=7 days  — medium window matches ±7-day tolerance
-              Stage 3: sigma=3.5 days — tight window polishes placement precision
+
+            - Stage 1: sigma=14 days — wide window builds initial recall
+            - Stage 2: sigma=7 days  — medium window matches ±7-day tolerance
+            - Stage 3: sigma=3.5 days — tight window polishes placement precision
 
         Parameters
         ----------

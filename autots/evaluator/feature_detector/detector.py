@@ -76,7 +76,7 @@ class TimeSeriesFeatureDetector(
     TODO: Improve anomaly typing in univariate mode (currently defaults to point_outlier) and incorporate detector scores into type confidence.
     TODO: Detect and expose non-holiday regressor impacts (not just holiday coefficients), and persist them in template/features output.
 
-        Parameters
+    Parameters
     ----------
     seasonality_params : dict, optional
         Parameters for DatepartRegressionTransformer used in final seasonality fit
@@ -101,9 +101,11 @@ class TimeSeriesFeatureDetector(
     detection_mode : str, default='multivariate'
         Controls whether detections are unique per series ('multivariate') or
         shared across all series ('univariate').
+
         - 'multivariate': Each series gets unique anomalies, holidays, changepoints, and level shifts
         - 'univariate': All series share common anomalies, holidays, changepoints, and level shifts
           (level shifts are detected on aggregated signal and scaled appropriately per series)
+
     global_holiday_anomaly_suppression : bool, default=True
         If True, anomaly detection suppresses holiday-proximate flags using a merged holiday
         date set from all series. Set False to disable this suppression.

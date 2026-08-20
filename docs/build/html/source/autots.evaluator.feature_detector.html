@@ -155,45 +155,36 @@ TODO: Support for modeling the trend with a fast kalman state space approach, id
 TODO: consider also having “deviation from group” type anomaly detection for multivariate series
 TODO: Improve anomaly typing in univariate mode (currently defaults to point_outlier) and incorporate detector scores into type confidence.
 TODO: Detect and expose non-holiday regressor impacts (not just holiday coefficients), and persist them in template/features output.</p>
-<blockquote>
-<div><p>Parameters</p>
-</div></blockquote>
-<dl>
-<dt>rough_seasonality_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for DatepartRegressionTransformer used in initial rough seasonality decomposition (to improve holiday and anomaly detection).</p>
-</dd>
-<dt>holiday_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for HolidayDetector</p>
-</dd>
-<dt>anomaly_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for AnomalyRemoval</p>
-</dd>
-<dt>changepoint_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for ChangepointDetector</p>
-</dd>
-<dt>level_shift_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for LevelShiftMagic</p>
-</dd>
-<dt>level_shift_validation<span class="classifier">dict, optional</span></dt><dd><p>Validation parameters for level shifts</p>
-</dd>
-<dt>general_transformer_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for GeneralTransformer applied before trend detection</p>
-</dd>
-<dt>smoothing_window<span class="classifier">int, optional</span></dt><dd><p>Window size for smoothing before trend detection</p>
-</dd>
-<dt>standardize<span class="classifier">bool, default=True</span></dt><dd><p>Whether to standardize series before processing</p>
-</dd>
-<dt>detection_mode<span class="classifier">str, default=’multivariate’</span></dt><dd><p>Controls whether detections are unique per series (‘multivariate’) or
-shared across all series (‘univariate’).
-- ‘multivariate’: Each series gets unique anomalies, holidays, changepoints, and level shifts
-- ‘univariate’: All series share common anomalies, holidays, changepoints, and level shifts</p>
-<blockquote>
-<div><p>(level shifts are detected on aggregated signal and scaled appropriately per series)</p>
-</div></blockquote>
-</dd>
-<dt>global_holiday_anomaly_suppression<span class="classifier">bool, default=True</span></dt><dd><p>If True, anomaly detection suppresses holiday-proximate flags using a merged holiday
-date set from all series. Set False to disable this suppression.</p>
-</dd>
-<dt>extended_anomaly_params<span class="classifier">dict, default=None</span></dt><dd><p>Opt-in second anomaly pass detecting multi-day/sustained patterns
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>seasonality_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Parameters for DatepartRegressionTransformer used in final seasonality fit</p></li>
+<li><p><strong>rough_seasonality_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Parameters for DatepartRegressionTransformer used in initial rough seasonality decomposition (to improve holiday and anomaly detection).</p></li>
+<li><p><strong>holiday_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Parameters for HolidayDetector</p></li>
+<li><p><strong>anomaly_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Parameters for AnomalyRemoval</p></li>
+<li><p><strong>changepoint_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Parameters for ChangepointDetector</p></li>
+<li><p><strong>level_shift_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Parameters for LevelShiftMagic</p></li>
+<li><p><strong>level_shift_validation</strong> (<em>dict</em><em>, </em><em>optional</em>) – Validation parameters for level shifts</p></li>
+<li><p><strong>general_transformer_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Parameters for GeneralTransformer applied before trend detection</p></li>
+<li><p><strong>smoothing_window</strong> (<em>int</em><em>, </em><em>optional</em>) – Window size for smoothing before trend detection</p></li>
+<li><p><strong>standardize</strong> (<em>bool</em><em>, </em><em>default=True</em>) – Whether to standardize series before processing</p></li>
+<li><p><strong>detection_mode</strong> (<em>str</em><em>, </em><em>default='multivariate'</em>) – <p>Controls whether detections are unique per series (‘multivariate’) or
+shared across all series (‘univariate’).</p>
+<ul>
+<li><p>’multivariate’: Each series gets unique anomalies, holidays, changepoints, and level shifts</p></li>
+<li><p>’univariate’: All series share common anomalies, holidays, changepoints, and level shifts
+(level shifts are detected on aggregated signal and scaled appropriately per series)</p></li>
+</ul>
+</p></li>
+<li><p><strong>global_holiday_anomaly_suppression</strong> (<em>bool</em><em>, </em><em>default=True</em>) – If True, anomaly detection suppresses holiday-proximate flags using a merged holiday
+date set from all series. Set False to disable this suppression.</p></li>
+<li><p><strong>extended_anomaly_params</strong> (<em>dict</em><em>, </em><em>default=None</em>) – Opt-in second anomaly pass detecting multi-day/sustained patterns
 (see ExtendedAnomalyDetector). Disabled unless a truthy dict is given;
 <code class="docutils literal notranslate"><span class="pre">default_extended_anomaly_params()</span></code> supplies a usable starting point.
 Off by default: sustained changes are already reported as level shifts
 and trend changepoints, and labelling them as anomalies as well makes
-the anomaly output span most of the timeline on typical data.</p>
+the anomaly output span most of the timeline on typical data.</p></li>
+</ul>
 </dd>
 </dl>
 <dl class="py attribute">
@@ -442,13 +433,11 @@ Pass 2: Extended/multi-day pattern detection:</p>
 <p>Two-pass anomaly detector combining point detection with multi-day pattern detection.</p>
 <p>Pass 1 produces point-level proposals via AnomalyRemoval (optional if
 <code class="docutils literal notranslate"><span class="pre">pass1_records</span></code> are provided externally).</p>
-<p>Pass 2 runs four independent detection methods on a clean residual:
-- <strong>CUSUM</strong>: cumulative-sum alarm for sustained mean shifts.
-- <strong>Slope-reversion template</strong>: cumulative-sum peak/trough analysis for</p>
-<blockquote>
-<div><p>slow onset → hold → reversion patterns.</p>
-</div></blockquote>
+<p>Pass 2 runs four independent detection methods on a clean residual:</p>
 <ul class="simple">
+<li><p><strong>CUSUM</strong>: cumulative-sum alarm for sustained mean shifts.</p></li>
+<li><p><strong>Slope-reversion template</strong>: cumulative-sum peak/trough analysis for
+slow onset → hold → reversion patterns.</p></li>
 <li><p><strong>Decay extension</strong>: extends pass-1 point detections with exponential or
 linear decay tails.</p></li>
 <li><p><strong>Segmented mean shift</strong>: sliding-window mean comparison against a rolling
@@ -578,7 +567,7 @@ result of this function as <code class="docutils literal notranslate"><span clas
 so the optimizer can zero in on changepoint quality without interference.</p>
 <p>The loss function is a statistical translation of techniques designed for
 neural changepoint training:</p>
-<dl>
+<dl class="simple">
 <dt>Gaussian Label Smoothing</dt><dd><p>Instead of a hard ±tolerance binary label, each true changepoint is
 represented as a Gaussian probability distribution centred on its date
 with standard deviation <code class="docutils literal notranslate"><span class="pre">sigma</span></code>.  This converts the step-function
@@ -594,11 +583,11 @@ changepoints rather than already-correct ones.</p>
 </dd>
 <dt>Curriculum Learning (sigma annealing)</dt><dd><p>Three stages with decreasing sigma drive the search from coarse to
 fine sensitivity:</p>
-<blockquote>
-<div><p>Stage 1: sigma=14 days — wide window builds initial recall
-Stage 2: sigma=7 days  — medium window matches ±7-day tolerance
-Stage 3: sigma=3.5 days — tight window polishes placement precision</p>
-</div></blockquote>
+<ul class="simple">
+<li><p>Stage 1: sigma=14 days — wide window builds initial recall</p></li>
+<li><p>Stage 2: sigma=7 days  — medium window matches ±7-day tolerance</p></li>
+<li><p>Stage 3: sigma=3.5 days — tight window polishes placement precision</p></li>
+</ul>
 </dd>
 </dl>
 <dl class="field-list simple">
@@ -687,13 +676,11 @@ when provided.</p>
 <p>Two-pass anomaly detector combining point detection with multi-day pattern detection.</p>
 <p>Pass 1 produces point-level proposals via AnomalyRemoval (optional if
 <code class="docutils literal notranslate"><span class="pre">pass1_records</span></code> are provided externally).</p>
-<p>Pass 2 runs four independent detection methods on a clean residual:
-- <strong>CUSUM</strong>: cumulative-sum alarm for sustained mean shifts.
-- <strong>Slope-reversion template</strong>: cumulative-sum peak/trough analysis for</p>
-<blockquote>
-<div><p>slow onset → hold → reversion patterns.</p>
-</div></blockquote>
+<p>Pass 2 runs four independent detection methods on a clean residual:</p>
 <ul class="simple">
+<li><p><strong>CUSUM</strong>: cumulative-sum alarm for sustained mean shifts.</p></li>
+<li><p><strong>Slope-reversion template</strong>: cumulative-sum peak/trough analysis for
+slow onset → hold → reversion patterns.</p></li>
 <li><p><strong>Decay extension</strong>: extends pass-1 point detections with exponential or
 linear decay tails.</p></li>
 <li><p><strong>Segmented mean shift</strong>: sliding-window mean comparison against a rolling
@@ -846,7 +833,7 @@ Otherwise return the full dict.</p>
 so the optimizer can zero in on changepoint quality without interference.</p>
 <p>The loss function is a statistical translation of techniques designed for
 neural changepoint training:</p>
-<dl>
+<dl class="simple">
 <dt>Gaussian Label Smoothing</dt><dd><p>Instead of a hard ±tolerance binary label, each true changepoint is
 represented as a Gaussian probability distribution centred on its date
 with standard deviation <code class="docutils literal notranslate"><span class="pre">sigma</span></code>.  This converts the step-function
@@ -862,11 +849,11 @@ changepoints rather than already-correct ones.</p>
 </dd>
 <dt>Curriculum Learning (sigma annealing)</dt><dd><p>Three stages with decreasing sigma drive the search from coarse to
 fine sensitivity:</p>
-<blockquote>
-<div><p>Stage 1: sigma=14 days — wide window builds initial recall
-Stage 2: sigma=7 days  — medium window matches ±7-day tolerance
-Stage 3: sigma=3.5 days — tight window polishes placement precision</p>
-</div></blockquote>
+<ul class="simple">
+<li><p>Stage 1: sigma=14 days — wide window builds initial recall</p></li>
+<li><p>Stage 2: sigma=7 days  — medium window matches ±7-day tolerance</p></li>
+<li><p>Stage 3: sigma=3.5 days — tight window polishes placement precision</p></li>
+</ul>
 </dd>
 </dl>
 <dl class="field-list simple">
@@ -995,45 +982,36 @@ TODO: Support for modeling the trend with a fast kalman state space approach, id
 TODO: consider also having “deviation from group” type anomaly detection for multivariate series
 TODO: Improve anomaly typing in univariate mode (currently defaults to point_outlier) and incorporate detector scores into type confidence.
 TODO: Detect and expose non-holiday regressor impacts (not just holiday coefficients), and persist them in template/features output.</p>
-<blockquote>
-<div><p>Parameters</p>
-</div></blockquote>
-<dl>
-<dt>rough_seasonality_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for DatepartRegressionTransformer used in initial rough seasonality decomposition (to improve holiday and anomaly detection).</p>
-</dd>
-<dt>holiday_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for HolidayDetector</p>
-</dd>
-<dt>anomaly_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for AnomalyRemoval</p>
-</dd>
-<dt>changepoint_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for ChangepointDetector</p>
-</dd>
-<dt>level_shift_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for LevelShiftMagic</p>
-</dd>
-<dt>level_shift_validation<span class="classifier">dict, optional</span></dt><dd><p>Validation parameters for level shifts</p>
-</dd>
-<dt>general_transformer_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for GeneralTransformer applied before trend detection</p>
-</dd>
-<dt>smoothing_window<span class="classifier">int, optional</span></dt><dd><p>Window size for smoothing before trend detection</p>
-</dd>
-<dt>standardize<span class="classifier">bool, default=True</span></dt><dd><p>Whether to standardize series before processing</p>
-</dd>
-<dt>detection_mode<span class="classifier">str, default=’multivariate’</span></dt><dd><p>Controls whether detections are unique per series (‘multivariate’) or
-shared across all series (‘univariate’).
-- ‘multivariate’: Each series gets unique anomalies, holidays, changepoints, and level shifts
-- ‘univariate’: All series share common anomalies, holidays, changepoints, and level shifts</p>
-<blockquote>
-<div><p>(level shifts are detected on aggregated signal and scaled appropriately per series)</p>
-</div></blockquote>
-</dd>
-<dt>global_holiday_anomaly_suppression<span class="classifier">bool, default=True</span></dt><dd><p>If True, anomaly detection suppresses holiday-proximate flags using a merged holiday
-date set from all series. Set False to disable this suppression.</p>
-</dd>
-<dt>extended_anomaly_params<span class="classifier">dict, default=None</span></dt><dd><p>Opt-in second anomaly pass detecting multi-day/sustained patterns
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>seasonality_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Parameters for DatepartRegressionTransformer used in final seasonality fit</p></li>
+<li><p><strong>rough_seasonality_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Parameters for DatepartRegressionTransformer used in initial rough seasonality decomposition (to improve holiday and anomaly detection).</p></li>
+<li><p><strong>holiday_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Parameters for HolidayDetector</p></li>
+<li><p><strong>anomaly_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Parameters for AnomalyRemoval</p></li>
+<li><p><strong>changepoint_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Parameters for ChangepointDetector</p></li>
+<li><p><strong>level_shift_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Parameters for LevelShiftMagic</p></li>
+<li><p><strong>level_shift_validation</strong> (<em>dict</em><em>, </em><em>optional</em>) – Validation parameters for level shifts</p></li>
+<li><p><strong>general_transformer_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Parameters for GeneralTransformer applied before trend detection</p></li>
+<li><p><strong>smoothing_window</strong> (<em>int</em><em>, </em><em>optional</em>) – Window size for smoothing before trend detection</p></li>
+<li><p><strong>standardize</strong> (<em>bool</em><em>, </em><em>default=True</em>) – Whether to standardize series before processing</p></li>
+<li><p><strong>detection_mode</strong> (<em>str</em><em>, </em><em>default='multivariate'</em>) – <p>Controls whether detections are unique per series (‘multivariate’) or
+shared across all series (‘univariate’).</p>
+<ul>
+<li><p>’multivariate’: Each series gets unique anomalies, holidays, changepoints, and level shifts</p></li>
+<li><p>’univariate’: All series share common anomalies, holidays, changepoints, and level shifts
+(level shifts are detected on aggregated signal and scaled appropriately per series)</p></li>
+</ul>
+</p></li>
+<li><p><strong>global_holiday_anomaly_suppression</strong> (<em>bool</em><em>, </em><em>default=True</em>) – If True, anomaly detection suppresses holiday-proximate flags using a merged holiday
+date set from all series. Set False to disable this suppression.</p></li>
+<li><p><strong>extended_anomaly_params</strong> (<em>dict</em><em>, </em><em>default=None</em>) – Opt-in second anomaly pass detecting multi-day/sustained patterns
 (see ExtendedAnomalyDetector). Disabled unless a truthy dict is given;
 <code class="docutils literal notranslate"><span class="pre">default_extended_anomaly_params()</span></code> supplies a usable starting point.
 Off by default: sustained changes are already reported as level shifts
 and trend changepoints, and labelling them as anomalies as well makes
-the anomaly output span most of the timeline on typical data.</p>
+the anomaly output span most of the timeline on typical data.</p></li>
+</ul>
 </dd>
 </dl>
 <dl class="py attribute">
@@ -1278,6 +1256,7 @@ result of this function as <code class="docutils literal notranslate"><span clas
 <li class="toctree-l1"><a class="reference internal" href="intro.html#autots">AutoTS</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorial.html">Tutorial</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorial.html#extended-tutorial">Extended Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../metric_weighting_guide.html">AutoTS Metric Weighting</a></li>
 </ul>
 <ul class="current">
 <li class="toctree-l1 current"><a class="reference internal" href="modules.html">autots</a><ul class="current">

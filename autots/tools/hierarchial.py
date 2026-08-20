@@ -211,7 +211,7 @@ def erm_reconcile(S: np.ndarray, y_all: np.ndarray, W: np.ndarray) -> np.ndarray
 
     The closed-form solution for y_bottom^r:
        y_bottom^r = (S' W S)^{-1} S' W y_all
-    => y_all^r = S y_bottom^r = S (S' W S)^{-1} S' W y_all
+       => y_all^r = S y_bottom^r = S (S' W S)^{-1} S' W y_all
 
     Parameters
     ----------

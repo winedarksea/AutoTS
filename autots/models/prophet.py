@@ -550,6 +550,7 @@ def get_changepoints(
     could be, which is around the 93% mark of the data, and then setting a
     relatively course, uniform grid going way back in time.
     (sourced from the work of Benn O)
+
     Args:
         training_start_ds: Pandas datetime or string date of earliest
             historical training date
@@ -562,6 +563,7 @@ def get_changepoints(
             also be the interval between potential changepoints
         custom_changepoints (string): comma separated dates in form YYYY-MM-DD. No
             additional quotations are necessary (e.g., "2020-10-12,2020-11-15")
+
     Returns:
         a pandas Series (dtype: datetime64[ns]) of potential changepoints for Prophet
     """

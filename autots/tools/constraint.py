@@ -579,6 +579,7 @@ def apply_adjustment_single(
             params: any AlignLastValue kwargs (rows, lag, method, strength, etc.)
         - "smoothing": EWMA smoothing
             params: span (int)
+
     series_ids limits adjustment to specific columns; defaults to all columns.
     """
     adjustment_params = adjustment_params or {}

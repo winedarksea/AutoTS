@@ -475,7 +475,7 @@ synthetic data has the expected number of anomalies, level shifts, etc.</p>
 response delays in days; 0 means “no true edge”</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">edges</span></code>: same structure as a list of
 <code class="docutils literal notranslate"><span class="pre">{'source',</span> <span class="pre">'target',</span> <span class="pre">'lag'}</span></code> dicts (only positive delays)</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">dominant_factor</span></code>: {series_name: int} index of the largest-<a href="#id4"><span class="problematic" id="id5">|w|</span></a> factor</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">dominant_factor</span></code>: {series_name: int} index of the largest <code class="docutils literal notranslate"><span class="pre">|w|</span></code> factor</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">observation_mask</span></code>: DataFrame (date x series) of bools, True where observed</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">responder</span></code>: {series_name: bool}, True for short-history cohorts</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">level_shifts</span></code> / <code class="docutils literal notranslate"><span class="pre">shared_events</span></code>: truth from <code class="docutils literal notranslate"><span class="pre">get_level_shifts()</span></code>
@@ -1129,7 +1129,7 @@ synthetic data has the expected number of anomalies, level shifts, etc.</p>
 response delays in days; 0 means “no true edge”</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">edges</span></code>: same structure as a list of
 <code class="docutils literal notranslate"><span class="pre">{'source',</span> <span class="pre">'target',</span> <span class="pre">'lag'}</span></code> dicts (only positive delays)</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">dominant_factor</span></code>: {series_name: int} index of the largest-<a href="#id6"><span class="problematic" id="id7">|w|</span></a> factor</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">dominant_factor</span></code>: {series_name: int} index of the largest <code class="docutils literal notranslate"><span class="pre">|w|</span></code> factor</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">observation_mask</span></code>: DataFrame (date x series) of bools, True where observed</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">responder</span></code>: {series_name: bool}, True for short-history cohorts</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">level_shifts</span></code> / <code class="docutils literal notranslate"><span class="pre">shared_events</span></code>: truth from <code class="docutils literal notranslate"><span class="pre">get_level_shifts()</span></code>
@@ -1352,70 +1352,59 @@ exercises coherence shrinkage and MinT reconciliation together.</p>
 <dt class="sig sig-object py" id="autots.datasets.load_daily">
 <span class="sig-prename descclassname"><span class="pre">autots.datasets.</span></span><span class="sig-name descname"><span class="pre">load_daily</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">long</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_daily" title="Link to this definition">¶</a></dt>
 <dd><p>Daily sample data.</p>
-<p><a href="#id1"><span class="problematic" id="id2">``</span></a>`
-# most of the wiki data was chosen to show holidays or holiday-like patterns
-wiki = [</p>
-<blockquote>
-<div><p>‘United_States’,
-‘Germany’,
-‘List_of_highest-grossing_films’,
-‘Jesus’,
-‘Michael_Jackson’,
-‘List_of_United_States_cities_by_population’,
-‘Microsoft_Office’,
-‘Google_Chrome’,
-‘Periodic_table’,
-‘Standard_deviation’,
-‘Easter’,
-‘Christmas’,
-‘Chinese_New_Year’,
-‘Thanksgiving’,
-‘List_of_countries_that_have_gained_independence_from_the_United_Kingdom’,
-‘History_of_the_hamburger’,
-‘Elizabeth_II’,
-‘William_Shakespeare’,
-‘George_Washington’,
-‘Cleopatra’,
-‘all’</p>
-</div></blockquote>
-<p>]</p>
-<dl class="simple">
-<dt>df2 = load_live_daily(</dt><dd><p>observation_start=”2017-01-01”, weather_years=7, trends_list=None,
-gov_domain_list=None, wikipedia_pages=wiki,
-fred_series=[‘DGS10’, ‘T5YIE’, ‘SP500’,’DEXUSEU’], sleep_seconds=10,
-fred_key = “93873d40f10c20fe6f6e75b1ad0aed4d”,
-weather_data_types = [“WSF2”, “PRCP”],
-weather_stations = [“USW00014771”],  # looking for intermittent
-tickers=None, london_air_stations=None,
-weather_event_types=None, earthquake_min_magnitude=None,</p>
-</dd>
-</dl>
-<p>)
-data_file_name = join(“autots”, “datasets”, ‘data’, ‘holidays.zip’)
-df2.to_csv(</p>
-<blockquote>
-<div><p>data_file_name,
-index=True,
-compression={</p>
-<blockquote>
-<div><p>‘method’: ‘zip’,
-‘archive_name’: ‘holidays.csv’,
-‘compresslevel’: 9  # Maximum compression level (0-9)</p>
-</div></blockquote>
-<p>}</p>
-</div></blockquote>
-<section id="id3">
-<h3>)<a class="headerlink" href="#id3" title="Link to this heading">¶</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># most of the wiki data was chosen to show holidays or holiday-like patterns</span>
+<span class="n">wiki</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s1">&#39;United_States&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;Germany&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;List_of_highest-grossing_films&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;Jesus&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;Michael_Jackson&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;List_of_United_States_cities_by_population&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;Microsoft_Office&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;Google_Chrome&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;Periodic_table&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;Standard_deviation&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;Easter&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;Christmas&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;Chinese_New_Year&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;Thanksgiving&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;List_of_countries_that_have_gained_independence_from_the_United_Kingdom&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;History_of_the_hamburger&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;Elizabeth_II&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;William_Shakespeare&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;George_Washington&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;Cleopatra&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;all&#39;</span>
+<span class="p">]</span>
+
+<span class="n">df2</span> <span class="o">=</span> <span class="n">load_live_daily</span><span class="p">(</span>
+    <span class="n">observation_start</span><span class="o">=</span><span class="s2">&quot;2017-01-01&quot;</span><span class="p">,</span> <span class="n">weather_years</span><span class="o">=</span><span class="mi">7</span><span class="p">,</span> <span class="n">trends_list</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">gov_domain_list</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">wikipedia_pages</span><span class="o">=</span><span class="n">wiki</span><span class="p">,</span>
+    <span class="n">fred_series</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;DGS10&#39;</span><span class="p">,</span> <span class="s1">&#39;T5YIE&#39;</span><span class="p">,</span> <span class="s1">&#39;SP500&#39;</span><span class="p">,</span><span class="s1">&#39;DEXUSEU&#39;</span><span class="p">],</span> <span class="n">sleep_seconds</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+    <span class="n">fred_key</span> <span class="o">=</span> <span class="s2">&quot;93873d40f10c20fe6f6e75b1ad0aed4d&quot;</span><span class="p">,</span>
+    <span class="n">weather_data_types</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;WSF2&quot;</span><span class="p">,</span> <span class="s2">&quot;PRCP&quot;</span><span class="p">],</span>
+    <span class="n">weather_stations</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;USW00014771&quot;</span><span class="p">],</span>  <span class="c1"># looking for intermittent</span>
+    <span class="n">tickers</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">london_air_stations</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">weather_event_types</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">earthquake_min_magnitude</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">data_file_name</span> <span class="o">=</span> <span class="n">join</span><span class="p">(</span><span class="s2">&quot;autots&quot;</span><span class="p">,</span> <span class="s2">&quot;datasets&quot;</span><span class="p">,</span> <span class="s1">&#39;data&#39;</span><span class="p">,</span> <span class="s1">&#39;holidays.zip&#39;</span><span class="p">)</span>
+<span class="n">df2</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span>
+    <span class="n">data_file_name</span><span class="p">,</span>
+    <span class="n">index</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">compression</span><span class="o">=</span><span class="p">{</span>
+        <span class="s1">&#39;method&#39;</span><span class="p">:</span> <span class="s1">&#39;zip&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;archive_name&#39;</span><span class="p">:</span> <span class="s1">&#39;holidays.csv&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;compresslevel&#39;</span><span class="p">:</span> <span class="mi">9</span>  <span class="c1"># Maximum compression level (0-9)</span>
+    <span class="p">}</span>
+<span class="p">)</span>
+</pre></div>
+</div>
 <p>Sources: Wikimedia Foundation</p>
 <dl class="field-list simple">
-<dt class="field-odd">param long<span class="colon">:</span></dt>
-<dd class="field-odd"><p>if True, return data in long format. Otherwise return wide</p>
-</dd>
-<dt class="field-even">type long<span class="colon">:</span></dt>
-<dd class="field-even"><p>bool</p>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>long</strong> (<em>bool</em>) – if True, return data in long format. Otherwise return wide</p>
 </dd>
 </dl>
-</section>
 </dd></dl>
 
 <dl class="py function">
@@ -1580,6 +1569,7 @@ if False, return a Series with dt index</p></li>
 <li class="toctree-l1"><a class="reference internal" href="intro.html#autots">AutoTS</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorial.html">Tutorial</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorial.html#extended-tutorial">Extended Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../metric_weighting_guide.html">AutoTS Metric Weighting</a></li>
 </ul>
 <ul class="current">
 <li class="toctree-l1 current"><a class="reference internal" href="modules.html">autots</a><ul class="current">

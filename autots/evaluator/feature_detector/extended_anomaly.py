@@ -4,6 +4,7 @@ ExtendedAnomalyDetector - Two-pass anomaly detector for multi-day patterns.
 
 Pass 1: Point anomaly proposals via AnomalyRemoval.
 Pass 2: Extended/multi-day pattern detection:
+
   - CUSUM (sustained mean shift for noisy_burst / transient_change)
   - Cumulative-sum template matching (slope_reversion onset + hold + reversion)
   - Decay extension of pass-1 points (impulse_decay / linear_decay)
@@ -82,6 +83,7 @@ class ExtendedAnomalyDetector:
     ``pass1_records`` are provided externally).
 
     Pass 2 runs four independent detection methods on a clean residual:
+
     - **CUSUM**: cumulative-sum alarm for sustained mean shifts.
     - **Slope-reversion template**: cumulative-sum peak/trough analysis for
       slow onset → hold → reversion patterns.

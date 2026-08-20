@@ -122,7 +122,7 @@ def sign_agreement(df, pairs) -> dict:
 
 
 def dca_error(forecast, actual, pairs) -> float:
-    """Mean |sign-agreement(forecast) - sign-agreement(actual)| over pairs.
+    """Mean ``|sign-agreement(forecast) - sign-agreement(actual)|`` over pairs.
 
     Scored against the realised future rather than as a raw rate, since a
     model that forces lockstep is as wrong as one that scatters. Lower is
@@ -285,7 +285,7 @@ def direction_coherence(frame, pairs, window: int = 28) -> float:
 
 
 def direction_coherence_error(forecast, actual, pairs, window: int = 28) -> float:
-    """|direction_coherence(forecast) - direction_coherence(actual)|.
+    """``|direction_coherence(forecast) - direction_coherence(actual)|``.
 
     Net-change analogue of :func:`dca_error`: penalises both over- and
     under-coupled forecasts against the realised future. Lower is better.
@@ -372,7 +372,7 @@ def _as_loading_array(loadings):
 
 
 def _greedy_column_match(true_lam, est_lam) -> dict:
-    """``{true_col: (est_col, sign)}`` by greedy |correlation| on loadings.
+    """``{true_col: (est_col, sign)}`` by greedy ``|correlation|`` on loadings.
 
     Fallback used when factor paths aren't available to
     :func:`~autots.evaluator.tva.discovery.match_factors`. Greedy rather than
@@ -477,7 +477,7 @@ def loading_structure_score(
         true_factors: optional (T, K_true) true factor paths.
         est_factors: optional (T, K_est) estimated factor paths. When both are
             supplied, columns are matched with ``discovery.match_factors``
-            (Hungarian on differenced |corr|); otherwise a greedy |corr| match
+            (Hungarian on differenced ``|corr|``); otherwise a greedy ``|corr|`` match
             on the loading columns themselves is used.
         asserted_pairs: optional iterable of ``(i, j)`` or ``(i, j, sign)``
             series-index pairs the caller's graph asserts as same-group (e.g.

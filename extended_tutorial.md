@@ -300,7 +300,7 @@ If a metric is entirely NaN in the initial results, likely that holdout was enti
 It may be worth viewing something like: `model.score_breakdown[model.score_breakdown.index == model.best_model_id].iloc[0]` to see if any one score is skewing selection. 
 Generally you would want the numbers here to follow the balance requested in the `metric_weighting`.
 
-##### Plots
+#### Plots
 ```python
 import matplotlib.pyplot as plt
 

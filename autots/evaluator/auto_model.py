@@ -1209,7 +1209,7 @@ class TemplateEvalObject(object):
         """Save results to a file.
 
         Args:
-            filename (str): *.pickle or *.csv. .pickle saves full results
+            filename (str): ``*.pickle`` or ``*.csv``. .pickle saves full results
         """
         if filename.endswith('.csv'):
             self.model_results.to_csv(filename, index=False)

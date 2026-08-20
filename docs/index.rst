@@ -20,6 +20,7 @@ Getting Started
 
    source/intro
    source/tutorial
+   metric_weighting_guide
    
 Modules API
 ===================

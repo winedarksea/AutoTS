@@ -36,6 +36,7 @@ try:
         """
 
         def fit(self, X, y, **kwargs):
+            """Fit, lowering min_samples only when the sklearn default would fail."""
             if self.min_samples is None and X.shape[1] + 1 > X.shape[0]:
                 self.min_samples = max(2, X.shape[0] // 2)
             return super().fit(X, y, **kwargs)
@@ -3817,8 +3818,8 @@ class VectorizedMultiOutputGPR:
         kernel (str): linear, polynomial, rbf, periodic, locally_periodic, exponential
         noise_var (float): noise variance, effectively regularization. Close to zero little regularization, larger values create more model flexiblity and noise tolerance.
         gamma: For the RBF, Exponential, and Locally Periodic kernels, γ is essentially an inverse length scale. [0.1,1,10,100].
-        lambda_: For the Periodic and Locally Periodic kernels, lambda_ determines the smoothness of the periodic function. A reasonable range might be [0.1,1,10,100].
-        lambda_prime: Specifically for the Locally Periodic kernel, this determines the smoothness of the periodic component. Same range as lambda_.
+        lambda_: For the Periodic and Locally Periodic kernels, ``lambda_`` determines the smoothness of the periodic function. A reasonable range might be [0.1,1,10,100].
+        lambda_prime: Specifically for the Locally Periodic kernel, this determines the smoothness of the periodic component. Same range as ``lambda_``.
         p: The period parameter for the Periodic and Locally Periodic kernels such as 7 or 365.25 for daily data.
     """
 

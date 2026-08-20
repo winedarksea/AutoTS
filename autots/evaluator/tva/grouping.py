@@ -410,7 +410,7 @@ def loading_graph(
 
     Returns:
         dict with 'loadings', 'group_assignment', 'series', 'factors',
-        'dominant_factor' (argmax |loading| per series).
+        'dominant_factor' (argmax ``|loading|`` per series).
     """
     lam = np.asarray(loadings, dtype=float)
     n, k = lam.shape if lam.ndim == 2 else (0, 0)

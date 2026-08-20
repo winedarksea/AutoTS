@@ -92,14 +92,16 @@ class TVA:
             interpretable, and a strong baseline the network must beat.
         fusion: How stochastic components (trend, seasonality, holidays) are
             recombined before level shifts are added additively.
-            'attention' (default): DigitalTwinFusion — self-attention contextualizes
-                component embeddings; sigmoid gates independently fade each component
-                in/out (gate in [0,1]) applied to the original values.
-            'direct': DirectAttentionFusion — self-attention contextualizes component
-                embeddings; attended representations are projected directly to scalar
-                contributions summed as a residual over the originals. More purely
-                attention-driven; zero-init ensures pure-additive start.
-            'additive': AdditiveFusion — plain sum, no learned parameters.
+
+            - 'attention' (default): DigitalTwinFusion — self-attention contextualizes
+              component embeddings; sigmoid gates independently fade each component
+              in/out (gate in [0,1]) applied to the original values.
+            - 'direct': DirectAttentionFusion — self-attention contextualizes component
+              embeddings; attended representations are projected directly to scalar
+              contributions summed as a residual over the originals. More purely
+              attention-driven; zero-init ensures pure-additive start.
+            - 'additive': AdditiveFusion — plain sum, no learned parameters.
+
         series_metadata: List of SeriesMetadata for prior construction.
         prior_adjacency: Optional co-movement graph prior. Accepts an (N, N)
             matrix, a labelled DataFrame, a list of
@@ -1070,7 +1072,7 @@ class TVA:
         forecast value — untouched.
 
         Guarded twice. The result is only trusted when its factors match the
-        forecast model's (``match_factors`` mean |corr| >= 0.4); a graph built
+        forecast model's (``match_factors`` mean ``|corr|`` >= 0.4); a graph built
         on a *different* set of factors than the one being shrunk would
         assert relationships the shrink cannot act on coherently. And any
         failure sets the attribute to None, falling back to

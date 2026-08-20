@@ -829,7 +829,7 @@ def load_model(run_id: str, artifact_path: str = None) -> Any:
             If None, tries 'autots/model_as_code.json' then 'modelobject/model_as_code.json'.
 
     Returns:
-        AutoTS or ModelObject: The reconstructed model instance.
+        autots.AutoTS or ModelObject: The reconstructed model instance.
     """
     mlflow = _get_mlflow()
     if mlflow is None:

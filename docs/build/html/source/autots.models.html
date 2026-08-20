@@ -212,39 +212,15 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <span class="sig-name descname"><span class="pre">lower_forecast</span></span><a class="headerlink" href="#autots.models.base.PredictionObject.lower_forecast" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<dl class="py method">
-<dt class="sig sig-object py" id="autots.models.base.PredictionObject.copy">
-<span class="sig-name descname"><span class="pre">copy</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.base.PredictionObject.copy" title="Link to this definition">¶</a></dt>
-<dd><p>return a deep copy with separate memory for all key elements</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="autots.models.base.PredictionObject.long_form_results">
-<span class="sig-name descname"><span class="pre">long_form_results</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.base.PredictionObject.long_form_results" title="Link to this definition">¶</a></dt>
-<dd><p>return complete results in long form</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="autots.models.base.PredictionObject.total_runtime">
-<span class="sig-name descname"><span class="pre">total_runtime</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.base.PredictionObject.total_runtime" title="Link to this definition">¶</a></dt>
-<dd><p>return runtime for all model components in seconds</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="autots.models.base.PredictionObject.plot">
-<span class="sig-name descname"><span class="pre">plot</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.base.PredictionObject.plot" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="autots.models.base.PredictionObject.evaluate">
-<span class="sig-name descname"><span class="pre">evaluate</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.base.PredictionObject.evaluate" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="autots.models.base.PredictionObject.apply_constraints">
-<span class="sig-name descname"><span class="pre">apply_constraints</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.base.PredictionObject.apply_constraints" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
+<p>Methods</p>
+<ul class="simple">
+<li><p>copy: return a deep copy with separate memory for all key elements</p></li>
+<li><p>long_form_results: return complete results in long form</p></li>
+<li><p>total_runtime: return runtime for all model components in seconds</p></li>
+<li><p>plot</p></li>
+<li><p>evaluate</p></li>
+<li><p>apply_constraints</p></li>
+</ul>
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.models.base.PredictionObject.apply_adjustments">
 <span class="sig-name descname"><span class="pre">apply_adjustments</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">adjustments</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">df_train</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.base.PredictionObject.apply_adjustments" title="Link to this definition">¶</a></dt>
@@ -252,109 +228,90 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="id0">
-<span class="sig-name descname"><span class="pre">apply_constraints</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">constraints</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">df_train</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">constraint_method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">constraint_regularization</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">upper_constraint</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lower_constraint</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bounds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#id0" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="autots.models.base.PredictionObject.apply_constraints">
+<span class="sig-name descname"><span class="pre">apply_constraints</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">constraints</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">df_train</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">constraint_method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">constraint_regularization</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">upper_constraint</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lower_constraint</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bounds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.base.PredictionObject.apply_constraints" title="Link to this definition">¶</a></dt>
 <dd><p>Use constraint thresholds to adjust outputs by limit.</p>
 <p class="rubric">Example</p>
-<dl>
-<dt>apply_constraints(</dt><dd><dl>
-<dt>constraints=[</dt><dd><dl class="simple">
-<dt>{  # don’t exceed historic max</dt><dd><p>“constraint_method”: “quantile”,
-“constraint_value”: 1.0,
-“constraint_direction”: “upper”,
-“constraint_regularization”: 1.0,
-“bounds”: True,</p>
-</dd>
-</dl>
-<p>},
-{  # don’t exceed 2% decline by end of forecast horizon</p>
-<blockquote>
-<div><p>“constraint_method”: “slope”,
-“constraint_value”: {</p>
-<blockquote>
-<div><p>“slope”: -0.02,
-“window”: 28,
-“window_agg”: “min”,
-“threshold”: -0.01,</p>
-</div></blockquote>
-<p>},
-“constraint_direction”: “lower”,
-“constraint_regularization”: 0.9,
-“bounds”: False,</p>
-</div></blockquote>
-<p>},
-{  # don’t exceed 2% growth by end of forecast horizon</p>
-<blockquote>
-<div><p>“constraint_method”: “slope”,
-“constraint_value”: {“slope”: 0.02, “window”: 10, “window_agg”: “max”, “threshold”: 0.01},
-“constraint_direction”: “upper”,
-“constraint_regularization”: 0.9,
-“bounds”: False,</p>
-</div></blockquote>
-<p>},
-{  # don’t go below the last 10 values - 10%</p>
-<blockquote>
-<div><p>“constraint_method”: “last_window”,
-“constraint_value”: {“window”: 10, “threshold”: -0.1},
-“constraint_direction”: “lower”,
-“constraint_regularization”: 1.0,
-“bounds”: False,</p>
-</div></blockquote>
-<p>},
-{  # don’t go below zero</p>
-<blockquote>
-<div><p>“constraint_method”: “absolute”,
-“constraint_value”: 0,  # can also be an array or Series
-“constraint_direction”: “lower”,
-“constraint_regularization”: 1.0,
-“bounds”: True,</p>
-</div></blockquote>
-<p>},
-{  # don’t go below historic min  - 1 st dev</p>
-<blockquote>
-<div><p>“constraint_method”: “stdev_min”,
-“constraint_value”: 1.0,
-“constraint_direction”: “lower”,
-“constraint_regularization”: 1.0,
-“bounds”: True,</p>
-</div></blockquote>
-<p>},
-{  # don’t go above historic mean  + 3 st devs, soft limit</p>
-<blockquote>
-<div><p>“constraint_method”: “stdev”,
-“constraint_value”: 3.0,
-“constraint_direction”: “upper”,
-“constraint_regularization”: 0.5,
-“bounds”: True,</p>
-</div></blockquote>
-<p>},
-{  # round decimals to 2 places</p>
-<blockquote>
-<div><p>“constraint_method”: “round”,
-“constraint_value”: 2,</p>
-</div></blockquote>
-<p>},
-{  # apply dampening (gradually flatten out forecast)</p>
-<blockquote>
-<div><p>“constraint_method”: “dampening”,
-“constraint_value”: 0.98,</p>
-</div></blockquote>
-<p>},</p>
-</dd>
-</dl>
-<p>]</p>
-</dd>
-</dl>
-<p>)</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">apply_constraints</span><span class="p">(</span>
+    <span class="n">constraints</span><span class="o">=</span><span class="p">[</span>
+        <span class="p">{</span>  <span class="c1"># don&#39;t exceed historic max</span>
+            <span class="s2">&quot;constraint_method&quot;</span><span class="p">:</span> <span class="s2">&quot;quantile&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;constraint_value&quot;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>
+            <span class="s2">&quot;constraint_direction&quot;</span><span class="p">:</span> <span class="s2">&quot;upper&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;constraint_regularization&quot;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>
+            <span class="s2">&quot;bounds&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="p">{</span>  <span class="c1"># don&#39;t exceed 2% decline by end of forecast horizon</span>
+            <span class="s2">&quot;constraint_method&quot;</span><span class="p">:</span> <span class="s2">&quot;slope&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;constraint_value&quot;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">&quot;slope&quot;</span><span class="p">:</span> <span class="o">-</span><span class="mf">0.02</span><span class="p">,</span>
+                <span class="s2">&quot;window&quot;</span><span class="p">:</span> <span class="mi">28</span><span class="p">,</span>
+                <span class="s2">&quot;window_agg&quot;</span><span class="p">:</span> <span class="s2">&quot;min&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;threshold&quot;</span><span class="p">:</span> <span class="o">-</span><span class="mf">0.01</span><span class="p">,</span>
+            <span class="p">},</span>
+            <span class="s2">&quot;constraint_direction&quot;</span><span class="p">:</span> <span class="s2">&quot;lower&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;constraint_regularization&quot;</span><span class="p">:</span> <span class="mf">0.9</span><span class="p">,</span>
+            <span class="s2">&quot;bounds&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="p">{</span>  <span class="c1"># don&#39;t exceed 2% growth by end of forecast horizon</span>
+            <span class="s2">&quot;constraint_method&quot;</span><span class="p">:</span> <span class="s2">&quot;slope&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;constraint_value&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;slope&quot;</span><span class="p">:</span> <span class="mf">0.02</span><span class="p">,</span> <span class="s2">&quot;window&quot;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span> <span class="s2">&quot;window_agg&quot;</span><span class="p">:</span> <span class="s2">&quot;max&quot;</span><span class="p">,</span> <span class="s2">&quot;threshold&quot;</span><span class="p">:</span> <span class="mf">0.01</span><span class="p">},</span>
+            <span class="s2">&quot;constraint_direction&quot;</span><span class="p">:</span> <span class="s2">&quot;upper&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;constraint_regularization&quot;</span><span class="p">:</span> <span class="mf">0.9</span><span class="p">,</span>
+            <span class="s2">&quot;bounds&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="p">{</span>  <span class="c1"># don&#39;t go below the last 10 values - 10%</span>
+            <span class="s2">&quot;constraint_method&quot;</span><span class="p">:</span> <span class="s2">&quot;last_window&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;constraint_value&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;window&quot;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span> <span class="s2">&quot;threshold&quot;</span><span class="p">:</span> <span class="o">-</span><span class="mf">0.1</span><span class="p">},</span>
+            <span class="s2">&quot;constraint_direction&quot;</span><span class="p">:</span> <span class="s2">&quot;lower&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;constraint_regularization&quot;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>
+            <span class="s2">&quot;bounds&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="p">{</span>  <span class="c1"># don&#39;t go below zero</span>
+            <span class="s2">&quot;constraint_method&quot;</span><span class="p">:</span> <span class="s2">&quot;absolute&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;constraint_value&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>  <span class="c1"># can also be an array or Series</span>
+            <span class="s2">&quot;constraint_direction&quot;</span><span class="p">:</span> <span class="s2">&quot;lower&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;constraint_regularization&quot;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>
+            <span class="s2">&quot;bounds&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="p">{</span>  <span class="c1"># don&#39;t go below historic min  - 1 st dev</span>
+            <span class="s2">&quot;constraint_method&quot;</span><span class="p">:</span> <span class="s2">&quot;stdev_min&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;constraint_value&quot;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>
+            <span class="s2">&quot;constraint_direction&quot;</span><span class="p">:</span> <span class="s2">&quot;lower&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;constraint_regularization&quot;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>
+            <span class="s2">&quot;bounds&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="p">{</span>  <span class="c1"># don&#39;t go above historic mean  + 3 st devs, soft limit</span>
+            <span class="s2">&quot;constraint_method&quot;</span><span class="p">:</span> <span class="s2">&quot;stdev&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;constraint_value&quot;</span><span class="p">:</span> <span class="mf">3.0</span><span class="p">,</span>
+            <span class="s2">&quot;constraint_direction&quot;</span><span class="p">:</span> <span class="s2">&quot;upper&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;constraint_regularization&quot;</span><span class="p">:</span> <span class="mf">0.5</span><span class="p">,</span>
+            <span class="s2">&quot;bounds&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="p">{</span>  <span class="c1"># round decimals to 2 places</span>
+            <span class="s2">&quot;constraint_method&quot;</span><span class="p">:</span> <span class="s2">&quot;round&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;constraint_value&quot;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="p">{</span>  <span class="c1"># apply dampening (gradually flatten out forecast)</span>
+            <span class="s2">&quot;constraint_method&quot;</span><span class="p">:</span> <span class="s2">&quot;dampening&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;constraint_value&quot;</span><span class="p">:</span> <span class="mf">0.98</span><span class="p">,</span>
+        <span class="p">},</span>
+    <span class="p">]</span>
+<span class="p">)</span>
+</pre></div>
+</div>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>constraint_method</strong> (<em>str</em>) – one of
-stdev_min - threshold is min and max of historic data +/- constraint * st dev of data
-stdev - threshold is the mean of historic data +/- constraint * st dev of data
-absolute - input is array of length series containing the threshold’s final value for each
-quantile - constraint is the quantile of historic data to use as threshold</p></li>
-<li><p><strong>constraint_regularization</strong> (<em>float</em>) – 0 to 1
+<li><p><strong>constraint_method</strong> (<em>str</em>) – <p>one of</p>
+<ul>
+<li><p>stdev_min - threshold is min and max of historic data +/- constraint * st dev of data</p></li>
+<li><p>stdev - threshold is the mean of historic data +/- constraint * st dev of data</p></li>
+<li><p>absolute - input is array of length series containing the threshold’s final value for each</p></li>
+<li><p>quantile - constraint is the quantile of historic data to use as threshold</p></li>
+</ul>
+</p></li>
+<li><p><strong>constraint_regularization</strong> (<em>float</em>) – 0 to 1,
 where 0 means no constraint, 1 is hard threshold cutoff, and in between is penalty term</p></li>
 <li><p><strong>upper_constraint</strong> (<em>float</em>) – or array, depending on method, None if unused</p></li>
 <li><p><strong>lower_constraint</strong> (<em>float</em>) – or array, depending on method, None if unused</p></li>
@@ -369,8 +326,8 @@ where 0 means no constraint, 1 is hard threshold cutoff, and in between is penal
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="id1">
-<span class="sig-name descname"><span class="pre">copy</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#id1" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="autots.models.base.PredictionObject.copy">
+<span class="sig-name descname"><span class="pre">copy</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.base.PredictionObject.copy" title="Link to this definition">¶</a></dt>
 <dd><p>Create a deep copy of the PredictionObject with separate memory for all key elements.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
@@ -383,8 +340,8 @@ where 0 means no constraint, 1 is hard threshold cutoff, and in between is penal
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="id2">
-<span class="sig-name descname"><span class="pre">evaluate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">actual</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">series_weights</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">df_train</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">per_timestamp_errors</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">full_mae_error</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scaler</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cumsum_A</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">diff_A</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">last_of_array</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">column_names</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">custom_metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#id2" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="autots.models.base.PredictionObject.evaluate">
+<span class="sig-name descname"><span class="pre">evaluate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">actual</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">series_weights</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">df_train</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">per_timestamp_errors</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">full_mae_error</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scaler</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cumsum_A</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">diff_A</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">last_of_array</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">column_names</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">custom_metric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.base.PredictionObject.evaluate" title="Link to this definition">¶</a></dt>
 <dd><p>Evalute prediction against test actual. Fills out attributes of base object.</p>
 <p>This fails with pd.NA values supplied.</p>
 <dl class="field-list simple">
@@ -421,8 +378,8 @@ scaler (numpy.array): precomputed scaler for efficiency, avg value of series in 
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="id3">
-<span class="sig-name descname"><span class="pre">long_form_results</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">id_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'SeriesID'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Value'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">interval_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'PredictionInterval'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">update_datetime_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">datetime_column</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#id3" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="autots.models.base.PredictionObject.long_form_results">
+<span class="sig-name descname"><span class="pre">long_form_results</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">id_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'SeriesID'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Value'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">interval_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'PredictionInterval'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">update_datetime_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">datetime_column</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.base.PredictionObject.long_form_results" title="Link to this definition">¶</a></dt>
 <dd><p>Export forecasts (including upper and lower) as single ‘long’ format output</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -441,8 +398,8 @@ scaler (numpy.array): precomputed scaler for efficiency, avg value of series in 
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="id4">
-<span class="sig-name descname"><span class="pre">plot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df_wide</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">series</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remove_zeroes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">interpolate</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_date</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">facecolor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'black'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loc</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'upper</span> <span class="pre">right'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title_substring</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vline</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">colors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_bounds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot_grid</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dpi</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#id4" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="autots.models.base.PredictionObject.plot">
+<span class="sig-name descname"><span class="pre">plot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df_wide</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">series</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remove_zeroes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">interpolate</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_date</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">facecolor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'black'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loc</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'upper</span> <span class="pre">right'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title_substring</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vline</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">colors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_bounds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot_grid</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dpi</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.base.PredictionObject.plot" title="Link to this definition">¶</a></dt>
 <dd><p>Generate an example plot of one series. Does not handle non-numeric forecasts.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -560,8 +517,8 @@ scaler (numpy.array): precomputed scaler for efficiency, avg value of series in 
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="id5">
-<span class="sig-name descname"><span class="pre">total_runtime</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#id5" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="autots.models.base.PredictionObject.total_runtime">
+<span class="sig-name descname"><span class="pre">total_runtime</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.base.PredictionObject.total_runtime" title="Link to this definition">¶</a></dt>
 <dd><p>Combine runtimes.</p>
 </dd></dl>
 
@@ -1815,52 +1772,18 @@ For component decomposition, scale will be inaccurate unless ‘BaseScaler’ is
 <dd class="field-odd"><p><strong>pass</strong></p>
 </dd>
 </dl>
-<dl class="py method">
-<dt class="sig sig-object py" id="autots.models.cassandra.Cassandra.fit">
-<span class="sig-name descname"><span class="pre">fit</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.fit" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="autots.models.cassandra.Cassandra.predict">
-<span class="sig-name descname"><span class="pre">predict</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.predict" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="autots.models.cassandra.Cassandra.holiday_detector.dates_to_holidays">
-<span class="sig-prename descclassname"><span class="pre">holiday_detector.</span></span><span class="sig-name descname"><span class="pre">dates_to_holidays</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.holiday_detector.dates_to_holidays" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="autots.models.cassandra.Cassandra.create_forecast_index">
-<span class="sig-name descname"><span class="pre">create_forecast_index</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.create_forecast_index" title="Link to this definition">¶</a></dt>
-<dd><p>after .fit, can be used to create index of prediction</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="autots.models.cassandra.Cassandra.plot_forecast">
-<span class="sig-name descname"><span class="pre">plot_forecast</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.plot_forecast" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="autots.models.cassandra.Cassandra.plot_components">
-<span class="sig-name descname"><span class="pre">plot_components</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.plot_components" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="autots.models.cassandra.Cassandra.plot_trend">
-<span class="sig-name descname"><span class="pre">plot_trend</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.plot_trend" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="autots.models.cassandra.Cassandra.get_new_params">
-<span class="sig-name descname"><span class="pre">get_new_params</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.get_new_params" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="autots.models.cassandra.Cassandra.return_components">
-<span class="sig-name descname"><span class="pre">return_components</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.return_components" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
+<p>Methods</p>
+<ul class="simple">
+<li><p>fit</p></li>
+<li><p>predict</p></li>
+<li><p>holiday_detector.dates_to_holidays</p></li>
+<li><p>create_forecast_index: after .fit, can be used to create index of prediction</p></li>
+<li><p>plot_forecast</p></li>
+<li><p>plot_components</p></li>
+<li><p>plot_trend</p></li>
+<li><p>get_new_params</p></li>
+<li><p>return_components</p></li>
+</ul>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="autots.models.cassandra.Cassandra..anomaly_detector.anomalies">
 <span class="sig-prename descclassname"><span class="pre">.anomaly_detector.</span></span><span class="sig-name descname"><span class="pre">anomalies</span></span><a class="headerlink" href="#autots.models.cassandra.Cassandra..anomaly_detector.anomalies" title="Link to this definition">¶</a></dt>
@@ -1952,8 +1875,8 @@ For component decomposition, scale will be inaccurate unless ‘BaseScaler’ is
 <dd></dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="id6">
-<span class="sig-name descname"><span class="pre">fit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">future_regressor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">regressor_per_series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">flag_regressors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">categorical_groups</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">past_impacts</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#id6" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="autots.models.cassandra.Cassandra.fit">
+<span class="sig-name descname"><span class="pre">fit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">future_regressor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">regressor_per_series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">flag_regressors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">categorical_groups</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">past_impacts</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.fit" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
@@ -1962,8 +1885,8 @@ For component decomposition, scale will be inaccurate unless ‘BaseScaler’ is
 <dd></dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="id7">
-<span class="sig-name descname"><span class="pre">get_new_params</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'fast'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#id7" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="autots.models.cassandra.Cassandra.get_new_params">
+<span class="sig-name descname"><span class="pre">get_new_params</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'fast'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.get_new_params" title="Link to this definition">¶</a></dt>
 <dd><p>Return dict of new parameters for parameter tuning.</p>
 </dd></dl>
 
@@ -1979,8 +1902,8 @@ For component decomposition, scale will be inaccurate unless ‘BaseScaler’ is
 <dd></dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="id8">
-<span class="sig-name descname"><span class="pre">plot_components</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">prediction</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">figsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(16,</span> <span class="pre">9)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">to_origin_space</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_date</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#id8" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="autots.models.cassandra.Cassandra.plot_components">
+<span class="sig-name descname"><span class="pre">plot_components</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">prediction</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">figsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(16,</span> <span class="pre">9)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">to_origin_space</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_date</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.plot_components" title="Link to this definition">¶</a></dt>
 <dd><p>Plot breakdown of linear model components.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -1998,8 +1921,8 @@ especially useful if “AlignLastValue” and other transformers present</p></li
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="id9">
-<span class="sig-name descname"><span class="pre">plot_forecast</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">prediction</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">actuals</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_date</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anomaly_color</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'darkslateblue'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_color</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'darkgreen'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trend_anomaly_color</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'slategray'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">point_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">12.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#id9" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="autots.models.cassandra.Cassandra.plot_forecast">
+<span class="sig-name descname"><span class="pre">plot_forecast</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">prediction</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">actuals</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_date</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anomaly_color</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'darkslateblue'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_color</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'darkgreen'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trend_anomaly_color</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'slategray'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">point_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">12.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.plot_forecast" title="Link to this definition">¶</a></dt>
 <dd><p>Plot a forecast time series.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -2023,13 +1946,13 @@ especially useful if “AlignLastValue” and other transformers present</p></li
 <dd></dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="id10">
-<span class="sig-name descname"><span class="pre">plot_trend</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vline</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">colors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">['#d4f74f',</span> <span class="pre">'#82ab5a',</span> <span class="pre">'#ff6c05',</span> <span class="pre">'#c12600']</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_date</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#id10" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="autots.models.cassandra.Cassandra.plot_trend">
+<span class="sig-name descname"><span class="pre">plot_trend</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vline</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">colors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">['#d4f74f',</span> <span class="pre">'#82ab5a',</span> <span class="pre">'#ff6c05',</span> <span class="pre">'#c12600']</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_date</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.plot_trend" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="id11">
-<span class="sig-name descname"><span class="pre">predict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">forecast_length</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_history</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">future_regressor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">regressor_per_series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">flag_regressors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">future_impacts</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">new_df</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">regressor_forecast_model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">regressor_forecast_model_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">regressor_forecast_transformations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_organic</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">past_impacts</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#id11" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="autots.models.cassandra.Cassandra.predict">
+<span class="sig-name descname"><span class="pre">predict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">forecast_length</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_history</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">future_regressor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">regressor_per_series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">flag_regressors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">future_impacts</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">new_df</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">regressor_forecast_model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">regressor_forecast_model_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">regressor_forecast_transformations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_organic</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">past_impacts</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.predict" title="Link to this definition">¶</a></dt>
 <dd><p>Generate a forecast.</p>
 <p>future_regressor and regressor_per_series should only include new future values, history is already stored
 they should match on forecast_length and index of forecasts</p>
@@ -2059,8 +1982,8 @@ they should match on forecast_length and index of forecasts</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="id12">
-<span class="sig-name descname"><span class="pre">return_components</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">to_origin_space</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_impacts</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#id12" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="autots.models.cassandra.Cassandra.return_components">
+<span class="sig-name descname"><span class="pre">return_components</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">to_origin_space</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_impacts</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.return_components" title="Link to this definition">¶</a></dt>
 <dd><p>Return additive elements of forecast, linear and trend. If impacts included, it is a multiplicative term.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -3779,14 +3702,12 @@ This is likely to be replaced in the future. It was likely designed the way
 is was to have exact control over where the last potential changepoint
 could be, which is around the 93% mark of the data, and then setting a
 relatively course, uniform grid going way back in time.
-(sourced from the work of Benn O)
-:param training_start_ds: Pandas datetime or string date of earliest</p>
-<blockquote>
-<div><p>historical training date</p>
-</div></blockquote>
+(sourced from the work of Benn O)</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
+<li><p><strong>training_start_ds</strong> – Pandas datetime or string date of earliest
+historical training date</p></li>
 <li><p><strong>training_end_ds</strong> – Pandas datetime or string date of last training
 date (used in model fitting)</p></li>
 <li><p><strong>changepoint_spacing</strong> (<em>int</em>) – Number of days between potential
@@ -4188,42 +4109,7 @@ lowering it unnecessarily costs consensus quality.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.models.sklearn.SafeRANSACRegressor.fit">
 <span class="sig-name descname"><span class="pre">fit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.SafeRANSACRegressor.fit" title="Link to this definition">¶</a></dt>
-<dd><p>Fit estimator using RANSAC algorithm.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>X</strong> (<em>{array-like</em><em>, </em><em>sparse matrix}</em><em> of </em><em>shape</em><em> (</em><em>n_samples</em><em>, </em><em>n_features</em><em>)</em>) – Training data.</p></li>
-<li><p><strong>y</strong> (<em>array-like</em><em> of </em><em>shape</em><em> (</em><em>n_samples</em><em>,</em><em>) or </em><em>(</em><em>n_samples</em><em>, </em><em>n_targets</em><em>)</em>) – Target values.</p></li>
-<li><p><strong>sample_weight</strong> (<em>array-like</em><em> of </em><em>shape</em><em> (</em><em>n_samples</em><em>,</em><em>)</em><em>, </em><em>default=None</em>) – <p>Individual weights for each sample
-raises error if sample_weight is passed and estimator
-fit method does not support it.</p>
-<div class="versionadded">
-<p><span class="versionmodified added">Added in version 0.18.</span></p>
-</div>
-</p></li>
-<li><p><strong>**fit_params</strong> (<em>dict</em>) – <p>Parameters routed to the <cite>fit</cite> method of the sub-estimator via the
-metadata routing API.</p>
-<div class="versionadded">
-<p><span class="versionmodified added">Added in version 1.5: </span>Only available if
-<cite>sklearn.set_config(enable_metadata_routing=True)</cite> is set. See
-<span class="xref std std-ref">Metadata Routing User Guide</span> for more
-details.</p>
-</div>
-</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><strong>self</strong> – Fitted <cite>RANSACRegressor</cite> estimator.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>object</p>
-</dd>
-<dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><strong>ValueError</strong> – If no valid consensus set could be found. This occurs if
-    <cite>is_data_valid</cite> and <cite>is_model_valid</cite> return False for all
-    <cite>max_trials</cite> randomly chosen sub-samples.</p>
-</dd>
-</dl>
+<dd><p>Fit, lowering min_samples only when the sklearn default would fail.</p>
 </dd></dl>
 
 <dl class="py method">
@@ -4254,8 +4140,8 @@ details.</p>
 <li><p><strong>kernel</strong> (<em>str</em>) – linear, polynomial, rbf, periodic, locally_periodic, exponential</p></li>
 <li><p><strong>noise_var</strong> (<em>float</em>) – noise variance, effectively regularization. Close to zero little regularization, larger values create more model flexiblity and noise tolerance.</p></li>
 <li><p><strong>gamma</strong> – For the RBF, Exponential, and Locally Periodic kernels, γ is essentially an inverse length scale. [0.1,1,10,100].</p></li>
-<li><p><strong>lambda</strong> – For the Periodic and Locally Periodic kernels, <a href="#id13"><span class="problematic" id="id14">lambda_</span></a> determines the smoothness of the periodic function. A reasonable range might be [0.1,1,10,100].</p></li>
-<li><p><strong>lambda_prime</strong> – Specifically for the Locally Periodic kernel, this determines the smoothness of the periodic component. Same range as <a href="#id15"><span class="problematic" id="id16">lambda_</span></a>.</p></li>
+<li><p><strong>lambda</strong> – For the Periodic and Locally Periodic kernels, <code class="docutils literal notranslate"><span class="pre">lambda_</span></code> determines the smoothness of the periodic function. A reasonable range might be [0.1,1,10,100].</p></li>
+<li><p><strong>lambda_prime</strong> – Specifically for the Locally Periodic kernel, this determines the smoothness of the periodic component. Same range as <code class="docutils literal notranslate"><span class="pre">lambda_</span></code>.</p></li>
 <li><p><strong>p</strong> – The period parameter for the Periodic and Locally Periodic kernels such as 7 or 365.25 for daily data.</p></li>
 </ul>
 </dd>
@@ -5409,6 +5295,7 @@ safety-layer and sparse-identification knobs enter the search.</p>
 <li class="toctree-l1"><a class="reference internal" href="intro.html#autots">AutoTS</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorial.html">Tutorial</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorial.html#extended-tutorial">Extended Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../metric_weighting_guide.html">AutoTS Metric Weighting</a></li>
 </ul>
 <ul class="current">
 <li class="toctree-l1 current"><a class="reference internal" href="modules.html">autots</a><ul class="current">

@@ -23,7 +23,7 @@
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="autots" href="modules.html" />
+    <link rel="next" title="AutoTS Metric Weighting" href="../metric_weighting_guide.html" />
     <link rel="prev" title="Intro" href="intro.html" />
    
   <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
@@ -315,6 +315,8 @@ This is similar to but faster than MDA (mean directional accuracy) as contour ev
 <p>If a metric is entirely NaN in the initial results, likely that holdout was entirely NaN in actuals.</p>
 <p>It may be worth viewing something like: <code class="docutils literal notranslate"><span class="pre">model.score_breakdown[model.score_breakdown.index</span> <span class="pre">==</span> <span class="pre">model.best_model_id].iloc[0]</span></code> to see if any one score is skewing selection.
 Generally you would want the numbers here to follow the balance requested in the <code class="docutils literal notranslate"><span class="pre">metric_weighting</span></code>.</p>
+<section id="plots">
+<h4>Plots<a class="headerlink" href="#plots" title="Link to this heading">¶</a></h4>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
 
 <span class="n">model</span> <span class="o">=</span> <span class="n">AutoTS</span><span class="p">()</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
@@ -354,6 +356,7 @@ Generally you would want the numbers here to follow the balance requested in the
     <span class="n">model</span><span class="o">.</span><span class="n">plot_backforecast</span><span class="p">(</span><span class="n">n_splits</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="n">start_date</span><span class="o">=</span><span class="s2">&quot;2019-01-01&quot;</span><span class="p">)</span>
 </pre></div>
 </div>
+</section>
 </section>
 <section id="hierarchial-and-grouped-forecasts">
 <h3>Hierarchial and Grouped Forecasts<a class="headerlink" href="#hierarchial-and-grouped-forecasts" title="Link to this heading">¶</a></h3>
@@ -1422,6 +1425,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <li class="toctree-l2"><a class="reference internal" href="#id9">Models</a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="../metric_weighting_guide.html">AutoTS Metric Weighting</a></li>
 </ul>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="modules.html">autots</a></li>
@@ -1432,7 +1436,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <ul>
   <li><a href="../index.html">Documentation overview</a><ul>
       <li>Previous: <a href="intro.html" title="previous chapter">Intro</a></li>
-      <li>Next: <a href="modules.html" title="next chapter">autots</a></li>
+      <li>Next: <a href="../metric_weighting_guide.html" title="next chapter">AutoTS Metric Weighting</a></li>
   </ul></li>
 </ul>
 </div>

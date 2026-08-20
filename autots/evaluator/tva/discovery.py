@@ -147,7 +147,7 @@ def _varimax(
 
 
 def _fix_factor_signs(loadings: np.ndarray, scores: np.ndarray) -> tuple:
-    """Deterministic sign convention: each factor's largest |loading| is positive."""
+    """Deterministic sign convention: each factor's largest ``|loading|`` is positive."""
     for j in range(loadings.shape[1]):
         col = loadings[:, j]
         if col.size and col[np.argmax(np.abs(col))] < 0:
@@ -396,7 +396,7 @@ def conditional_candidates(R: np.ndarray, top_k: int = 8, max_lag: int = 3) -> d
     structurally what pairwise Granger cannot do: a candidate survives
     conditioning on all other series. Because a purely LAGGED parent can
     leave little contemporaneous partial correlation, the candidate set is
-    unioned with the top-k series by |cross-correlation| over lags
+    unioned with the top-k series by ``|cross-correlation|`` over lags
     1..max_lag. Stability-selected lasso downstream rejects the false ones.
     """
     T, N = R.shape
@@ -646,7 +646,7 @@ def falsify_edges(R: np.ndarray, edges: list, config: dict) -> list:
 def leadlag_edges(R: np.ndarray, config: dict) -> list:
     """Windowed cross-correlation lead-lag candidates on trailing residuals.
 
-    Keep j -> i where the |cross-correlation| over positive lags of j peaks
+    Keep j -> i where the ``|cross-correlation|`` over positive lags of j peaks
     at lag > 0 and exceeds leadlag_min_corr; top leadlag_top_k per target.
     Cheap, fitting-free, recomputable at predict time.
     """
@@ -996,7 +996,7 @@ def match_factors(true_factors, est_factors) -> dict:
     the differenced factor scores; generator factors are levels), so they are
     differenced before comparison — the shared *movement* is what identifies a
     factor, not its arbitrary integration constant. Matching is a Hungarian
-    assignment on the |correlation| matrix, which handles both permutation and
+    assignment on the ``|correlation|`` matrix, which handles both permutation and
     sign indeterminacy of the factor basis.
 
     Args:
@@ -1009,8 +1009,7 @@ def match_factors(true_factors, est_factors) -> dict:
             'assignment': {true_index: est_index} for the matched pairs
             'correlations': {true_index: signed correlation} per matched pair
             'signs': {true_index: +1/-1} sign of each matched correlation
-            'mean_abs_corr': mean |corr| over matched pairs, averaged over
-                ``max(K, r)`` so missing/spurious factors are penalized
+            'mean_abs_corr': mean ``|corr|`` over matched pairs, averaged over ``max(K, r)`` so missing/spurious factors are penalized
             'n_true', 'n_est': factor counts
     """
     true_arr = np.asarray(

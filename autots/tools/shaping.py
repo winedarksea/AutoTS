@@ -168,11 +168,11 @@ def long_to_wide(
     Take long data and convert into wide, cleaner data.
 
     Args:
-        df (pd.DataFrame) - a pandas dataframe having three columns:
-        date_col (str) - the name of the column containing dates, preferrably already in pandas datetime format
-        value_col (str): - the name of the column with the values of the time series (ie sales $)
-        id_col (str): - name of the id column, unique for each time series
-        aggfunc (str): - passed to pd.pivot_table, determines how to aggregate duplicates for series_id and datetime
+        df (pd.DataFrame): a pandas dataframe having three columns:
+        date_col (str): the name of the column containing dates, preferrably already in pandas datetime format
+        value_col (str): the name of the column with the values of the time series (ie sales $)
+        id_col (str): name of the id column, unique for each time series
+        aggfunc (str): passed to pd.pivot_table, determines how to aggregate duplicates for series_id and datetime
             other options include "mean" and other numpy functions, beware data *must* already be input as numeric type for these to work.
             if categorical data is provided, `aggfunc='first'` is recommended
     """
@@ -410,7 +410,7 @@ def simple_train_test_split(
     Args:
         forecast_length (int): number of future periods to predict
 
-        min_allowed_train_percent (float): - forecast length cannot be greater than 1 - this
+        min_allowed_train_percent (float): forecast length cannot be greater than 1 - this
             constrains the forecast length from being much larger than than the training data
             note this includes NaNs in current configuration
             When forecast_length exceeds the available rows, callers that have
@@ -508,8 +508,10 @@ def drop_leading_na_block(
 ) -> pd.DataFrame:
     """
     Drop an initial leading block of rows if:
+
       - Those rows are 'bad' (row NaN proportion > threshold), AND
-      - There are at least `window` consecutive bad rows starting from the top.
+      - There are at least ``window`` consecutive bad rows starting from the top.
+
     Will warn or raise if more than `max_drop_fraction` of rows would be dropped.
 
     Args:

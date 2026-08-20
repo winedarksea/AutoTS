@@ -92,16 +92,17 @@ class Cassandra(ModelObject):
     Args:
         pass
 
-    Methods:
-         fit
-         predict
-         holiday_detector.dates_to_holidays
-         create_forecast_index: after .fit, can be used to create index of prediction
-         plot_forecast
-         plot_components
-         plot_trend
-         get_new_params
-         return_components
+    Methods
+
+    - fit
+    - predict
+    - holiday_detector.dates_to_holidays
+    - create_forecast_index: after .fit, can be used to create index of prediction
+    - plot_forecast
+    - plot_components
+    - plot_trend
+    - get_new_params
+    - return_components
 
     Attributes:
         .anomaly_detector.anomalies

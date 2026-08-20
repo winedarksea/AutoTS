@@ -3027,18 +3027,18 @@ def create_changepoint_features(
     """
     Creates a feature set for estimating trend changepoints using various algorithms.
 
-    Parameters:
-    DTindex (pd.DatetimeIndex): a datetimeindex
-    changepoint_spacing (int): Distance between consecutive changepoints (legacy, for basic method).
-    changepoint_distance_end (int): Number of rows that belong to the final changepoint (legacy, for basic method).
-    method (str): Method for changepoint detection ('basic', 'pelt', 'l1_fused_lasso',
-        'l1_total_variation', 'l0_trend_filter', 'cusum', 'ewma', 'autoencoder',
-        'kcpd', 'bottom_up', 'wbs2')
-    params (dict): Additional parameters for the chosen method
-    data (array-like): Time series data (required for advanced methods)
+    Args:
+        DTindex (pd.DatetimeIndex): a datetimeindex
+        changepoint_spacing (int): Distance between consecutive changepoints (legacy, for basic method).
+        changepoint_distance_end (int): Number of rows that belong to the final changepoint (legacy, for basic method).
+        method (str): Method for changepoint detection ('basic', 'pelt', 'l1_fused_lasso',
+            'l1_total_variation', 'l0_trend_filter', 'cusum', 'ewma', 'autoencoder',
+            'kcpd', 'bottom_up', 'wbs2')
+        params (dict): Additional parameters for the chosen method
+        data (array-like): Time series data (required for advanced methods)
 
     Returns:
-    pd.DataFrame: DataFrame containing changepoint features for linear regression.
+        pd.DataFrame: DataFrame containing changepoint features for linear regression.
     """
     if params is None:
         params = {}
@@ -4993,6 +4993,7 @@ class ChangepointDetector(object):
 
         Args:
             method (str): Method for parameter selection
+
                 - 'fast': All methods but with fastest parameter configurations for PELT and composite_fused_lasso
                 - Or specify a method name directly: 'basic', 'pelt', 'l1_fused_lasso',
                   'l1_total_variation', 'l0_trend_filter', 'cusum', 'ewma', 'kcpd', 'bottom_up',

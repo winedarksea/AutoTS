@@ -518,13 +518,13 @@ wide-format time series data, similar to HolidayDetector.</p>
 <dd><p>Generate new random parameters for changepoint detection.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>method</strong> (<em>str</em>) – <p>Method for parameter selection
-- ‘fast’: All methods but with fastest parameter configurations for PELT and composite_fused_lasso
-- Or specify a method name directly: ‘basic’, ‘pelt’, ‘l1_fused_lasso’,</p>
-<blockquote>
-<div><p>’l1_total_variation’, ‘l0_trend_filter’, ‘cusum’, ‘ewma’, ‘kcpd’, ‘bottom_up’,
-‘wbs2’, ‘autoencoder’, ‘composite_fused_lasso’</p>
-</div></blockquote>
+<dd class="field-odd"><p><strong>method</strong> (<em>str</em>) – <p>Method for parameter selection</p>
+<ul class="simple">
+<li><p>’fast’: All methods but with fastest parameter configurations for PELT and composite_fused_lasso</p></li>
+<li><p>Or specify a method name directly: ‘basic’, ‘pelt’, ‘l1_fused_lasso’,
+‘l1_total_variation’, ‘l0_trend_filter’, ‘cusum’, ‘ewma’, ‘kcpd’, ‘bottom_up’,
+‘wbs2’, ‘autoencoder’, ‘composite_fused_lasso’</p></li>
+</ul>
 </p>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -586,19 +586,26 @@ wide-format time series data, similar to HolidayDetector.</p>
 <dt class="sig sig-object py" id="autots.tools.changepoints.create_changepoint_features">
 <span class="sig-prename descclassname"><span class="pre">autots.tools.changepoints.</span></span><span class="sig-name descname"><span class="pre">create_changepoint_features</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">DTindex</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">changepoint_spacing</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">60</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">changepoint_distance_end</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">120</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'basic'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.changepoints.create_changepoint_features" title="Link to this definition">¶</a></dt>
 <dd><p>Creates a feature set for estimating trend changepoints using various algorithms.</p>
-<p>Parameters:
-DTindex (pd.DatetimeIndex): a datetimeindex
-changepoint_spacing (int): Distance between consecutive changepoints (legacy, for basic method).
-changepoint_distance_end (int): Number of rows that belong to the final changepoint (legacy, for basic method).
-method (str): Method for changepoint detection (‘basic’, ‘pelt’, ‘l1_fused_lasso’,</p>
-<blockquote>
-<div><p>‘l1_total_variation’, ‘l0_trend_filter’, ‘cusum’, ‘ewma’, ‘autoencoder’,
-‘kcpd’, ‘bottom_up’, ‘wbs2’)</p>
-</div></blockquote>
-<p>params (dict): Additional parameters for the chosen method
-data (array-like): Time series data (required for advanced methods)</p>
-<p>Returns:
-pd.DataFrame: DataFrame containing changepoint features for linear regression.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>DTindex</strong> (<em>pd.DatetimeIndex</em>) – a datetimeindex</p></li>
+<li><p><strong>changepoint_spacing</strong> (<em>int</em>) – Distance between consecutive changepoints (legacy, for basic method).</p></li>
+<li><p><strong>changepoint_distance_end</strong> (<em>int</em>) – Number of rows that belong to the final changepoint (legacy, for basic method).</p></li>
+<li><p><strong>method</strong> (<em>str</em>) – Method for changepoint detection (‘basic’, ‘pelt’, ‘l1_fused_lasso’,
+‘l1_total_variation’, ‘l0_trend_filter’, ‘cusum’, ‘ewma’, ‘autoencoder’,
+‘kcpd’, ‘bottom_up’, ‘wbs2’)</p></li>
+<li><p><strong>params</strong> (<em>dict</em>) – Additional parameters for the chosen method</p></li>
+<li><p><strong>data</strong> (<em>array-like</em>) – Time series data (required for advanced methods)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>DataFrame containing changepoint features for linear regression.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>pd.DataFrame</p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py function">
@@ -871,16 +878,14 @@ print(‘mean’)
 print(smoothed.states.mean[1,2,:])</p>
 <p>print(‘covariance’)
 print(smoothed.states.cov[1,2,:,:])</p>
-<blockquote>
-<div><p>mean
-[ 0.29311384 -0.06948961]
-covariance
-[[ 0.19959416 -0.00777587]</p>
-<blockquote>
-<div><p>[-0.00777587  0.02528967]]</p>
 </div></blockquote>
-</div></blockquote>
-</div></blockquote>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">mean</span>
+<span class="p">[</span> <span class="mf">0.29311384</span> <span class="o">-</span><span class="mf">0.06948961</span><span class="p">]</span>
+<span class="n">covariance</span>
+<span class="p">[[</span> <span class="mf">0.19959416</span> <span class="o">-</span><span class="mf">0.00777587</span><span class="p">]</span>
+ <span class="p">[</span><span class="o">-</span><span class="mf">0.00777587</span>  <span class="mf">0.02528967</span><span class="p">]]</span>
+</pre></div>
+</div>
 <p>Predict new data for a single series (1d case)</p>
 <blockquote>
 <div><p>predicted = kf.predict(data[1,:], 123)</p>
@@ -1708,10 +1713,10 @@ G.726-style decision levels optimized for time series.</p></li>
 <dt>ERM (Error or Empirical Risk Minimization) Reconciliation using robust numerical methods:</dt><dd><p>Solve Weighted LS:  min_{y_bottom}  ||y_all - S y_bottom||_W^2
 subject to hierarchical constraints.</p>
 </dd>
-<dt>The closed-form solution for y_bottom^r:</dt><dd><p>y_bottom^r = (S’ W S)^{-1} S’ W y_all</p>
+<dt>The closed-form solution for y_bottom^r:</dt><dd><p>y_bottom^r = (S’ W S)^{-1} S’ W y_all
+=&gt; y_all^r = S y_bottom^r = S (S’ W S)^{-1} S’ W y_all</p>
 </dd>
 </dl>
-<p>=&gt; y_all^r = S y_bottom^r = S (S’ W S)^{-1} S’ W y_all</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -2314,7 +2319,7 @@ If None, tries ‘autots/model_as_code.json’ then ‘modelobject/model_as_code
 <dd class="field-even"><p>The reconstructed model instance.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference internal" href="autots.html#autots.AutoTS" title="autots.AutoTS">AutoTS</a> or <a class="reference internal" href="autots.models.html#autots.models.base.ModelObject" title="autots.models.base.ModelObject">ModelObject</a></p>
+<dd class="field-odd"><p><a class="reference internal" href="autots.html#autots.AutoTS" title="autots.AutoTS">autots.AutoTS</a> or <a class="reference internal" href="autots.models.html#autots.models.base.ModelObject" title="autots.models.base.ModelObject">ModelObject</a></p>
 </dd>
 </dl>
 </dd></dl>
@@ -3106,13 +3111,13 @@ If new categorical series or levels are present in .transform() it won’t work!
 <dl class="py function">
 <dt class="sig sig-object py" id="autots.tools.shaping.drop_leading_na_block">
 <span class="sig-prename descclassname"><span class="pre">autots.tools.shaping.</span></span><span class="sig-name descname"><span class="pre">drop_leading_na_block</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.75</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">window</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_drop_fraction</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">warn</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">DataFrame</span></span></span><a class="headerlink" href="#autots.tools.shaping.drop_leading_na_block" title="Link to this definition">¶</a></dt>
-<dd><dl class="simple">
-<dt>Drop an initial leading block of rows if:</dt><dd><ul class="simple">
+<dd><p>Drop an initial leading block of rows if:</p>
+<blockquote>
+<div><ul class="simple">
 <li><p>Those rows are ‘bad’ (row NaN proportion &gt; threshold), AND</p></li>
-<li><p>There are at least <cite>window</cite> consecutive bad rows starting from the top.</p></li>
+<li><p>There are at least <code class="docutils literal notranslate"><span class="pre">window</span></code> consecutive bad rows starting from the top.</p></li>
 </ul>
-</dd>
-</dl>
+</div></blockquote>
 <p>Will warn or raise if more than <cite>max_drop_fraction</cite> of rows would be dropped.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -3158,22 +3163,13 @@ if False, proceeds with printed warning.</p></li>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>df</strong> (<em>pd.DataFrame</em>)</p></li>
-<li><p><strong>date_col</strong> (<em>str</em>)</p></li>
-<li><p><strong>value_col</strong> (<em>str</em>) – <ul>
-<li><p>the name of the column with the values of the time series (ie sales $)</p></li>
-</ul>
-</p></li>
-<li><p><strong>id_col</strong> (<em>str</em>) – <ul>
-<li><p>name of the id column, unique for each time series</p></li>
-</ul>
-</p></li>
-<li><p><strong>aggfunc</strong> (<em>str</em>) – <ul>
-<li><p>passed to pd.pivot_table, determines how to aggregate duplicates for series_id and datetime</p></li>
-</ul>
-<p>other options include “mean” and other numpy functions, beware data <em>must</em> already be input as numeric type for these to work.
-if categorical data is provided, <cite>aggfunc=’first’</cite> is recommended</p>
-</p></li>
+<li><p><strong>df</strong> (<em>pd.DataFrame</em>) – a pandas dataframe having three columns:</p></li>
+<li><p><strong>date_col</strong> (<em>str</em>) – the name of the column containing dates, preferrably already in pandas datetime format</p></li>
+<li><p><strong>value_col</strong> (<em>str</em>) – the name of the column with the values of the time series (ie sales $)</p></li>
+<li><p><strong>id_col</strong> (<em>str</em>) – name of the id column, unique for each time series</p></li>
+<li><p><strong>aggfunc</strong> (<em>str</em>) – passed to pd.pivot_table, determines how to aggregate duplicates for series_id and datetime
+other options include “mean” and other numpy functions, beware data <em>must</em> already be input as numeric type for these to work.
+if categorical data is provided, <cite>aggfunc=’first’</cite> is recommended</p></li>
 </ul>
 </dd>
 </dl>
@@ -3187,15 +3183,12 @@ if categorical data is provided, <cite>aggfunc=’first’</cite> is recommended
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – number of future periods to predict</p></li>
-<li><p><strong>min_allowed_train_percent</strong> (<em>float</em>) – <ul>
-<li><p>forecast length cannot be greater than 1 - this</p></li>
-</ul>
-<p>constrains the forecast length from being much larger than than the training data
+<li><p><strong>min_allowed_train_percent</strong> (<em>float</em>) – forecast length cannot be greater than 1 - this
+constrains the forecast length from being much larger than than the training data
 note this includes NaNs in current configuration
 When forecast_length exceeds the available rows, callers that have
 already warned about degraded validation use an approximately 50/50
-train/test split instead.</p>
-</p></li>
+train/test split instead.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -3273,9 +3266,9 @@ tradeoff between:</p>
 <blockquote>
 <div><ol class="loweralpha simple">
 <li><p>number of anomalies and anomalous ranges</p></li>
+<li><p>the reduction in mean and st dev if anomalous points are removed
+from errors</p></li>
 </ol>
-<p>b) the reduction in mean and st dev if anomalous points are removed
-from errors</p>
 </div></blockquote>
 <p>(see <a class="reference external" href="https://arxiv.org/pdf/1802.04431.pdf">https://arxiv.org/pdf/1802.04431.pdf</a>)</p>
 <dl class="field-list simple">
@@ -4884,10 +4877,8 @@ None - no discretization
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>fillNA</strong> (<em>str</em>) – <ul>
-<li><p>method to fill NA, passed through to FillNA()</p></li>
-</ul>
-<p>’ffill’ - fill most recent non-na value forward until another non-na value is reached
+<li><p><strong>fillNA</strong> (<em>str</em>) – method to fill NA, passed through to FillNA()
+‘ffill’ - fill most recent non-na value forward until another non-na value is reached
 ‘zero’ - fill with zero. Useful for sales and other data where NA does usually mean $0.
 ‘mean’ - fill all missing values with the series’ overall average value
 ‘median’ - fill all missing values with the series’ overall median value
@@ -4896,12 +4887,9 @@ None - no discretization
 ‘ffill_mean_biased’ - simple avg of ffill and mean
 ‘fake_date’ - shifts forward data over nan, thus values will have incorrect timestamps
 ‘IterativeImputer’ - sklearn iterative imputer
-most of the interpolate methods from pandas.interpolate</p>
-</p></li>
-<li><p><strong>transformations</strong> (<em>dict</em>) – <ul>
-<li><p>transformations to apply {0: “MinMaxScaler”, 1: “Detrend”, …}</p></li>
-</ul>
-<p>’None’
+most of the interpolate methods from pandas.interpolate</p></li>
+<li><p><strong>transformations</strong> (<em>dict</em>) – transformations to apply {0: “MinMaxScaler”, 1: “Detrend”, …}
+‘None’
 ‘MinMaxScaler’ - Sklearn MinMaxScaler
 ‘PowerTransformer’ - Sklearn PowerTransformer
 ‘QuantileTransformer’ - Sklearn
@@ -4960,8 +4948,7 @@ most of the interpolate methods from pandas.interpolate</p>
 “MeanPercentSplitter”: split data into rolling mean and percent of rolling mean
 “UpscaleDownscaleTransformer”: upscales and downscales
 “ReconciliationTransformer”: creates hierarchies then reconciles on the way back
-“CointegrationTransformer”: creates stationary features from cointegrated sets of series</p>
-</p></li>
+“CointegrationTransformer”: creates stationary features from cointegrated sets of series</p></li>
 <li><p><strong>transformation_params</strong> (<em>dict</em>) – params of transformers {0: {}, 1: {‘model’: ‘Poisson’}, …}
 pass through dictionary of empty dictionaries to utilize defaults</p></li>
 <li><p><strong>random_seed</strong> (<em>int</em>) – random state passed through where applicable</p></li>
@@ -5160,15 +5147,23 @@ AutoTS prediction container</p></li>
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.tools.transform.HolidayTransformer.dates_to_holidays">
 <span class="sig-name descname"><span class="pre">dates_to_holidays</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dates</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">style</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'flag'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_impacts</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_features</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">365</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.HolidayTransformer.dates_to_holidays" title="Link to this definition">¶</a></dt>
-<dd><p>dates (pd.DatetimeIndex): list of dates
-style (str): option for how to return information</p>
-<blockquote>
-<div><p>“long” - return date, name, series for all holidays in a long style dataframe
-“impact” - returns dates, series with values of sum of impacts (if given) or joined string of holiday names
-‘flag’ - return dates, holidays flag, (is not 0-1 but rather sum of input series impacted for that holiday and day)
-‘prophet’ - return format required for prophet. Will need to be filtered on <cite>series</cite> for multivariate case
-‘series_flag’ - dates, series 0/1 for if holiday occurred in any calendar</p>
-</div></blockquote>
+<dd><p>Convert dates to holidays.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dates</strong> (<em>pd.DatetimeIndex</em>) – list of dates</p></li>
+<li><p><strong>style</strong> (<em>str</em>) – <p>option for how to return information</p>
+<ul>
+<li><p>”long” - return date, name, series for all holidays in a long style dataframe</p></li>
+<li><p>”impact” - returns dates, series with values of sum of impacts (if given) or joined string of holiday names</p></li>
+<li><p>’flag’ - return dates, holidays flag, (is not 0-1 but rather sum of input series impacted for that holiday and day)</p></li>
+<li><p>’prophet’ - return format required for prophet. Will need to be filtered on <cite>series</cite> for multivariate case</p></li>
+<li><p>’series_flag’ - dates, series 0/1 for if holiday occurred in any calendar</p></li>
+</ul>
+</p></li>
+</ul>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py method">
@@ -5367,12 +5362,10 @@ style (str): option for how to return information</p>
 <li><p><strong>remove_at_shift</strong> (<em>bool</em>) – if True, remove data points at detected level shifts and fill gaps</p></li>
 <li><p><strong>shift_remove_window</strong> (<em>int</em>) – number of points to remove on each side of shift point (0, 1, or 2)</p></li>
 <li><p><strong>shift_fillna</strong> (<em>str</em>) – fillna method to use for gaps created by shift removal</p></li>
-<li><p><strong>window_method</strong> (<em>str</em>) – <p>method for comparing forward and backward rolling windows
-- “overlap” (default): both windows include current point i, then subtract means</p>
-<blockquote>
-<div><p>backward=[i-N+1 to i], forward=[i to i+N-1], compare: rolling - rolling_forward</p>
-</div></blockquote>
+<li><p><strong>window_method</strong> (<em>str</em>) – <p>method for comparing forward and backward rolling windows</p>
 <ul>
+<li><p>”overlap” (default): both windows include current point i, then subtract means
+backward=[i-N+1 to i], forward=[i to i+N-1], compare: rolling - rolling_forward</p></li>
 <li><p>”exclusive”: windows exclude current point with 1-point gap, then subtract means
 backward=[i-N to i-1], forward=[i+1 to i+N], compare: rolling - rolling_forward</p></li>
 <li><p>”diff_overlap”: diff data first, then overlapping windows, detect when BOTH exceed threshold
@@ -5802,7 +5795,7 @@ inverse_transform can only be applied to the original series, or an immediately 
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>log</strong> (<em>bool</em>) – whether to include a log transform.</p></li>
 <li><p><strong>center_one</strong> (<em>bool</em>) – whether to shift to 1 instead of 0.</p></li>
-<li><p><strong>squared</strong> (<em>bool</em>) – whether to square (<a href="#id3"><span class="problematic" id="id4">**</span></a>2) values after shift.</p></li>
+<li><p><strong>squared</strong> (<em>bool</em>) – whether to square (<code class="docutils literal notranslate"><span class="pre">**2</span></code>) values after shift.</p></li>
 </ul>
 </dd>
 </dl>
@@ -5886,12 +5879,9 @@ plus a small ridge to ensure numerical stability.</p></li>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>group_size</strong> (<em>int</em>) – Number of bottom-level series to combine into one middle-level aggregator
 if no hierarchy_map is provided.</p></li>
-<li><p><strong>hierarchy_map</strong> (<em>dict</em><em> or </em><em>None</em>) – <dl class="simple">
-<dt>If provided, describes aggregator sums for top/middle levels. E.g.,</dt><dd><p>{ “TOP”: [“A”,”B”,”C”,”D”], “MID1”:[“A”,”B”], “MID2”:[“C”,”D”] }.</p>
-</dd>
-</dl>
-<p>If None, automatically creates groups of size group_size plus a single “TOP”.</p>
-</p></li>
+<li><p><strong>hierarchy_map</strong> (<em>dict</em><em> or </em><em>None</em>) – If provided, describes aggregator sums for top/middle levels. E.g.,
+<code class="docutils literal notranslate"><span class="pre">{</span> <span class="pre">&quot;TOP&quot;:</span> <span class="pre">[&quot;A&quot;,&quot;B&quot;,&quot;C&quot;,&quot;D&quot;],</span> <span class="pre">&quot;MID1&quot;:[&quot;A&quot;,&quot;B&quot;],</span> <span class="pre">&quot;MID2&quot;:[&quot;C&quot;,&quot;D&quot;]</span> <span class="pre">}</span></code>.
+If None, automatically creates groups of size group_size plus a single “TOP”.</p></li>
 <li><p><strong>reconciliation_params</strong> (<em>dict</em>) – <dl class="simple">
 <dt>Dict of parameters for reconciliation. Structure:</dt><dd><ul>
 <li><dl class="simple">
@@ -6943,17 +6933,17 @@ will ultimately yield a DataFrame with the same DatetimeIndex as the original.</
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>df</strong> (<em>pandas.DataFrame</em>) – training data frame to slice</p></li>
-<li><p><strong>method</strong> (<em>str</em>) – <p>Option to slice dataframe
-‘None’ - return unaltered dataframe
-‘HalfMax’ - return half of dataframe
-‘ForecastLength’ - return dataframe equal to length of forecast
-‘2ForecastLength’ - return dataframe equal to twice length of forecast</p>
-<blockquote>
-<div><p>(also takes 4, 6, 8, 10 in addition to 2)</p>
-</div></blockquote>
-<p>’n’ - any integer length to slice by
-‘-n’ - full length less this amount
-“0.n” - this percent of the full data</p>
+<li><p><strong>method</strong> (<em>str</em>) – <p>Option to slice dataframe</p>
+<ul>
+<li><p>’None’ - return unaltered dataframe</p></li>
+<li><p>’HalfMax’ - return half of dataframe</p></li>
+<li><p>’ForecastLength’ - return dataframe equal to length of forecast</p></li>
+<li><p>’2ForecastLength’ - return dataframe equal to twice length of forecast
+(also takes 4, 6, 8, 10 in addition to 2)</p></li>
+<li><p>’n’ - any integer length to slice by</p></li>
+<li><p>’-n’ - full length less this amount</p></li>
+<li><p>”0.n” - this percent of the full data</p></li>
+</ul>
 </p></li>
 </ul>
 </dd>
@@ -7321,6 +7311,7 @@ Note that this returns a different orientation than window_maker_2</p>
 <li class="toctree-l1"><a class="reference internal" href="intro.html#autots">AutoTS</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorial.html">Tutorial</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorial.html#extended-tutorial">Extended Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../metric_weighting_guide.html">AutoTS Metric Weighting</a></li>
 </ul>
 <ul class="current">
 <li class="toctree-l1 current"><a class="reference internal" href="modules.html">autots</a><ul class="current">

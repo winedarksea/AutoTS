@@ -648,7 +648,7 @@ still found is manufactured by the procedure rather than the data.</p>
 structurally what pairwise Granger cannot do: a candidate survives
 conditioning on all other series. Because a purely LAGGED parent can
 leave little contemporaneous partial correlation, the candidate set is
-unioned with the top-k series by <a href="#id8"><span class="problematic" id="id9">|cross-correlation|</span></a> over lags
+unioned with the top-k series by <code class="docutils literal notranslate"><span class="pre">|cross-correlation|</span></code> over lags
 1..max_lag. Stability-selected lasso downstream rejects the false ones.</p>
 </dd></dl>
 
@@ -752,7 +752,7 @@ estimation problem — so a cheap damped-trend continuation is reliable.</p>
 <dt class="sig sig-object py" id="autots.evaluator.tva.discovery.leadlag_edges">
 <span class="sig-prename descclassname"><span class="pre">autots.evaluator.tva.discovery.</span></span><span class="sig-name descname"><span class="pre">leadlag_edges</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">R</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span></span></span><a class="headerlink" href="#autots.evaluator.tva.discovery.leadlag_edges" title="Link to this definition">¶</a></dt>
 <dd><p>Windowed cross-correlation lead-lag candidates on trailing residuals.</p>
-<p>Keep j -&gt; i where the <a href="#id10"><span class="problematic" id="id11">|cross-correlation|</span></a> over positive lags of j peaks
+<p>Keep j -&gt; i where the <code class="docutils literal notranslate"><span class="pre">|cross-correlation|</span></code> over positive lags of j peaks
 at lag &gt; 0 and exceeds leadlag_min_corr; top leadlag_top_k per target.
 Cheap, fitting-free, recomputable at predict time.</p>
 </dd></dl>
@@ -765,7 +765,7 @@ Cheap, fitting-free, recomputable at predict time.</p>
 the differenced factor scores; generator factors are levels), so they are
 differenced before comparison — the shared <em>movement</em> is what identifies a
 factor, not its arbitrary integration constant. Matching is a Hungarian
-assignment on the <a href="#id12"><span class="problematic" id="id13">|correlation|</span></a> matrix, which handles both permutation and
+assignment on the <code class="docutils literal notranslate"><span class="pre">|correlation|</span></code> matrix, which handles both permutation and
 sign indeterminacy of the factor basis.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -776,15 +776,11 @@ different number of factors than <code class="docutils literal notranslate"><spa
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><p>‘assignment’: {true_index: est_index} for the matched pairs
+<dd class="field-even"><p>‘assignment’: {true_index: est_index} for the matched pairs
 ‘correlations’: {true_index: signed correlation} per matched pair
 ‘signs’: {true_index: +1/-1} sign of each matched correlation
-‘mean_abs_corr’: mean <a href="#id14"><span class="problematic" id="id15">|corr|</span></a> over matched pairs, averaged over</p>
-<blockquote>
-<div><p><code class="docutils literal notranslate"><span class="pre">max(K,</span> <span class="pre">r)</span></code> so missing/spurious factors are penalized</p>
-</div></blockquote>
-<p>’n_true’, ‘n_est’: factor counts</p>
-</p>
+‘mean_abs_corr’: mean <code class="docutils literal notranslate"><span class="pre">|corr|</span></code> over matched pairs, averaged over <code class="docutils literal notranslate"><span class="pre">max(K,</span> <span class="pre">r)</span></code> so missing/spurious factors are penalized
+‘n_true’, ‘n_est’: factor counts</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>dict with</p>
@@ -1139,7 +1135,7 @@ separately-estimated adjacency.</p>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>dict with ‘loadings’, ‘group_assignment’, ‘series’, ‘factors’,
-‘dominant_factor’ (argmax <a href="#id16"><span class="problematic" id="id17">|loading|</span></a> per series).</p>
+‘dominant_factor’ (argmax <code class="docutils literal notranslate"><span class="pre">|loading|</span></code> per series).</p>
 </dd>
 </dl>
 </dd></dl>
@@ -1223,7 +1219,7 @@ at <code class="docutils literal notranslate"><span class="pre">max_pairs</span>
 <dl class="py function">
 <dt class="sig sig-object py" id="autots.evaluator.tva.metrics.dca_error">
 <span class="sig-prename descclassname"><span class="pre">autots.evaluator.tva.metrics.</span></span><span class="sig-name descname"><span class="pre">dca_error</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">forecast</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">actual</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pairs</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">float</span></span></span><a class="headerlink" href="#autots.evaluator.tva.metrics.dca_error" title="Link to this definition">¶</a></dt>
-<dd><p>Mean <a href="#id18"><span class="problematic" id="id19">|sign-agreement(forecast) - sign-agreement(actual)|</span></a> over pairs.</p>
+<dd><p>Mean <code class="docutils literal notranslate"><span class="pre">|sign-agreement(forecast)</span> <span class="pre">-</span> <span class="pre">sign-agreement(actual)|</span></code> over pairs.</p>
 <p>Scored against the realised future rather than as a raw rate, since a
 model that forces lockstep is as wrong as one that scatters. Lower is
 better; <code class="docutils literal notranslate"><span class="pre">np.nan</span></code> when there are no usable pairs.</p>
@@ -1242,7 +1238,7 @@ columns count toward the denominator but never toward the numerator, so
 <dl class="py function">
 <dt class="sig sig-object py" id="autots.evaluator.tva.metrics.direction_coherence_error">
 <span class="sig-prename descclassname"><span class="pre">autots.evaluator.tva.metrics.</span></span><span class="sig-name descname"><span class="pre">direction_coherence_error</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">forecast</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">actual</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pairs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">window</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">28</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">float</span></span></span><a class="headerlink" href="#autots.evaluator.tva.metrics.direction_coherence_error" title="Link to this definition">¶</a></dt>
-<dd><p><a href="#id20"><span class="problematic" id="id21">|direction_coherence(forecast) - direction_coherence(actual)|</span></a>.</p>
+<dd><p><code class="docutils literal notranslate"><span class="pre">|direction_coherence(forecast)</span> <span class="pre">-</span> <span class="pre">direction_coherence(actual)|</span></code>.</p>
 <p>Net-change analogue of <a class="reference internal" href="#autots.evaluator.tva.metrics.dca_error" title="autots.evaluator.tva.metrics.dca_error"><code class="xref py py-func docutils literal notranslate"><span class="pre">dca_error()</span></code></a>: penalises both over- and
 under-coupled forecasts against the realised future. Lower is better.</p>
 </dd></dl>
@@ -1281,7 +1277,7 @@ which is exactly the failure mode the coherence graph is built on top of.</p>
 <li><p><strong>true_factors</strong> – optional (T, K_true) true factor paths.</p></li>
 <li><p><strong>est_factors</strong> – optional (T, K_est) estimated factor paths. When both are
 supplied, columns are matched with <code class="docutils literal notranslate"><span class="pre">discovery.match_factors</span></code>
-(Hungarian on differenced <a href="#id22"><span class="problematic" id="id23">|corr|</span></a>); otherwise a greedy <a href="#id24"><span class="problematic" id="id25">|corr|</span></a> match
+(Hungarian on differenced <code class="docutils literal notranslate"><span class="pre">|corr|</span></code>); otherwise a greedy <code class="docutils literal notranslate"><span class="pre">|corr|</span></code> match
 on the loading columns themselves is used.</p></li>
 <li><p><strong>asserted_pairs</strong> – optional iterable of <code class="docutils literal notranslate"><span class="pre">(i,</span> <span class="pre">j)</span></code> or <code class="docutils literal notranslate"><span class="pre">(i,</span> <span class="pre">j,</span> <span class="pre">sign)</span></code>
 series-index pairs the caller’s graph asserts as same-group (e.g.
@@ -1373,53 +1369,16 @@ related time series across different domains through shared metadata.</p>
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">autots.evaluator.tva.priors.</span></span><span class="sig-name descname"><span class="pre">SeriesMetadata</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">attribute_values</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">attribute_weights</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">float</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hierarchy_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">history_periods</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">surface</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">geography</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.tva.priors.SeriesMetadata" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Metadata descriptor for a single time series.</p>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="autots.evaluator.tva.priors.SeriesMetadata.name">
-<span class="sig-name descname"><span class="pre">name</span></span><a class="headerlink" href="#autots.evaluator.tva.priors.SeriesMetadata.name" title="Link to this definition">¶</a></dt>
-<dd><p>Series identifier matching DataFrame column name.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>str</p>
-</dd>
-</dl>
-</dd></dl>
-
+<p>Attributes</p>
+<ul class="simple">
+<li><p>name: Series identifier matching DataFrame column name.</p></li>
+<li><p>attribute_values: Arbitrary categorical metadata for the series.</p></li>
+<li><p>hierarchy_path: Ordered path from root to leaf (e.g. [‘global’, ‘NA’, ‘US’]).</p></li>
+<li><p>history_periods: Number of observed time periods available.</p></li>
+</ul>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="autots.evaluator.tva.priors.SeriesMetadata.attribute_values">
-<span class="sig-name descname"><span class="pre">attribute_values</span></span><a class="headerlink" href="#autots.evaluator.tva.priors.SeriesMetadata.attribute_values" title="Link to this definition">¶</a></dt>
-<dd><p>Arbitrary categorical metadata for the series.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Dict[str, str]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="autots.evaluator.tva.priors.SeriesMetadata.hierarchy_path">
-<span class="sig-name descname"><span class="pre">hierarchy_path</span></span><a class="headerlink" href="#autots.evaluator.tva.priors.SeriesMetadata.hierarchy_path" title="Link to this definition">¶</a></dt>
-<dd><p>Ordered path from root to leaf (e.g. [‘global’, ‘NA’, ‘US’]).</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>list | None</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="autots.evaluator.tva.priors.SeriesMetadata.history_periods">
-<span class="sig-name descname"><span class="pre">history_periods</span></span><a class="headerlink" href="#autots.evaluator.tva.priors.SeriesMetadata.history_periods" title="Link to this definition">¶</a></dt>
-<dd><p>Number of observed time periods available.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>int</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="id0">
-<span class="sig-name descname"><span class="pre">attribute_values</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#id0" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">attribute_values</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#autots.evaluator.tva.priors.SeriesMetadata.attribute_values" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
@@ -1433,13 +1392,13 @@ related time series across different domains through shared metadata.</p>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="id1">
-<span class="sig-name descname"><span class="pre">hierarchy_path</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">list</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#id1" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="autots.evaluator.tva.priors.SeriesMetadata.hierarchy_path">
+<span class="sig-name descname"><span class="pre">hierarchy_path</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">list</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#autots.evaluator.tva.priors.SeriesMetadata.hierarchy_path" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="id2">
-<span class="sig-name descname"><span class="pre">history_periods</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#id2" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="autots.evaluator.tva.priors.SeriesMetadata.history_periods">
+<span class="sig-name descname"><span class="pre">history_periods</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#autots.evaluator.tva.priors.SeriesMetadata.history_periods" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py property">
@@ -1448,8 +1407,8 @@ related time series across different domains through shared metadata.</p>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="id3">
-<span class="sig-name descname"><span class="pre">name</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></span><a class="headerlink" href="#id3" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="autots.evaluator.tva.priors.SeriesMetadata.name">
+<span class="sig-name descname"><span class="pre">name</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></span><a class="headerlink" href="#autots.evaluator.tva.priors.SeriesMetadata.name" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py property">
@@ -1648,7 +1607,7 @@ input scores near the oracle and the factor model still recovers poorly,
 the loss is downstream; if the robust input sits near the
 detector-adjusted panel, decomposition is the binding constraint.</p>
 <p>Scores (all column-wise on mean-removed series, then averaged):
-<code class="docutils literal notranslate"><span class="pre">mean_abs_corr</span></code> – mean <a href="#id26"><span class="problematic" id="id27">|correlation|</span></a> with oracle (1 is best);
+<code class="docutils literal notranslate"><span class="pre">mean_abs_corr</span></code> – mean <code class="docutils literal notranslate"><span class="pre">|correlation|</span></code> with oracle (1 is best);
 <code class="docutils literal notranslate"><span class="pre">nrmse</span></code> – RMSE / oracle std (0 is best, 1.0 = no better than flat);
 <code class="docutils literal notranslate"><span class="pre">residual_energy_retained</span></code> – non-trend energy left, as a fraction of
 the raw panel’s (raw scores 1.0, oracle 0.0, &gt;1.0 means added noise).</p>
@@ -2606,19 +2565,17 @@ factor/edge discovery, MinT reconciliation, and residual-sigma
 intervals. ‘none’ is the Phase-4 kill-rule configuration: fast,
 interpretable, and a strong baseline the network must beat.</p></li>
 <li><p><strong>fusion</strong> – <p>How stochastic components (trend, seasonality, holidays) are
-recombined before level shifts are added additively.
-‘attention’ (default): DigitalTwinFusion — self-attention contextualizes</p>
-<blockquote>
-<div><p>component embeddings; sigmoid gates independently fade each component
-in/out (gate in [0,1]) applied to the original values.</p>
-</div></blockquote>
-<dl class="simple">
-<dt>’direct’: DirectAttentionFusion — self-attention contextualizes component</dt><dd><p>embeddings; attended representations are projected directly to scalar
+recombined before level shifts are added additively.</p>
+<ul>
+<li><p>’attention’ (default): DigitalTwinFusion — self-attention contextualizes
+component embeddings; sigmoid gates independently fade each component
+in/out (gate in [0,1]) applied to the original values.</p></li>
+<li><p>’direct’: DirectAttentionFusion — self-attention contextualizes component
+embeddings; attended representations are projected directly to scalar
 contributions summed as a residual over the originals. More purely
-attention-driven; zero-init ensures pure-additive start.</p>
-</dd>
-</dl>
-<p>’additive’: AdditiveFusion — plain sum, no learned parameters.</p>
+attention-driven; zero-init ensures pure-additive start.</p></li>
+<li><p>’additive’: AdditiveFusion — plain sum, no learned parameters.</p></li>
+</ul>
 </p></li>
 <li><p><strong>series_metadata</strong> – List of SeriesMetadata for prior construction.</p></li>
 <li><p><strong>prior_adjacency</strong> – Optional co-movement graph prior. Accepts an (N, N)
@@ -3088,53 +3045,16 @@ array aligned to the fitted columns, or None when unavailable.</p>
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">autots.evaluator.tva.</span></span><span class="sig-name descname"><span class="pre">SeriesMetadata</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">attribute_values</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">attribute_weights</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">float</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hierarchy_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">history_periods</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">surface</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">geography</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.tva.SeriesMetadata" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Metadata descriptor for a single time series.</p>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="autots.evaluator.tva.SeriesMetadata.name">
-<span class="sig-name descname"><span class="pre">name</span></span><a class="headerlink" href="#autots.evaluator.tva.SeriesMetadata.name" title="Link to this definition">¶</a></dt>
-<dd><p>Series identifier matching DataFrame column name.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>str</p>
-</dd>
-</dl>
-</dd></dl>
-
+<p>Attributes</p>
+<ul class="simple">
+<li><p>name: Series identifier matching DataFrame column name.</p></li>
+<li><p>attribute_values: Arbitrary categorical metadata for the series.</p></li>
+<li><p>hierarchy_path: Ordered path from root to leaf (e.g. [‘global’, ‘NA’, ‘US’]).</p></li>
+<li><p>history_periods: Number of observed time periods available.</p></li>
+</ul>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="autots.evaluator.tva.SeriesMetadata.attribute_values">
-<span class="sig-name descname"><span class="pre">attribute_values</span></span><a class="headerlink" href="#autots.evaluator.tva.SeriesMetadata.attribute_values" title="Link to this definition">¶</a></dt>
-<dd><p>Arbitrary categorical metadata for the series.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Dict[str, str]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="autots.evaluator.tva.SeriesMetadata.hierarchy_path">
-<span class="sig-name descname"><span class="pre">hierarchy_path</span></span><a class="headerlink" href="#autots.evaluator.tva.SeriesMetadata.hierarchy_path" title="Link to this definition">¶</a></dt>
-<dd><p>Ordered path from root to leaf (e.g. [‘global’, ‘NA’, ‘US’]).</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>list | None</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="autots.evaluator.tva.SeriesMetadata.history_periods">
-<span class="sig-name descname"><span class="pre">history_periods</span></span><a class="headerlink" href="#autots.evaluator.tva.SeriesMetadata.history_periods" title="Link to this definition">¶</a></dt>
-<dd><p>Number of observed time periods available.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>int</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="id4">
-<span class="sig-name descname"><span class="pre">attribute_values</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#id4" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">attribute_values</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#autots.evaluator.tva.SeriesMetadata.attribute_values" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
@@ -3148,13 +3068,13 @@ array aligned to the fitted columns, or None when unavailable.</p>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="id5">
-<span class="sig-name descname"><span class="pre">hierarchy_path</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">list</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#id5" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="autots.evaluator.tva.SeriesMetadata.hierarchy_path">
+<span class="sig-name descname"><span class="pre">hierarchy_path</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">list</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#autots.evaluator.tva.SeriesMetadata.hierarchy_path" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="id6">
-<span class="sig-name descname"><span class="pre">history_periods</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#id6" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="autots.evaluator.tva.SeriesMetadata.history_periods">
+<span class="sig-name descname"><span class="pre">history_periods</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#autots.evaluator.tva.SeriesMetadata.history_periods" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py property">
@@ -3163,8 +3083,8 @@ array aligned to the fitted columns, or None when unavailable.</p>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="id7">
-<span class="sig-name descname"><span class="pre">name</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></span><a class="headerlink" href="#id7" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="autots.evaluator.tva.SeriesMetadata.name">
+<span class="sig-name descname"><span class="pre">name</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></span><a class="headerlink" href="#autots.evaluator.tva.SeriesMetadata.name" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py property">
@@ -3298,19 +3218,17 @@ factor/edge discovery, MinT reconciliation, and residual-sigma
 intervals. ‘none’ is the Phase-4 kill-rule configuration: fast,
 interpretable, and a strong baseline the network must beat.</p></li>
 <li><p><strong>fusion</strong> – <p>How stochastic components (trend, seasonality, holidays) are
-recombined before level shifts are added additively.
-‘attention’ (default): DigitalTwinFusion — self-attention contextualizes</p>
-<blockquote>
-<div><p>component embeddings; sigmoid gates independently fade each component
-in/out (gate in [0,1]) applied to the original values.</p>
-</div></blockquote>
-<dl class="simple">
-<dt>’direct’: DirectAttentionFusion — self-attention contextualizes component</dt><dd><p>embeddings; attended representations are projected directly to scalar
+recombined before level shifts are added additively.</p>
+<ul>
+<li><p>’attention’ (default): DigitalTwinFusion — self-attention contextualizes
+component embeddings; sigmoid gates independently fade each component
+in/out (gate in [0,1]) applied to the original values.</p></li>
+<li><p>’direct’: DirectAttentionFusion — self-attention contextualizes component
+embeddings; attended representations are projected directly to scalar
 contributions summed as a residual over the originals. More purely
-attention-driven; zero-init ensures pure-additive start.</p>
-</dd>
-</dl>
-<p>’additive’: AdditiveFusion — plain sum, no learned parameters.</p>
+attention-driven; zero-init ensures pure-additive start.</p></li>
+<li><p>’additive’: AdditiveFusion — plain sum, no learned parameters.</p></li>
+</ul>
 </p></li>
 <li><p><strong>series_metadata</strong> – List of SeriesMetadata for prior construction.</p></li>
 <li><p><strong>prior_adjacency</strong> – Optional co-movement graph prior. Accepts an (N, N)
@@ -3761,6 +3679,7 @@ dropped, never silently ignored.</p>
 <li class="toctree-l1"><a class="reference internal" href="intro.html#autots">AutoTS</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorial.html">Tutorial</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorial.html#extended-tutorial">Extended Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../metric_weighting_guide.html">AutoTS Metric Weighting</a></li>
 </ul>
 <ul class="current">
 <li class="toctree-l1 current"><a class="reference internal" href="modules.html">autots</a><ul class="current">

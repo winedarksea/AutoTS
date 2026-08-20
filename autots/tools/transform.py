@@ -184,14 +184,16 @@ def simple_context_slicer(df, method: str = "None", forecast_length: int = 30):
     Args:
         df (pandas.DataFrame): training data frame to slice
         method (str): Option to slice dataframe
-            'None' - return unaltered dataframe
-            'HalfMax' - return half of dataframe
-            'ForecastLength' - return dataframe equal to length of forecast
-            '2ForecastLength' - return dataframe equal to twice length of forecast
-                (also takes 4, 6, 8, 10 in addition to 2)
-            'n' - any integer length to slice by
-            '-n' - full length less this amount
-            "0.n" - this percent of the full data
+
+            - 'None' - return unaltered dataframe
+            - 'HalfMax' - return half of dataframe
+            - 'ForecastLength' - return dataframe equal to length of forecast
+            - '2ForecastLength' - return dataframe equal to twice length of forecast
+              (also takes 4, 6, 8, 10 in addition to 2)
+            - 'n' - any integer length to slice by
+            - '-n' - full length less this amount
+            - "0.n" - this percent of the full data
+
     """
     if method in [None, "None"]:
         return df
@@ -851,7 +853,7 @@ class PositiveShift(EmptyTransformer):
     Args:
         log (bool): whether to include a log transform.
         center_one (bool): whether to shift to 1 instead of 0.
-        squared (bool): whether to square (**2) values after shift.
+        squared (bool): whether to square (``**2``) values after shift.
     """
 
     def __init__(
@@ -3864,14 +3866,17 @@ class HolidayTransformer(EmptyTransformer):
     def dates_to_holidays(
         self, dates, style="flag", holiday_impacts=False, max_features=365
     ):
-        """
-        dates (pd.DatetimeIndex): list of dates
-        style (str): option for how to return information
-            "long" - return date, name, series for all holidays in a long style dataframe
-            "impact" - returns dates, series with values of sum of impacts (if given) or joined string of holiday names
-            'flag' - return dates, holidays flag, (is not 0-1 but rather sum of input series impacted for that holiday and day)
-            'prophet' - return format required for prophet. Will need to be filtered on `series` for multivariate case
-            'series_flag' - dates, series 0/1 for if holiday occurred in any calendar
+        """Convert dates to holidays.
+
+        Args:
+            dates (pd.DatetimeIndex): list of dates
+            style (str): option for how to return information
+
+                - "long" - return date, name, series for all holidays in a long style dataframe
+                - "impact" - returns dates, series with values of sum of impacts (if given) or joined string of holiday names
+                - 'flag' - return dates, holidays flag, (is not 0-1 but rather sum of input series impacted for that holiday and day)
+                - 'prophet' - return format required for prophet. Will need to be filtered on `series` for multivariate case
+                - 'series_flag' - dates, series 0/1 for if holiday occurred in any calendar
         """
         if self.df_cols is None:
             return ValueError("HolidayTransformer has not yet been .fit()")
@@ -4589,6 +4594,7 @@ class LevelShiftMagic(EmptyTransformer):
         shift_remove_window (int): number of points to remove on each side of shift point (0, 1, or 2)
         shift_fillna (str): fillna method to use for gaps created by shift removal
         window_method (str): method for comparing forward and backward rolling windows
+
             - "overlap" (default): both windows include current point i, then subtract means
               backward=[i-N+1 to i], forward=[i to i+N-1], compare: rolling - rolling_forward
             - "exclusive": windows exclude current point with 1-point gap, then subtract means
@@ -4596,6 +4602,7 @@ class LevelShiftMagic(EmptyTransformer):
             - "diff_overlap": diff data first, then overlapping windows, detect when BOTH exceed threshold
               Apply diff first, then backward=[i-N+1 to i], forward=[i to i+N-1]
               Point i is a shift if BOTH rolling and rolling_forward independently exceed threshold in same direction
+
     """
 
     def __init__(
@@ -7623,7 +7630,7 @@ class ReconciliationTransformer(EmptyTransformer):
         if no hierarchy_map is provided.
     hierarchy_map : dict or None
         If provided, describes aggregator sums for top/middle levels. E.g.,
-          { "TOP": ["A","B","C","D"], "MID1":["A","B"], "MID2":["C","D"] }.
+        ``{ "TOP": ["A","B","C","D"], "MID1":["A","B"], "MID2":["C","D"] }``.
         If None, automatically creates groups of size group_size plus a single "TOP".
     reconciliation_params : dict
         Dict of parameters for reconciliation. Structure:
@@ -8239,7 +8246,7 @@ class GeneralTransformer(object):
                 * by default 'forecast' is expected, 'original' can be set in trans_method
 
     Args:
-        fillNA (str): - method to fill NA, passed through to FillNA()
+        fillNA (str): method to fill NA, passed through to FillNA()
             'ffill' - fill most recent non-na value forward until another non-na value is reached
             'zero' - fill with zero. Useful for sales and other data where NA does usually mean $0.
             'mean' - fill all missing values with the series' overall average value
@@ -8251,7 +8258,7 @@ class GeneralTransformer(object):
             'IterativeImputer' - sklearn iterative imputer
             most of the interpolate methods from pandas.interpolate
 
-        transformations (dict): - transformations to apply {0: "MinMaxScaler", 1: "Detrend", ...}
+        transformations (dict): transformations to apply {0: "MinMaxScaler", 1: "Detrend", ...}
             'None'
             'MinMaxScaler' - Sklearn MinMaxScaler
             'PowerTransformer' - Sklearn PowerTransformer

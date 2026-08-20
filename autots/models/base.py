@@ -619,13 +619,14 @@ class PredictionObject(object):
         upper_forecast
         lower_forecast
 
-    Methods:
-        copy: return a deep copy with separate memory for all key elements
-        long_form_results: return complete results in long form
-        total_runtime: return runtime for all model components in seconds
-        plot
-        evaluate
-        apply_constraints
+    Methods
+
+    - copy: return a deep copy with separate memory for all key elements
+    - long_form_results: return complete results in long form
+    - total_runtime: return runtime for all model components in seconds
+    - plot
+    - evaluate
+    - apply_constraints
     """
 
     def __init__(
@@ -1489,80 +1490,84 @@ class PredictionObject(object):
         """Use constraint thresholds to adjust outputs by limit.
 
         Example:
-            apply_constraints(
-                constraints=[
-                    {  # don't exceed historic max
-                        "constraint_method": "quantile",
-                        "constraint_value": 1.0,
-                        "constraint_direction": "upper",
-                        "constraint_regularization": 1.0,
-                        "bounds": True,
-                    },
-                    {  # don't exceed 2% decline by end of forecast horizon
-                        "constraint_method": "slope",
-                        "constraint_value": {
-                            "slope": -0.02,
-                            "window": 28,
-                            "window_agg": "min",
-                            "threshold": -0.01,
+            .. code-block:: python
+
+                apply_constraints(
+                    constraints=[
+                        {  # don't exceed historic max
+                            "constraint_method": "quantile",
+                            "constraint_value": 1.0,
+                            "constraint_direction": "upper",
+                            "constraint_regularization": 1.0,
+                            "bounds": True,
                         },
-                        "constraint_direction": "lower",
-                        "constraint_regularization": 0.9,
-                        "bounds": False,
-                    },
-                    {  # don't exceed 2% growth by end of forecast horizon
-                        "constraint_method": "slope",
-                        "constraint_value": {"slope": 0.02, "window": 10, "window_agg": "max", "threshold": 0.01},
-                        "constraint_direction": "upper",
-                        "constraint_regularization": 0.9,
-                        "bounds": False,
-                    },
-                    {  # don't go below the last 10 values - 10%
-                        "constraint_method": "last_window",
-                        "constraint_value": {"window": 10, "threshold": -0.1},
-                        "constraint_direction": "lower",
-                        "constraint_regularization": 1.0,
-                        "bounds": False,
-                    },
-                    {  # don't go below zero
-                        "constraint_method": "absolute",
-                        "constraint_value": 0,  # can also be an array or Series
-                        "constraint_direction": "lower",
-                        "constraint_regularization": 1.0,
-                        "bounds": True,
-                    },
-                    {  # don't go below historic min  - 1 st dev
-                        "constraint_method": "stdev_min",
-                        "constraint_value": 1.0,
-                        "constraint_direction": "lower",
-                        "constraint_regularization": 1.0,
-                        "bounds": True,
-                    },
-                    {  # don't go above historic mean  + 3 st devs, soft limit
-                        "constraint_method": "stdev",
-                        "constraint_value": 3.0,
-                        "constraint_direction": "upper",
-                        "constraint_regularization": 0.5,
-                        "bounds": True,
-                    },
-                    {  # round decimals to 2 places
-                        "constraint_method": "round",
-                        "constraint_value": 2,
-                    },
-                    {  # apply dampening (gradually flatten out forecast)
-                        "constraint_method": "dampening",
-                        "constraint_value": 0.98,
-                    },
-                ]
-            )
+                        {  # don't exceed 2% decline by end of forecast horizon
+                            "constraint_method": "slope",
+                            "constraint_value": {
+                                "slope": -0.02,
+                                "window": 28,
+                                "window_agg": "min",
+                                "threshold": -0.01,
+                            },
+                            "constraint_direction": "lower",
+                            "constraint_regularization": 0.9,
+                            "bounds": False,
+                        },
+                        {  # don't exceed 2% growth by end of forecast horizon
+                            "constraint_method": "slope",
+                            "constraint_value": {"slope": 0.02, "window": 10, "window_agg": "max", "threshold": 0.01},
+                            "constraint_direction": "upper",
+                            "constraint_regularization": 0.9,
+                            "bounds": False,
+                        },
+                        {  # don't go below the last 10 values - 10%
+                            "constraint_method": "last_window",
+                            "constraint_value": {"window": 10, "threshold": -0.1},
+                            "constraint_direction": "lower",
+                            "constraint_regularization": 1.0,
+                            "bounds": False,
+                        },
+                        {  # don't go below zero
+                            "constraint_method": "absolute",
+                            "constraint_value": 0,  # can also be an array or Series
+                            "constraint_direction": "lower",
+                            "constraint_regularization": 1.0,
+                            "bounds": True,
+                        },
+                        {  # don't go below historic min  - 1 st dev
+                            "constraint_method": "stdev_min",
+                            "constraint_value": 1.0,
+                            "constraint_direction": "lower",
+                            "constraint_regularization": 1.0,
+                            "bounds": True,
+                        },
+                        {  # don't go above historic mean  + 3 st devs, soft limit
+                            "constraint_method": "stdev",
+                            "constraint_value": 3.0,
+                            "constraint_direction": "upper",
+                            "constraint_regularization": 0.5,
+                            "bounds": True,
+                        },
+                        {  # round decimals to 2 places
+                            "constraint_method": "round",
+                            "constraint_value": 2,
+                        },
+                        {  # apply dampening (gradually flatten out forecast)
+                            "constraint_method": "dampening",
+                            "constraint_value": 0.98,
+                        },
+                    ]
+                )
 
         Args:
             constraint_method (str): one of
-                stdev_min - threshold is min and max of historic data +/- constraint * st dev of data
-                stdev - threshold is the mean of historic data +/- constraint * st dev of data
-                absolute - input is array of length series containing the threshold's final value for each
-                quantile - constraint is the quantile of historic data to use as threshold
-            constraint_regularization (float): 0 to 1
+
+                - stdev_min - threshold is min and max of historic data +/- constraint * st dev of data
+                - stdev - threshold is the mean of historic data +/- constraint * st dev of data
+                - absolute - input is array of length series containing the threshold's final value for each
+                - quantile - constraint is the quantile of historic data to use as threshold
+
+            constraint_regularization (float): 0 to 1,
                 where 0 means no constraint, 1 is hard threshold cutoff, and in between is penalty term
             upper_constraint (float): or array, depending on method, None if unused
             lower_constraint (float): or array, depending on method, None if unused

@@ -88,16 +88,20 @@ class AutoTS(object):
         no_negatives (bool): if True, all negative predictions are rounded up to 0.
         constraint (float): when not None, use this float value * data st dev above max or below min for constraining forecast values.
             now also instead accepts a dictionary containing the following key/values:
-                constraint_method (str): one of
-                    stdev_min - threshold is min and max of historic data +/- constraint * st dev of data
-                    stdev - threshold is the mean of historic data +/- constraint * st dev of data
-                    absolute - input is array of length series containing the threshold's final value for each
-                    quantile - constraint is the quantile of historic data to use as threshold
-                constraint_regularization (float): 0 to 1
-                    where 0 means no constraint, 1 is hard threshold cutoff, and in between is penalty term
-                upper_constraint (float): or array, depending on method, None if unused
-                lower_constraint (float): or array, depending on method, None if unused
-                bounds (bool): if True, apply to upper/lower forecast, otherwise False applies only to forecast
+
+            - constraint_method (str): one of
+
+              - stdev_min - threshold is min and max of historic data +/- constraint * st dev of data
+              - stdev - threshold is the mean of historic data +/- constraint * st dev of data
+              - absolute - input is array of length series containing the threshold's final value for each
+              - quantile - constraint is the quantile of historic data to use as threshold
+
+            - constraint_regularization (float): 0 to 1,
+              where 0 means no constraint, 1 is hard threshold cutoff, and in between is penalty term
+            - upper_constraint (float): or array, depending on method, None if unused
+            - lower_constraint (float): or array, depending on method, None if unused
+            - bounds (bool): if True, apply to upper/lower forecast, otherwise False applies only to forecast
+
         ensemble (str): None or list or comma-separated string containing:
             'auto', 'simple', 'distance', 'horizontal', 'horizontal-min', 'horizontal-max', "mosaic", "subsample"
         initial_template (str): 'Random' - randomly generates starting template, 'General' uses template included in package, 'General+Random' - both of previous. Also can be overriden with self.import_template()
@@ -2474,8 +2478,8 @@ class AutoTS(object):
             forecast_length (int): Number of periods of data to forecast ahead
             prediction_interval (float): interval of upper/lower forecasts.
                 defaults to 'self' ie the interval specified in __init__()
-                if prediction_interval is a list, then returns a dict of forecast objects.
-                    {str(interval): prediction_object}
+                if prediction_interval is a list, then returns a dict of forecast objects,
+                ``{str(interval): prediction_object}``
             future_regressor (numpy.Array): additional regressor
             hierarchy: Not yet implemented
             just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
@@ -3347,10 +3351,11 @@ class AutoTS(object):
         There may be jumps in data between chunks.
 
         Args are same as for model_forecast except...
-        n_splits(int): how many pieces to split data into. Pass 2 for fastest, or "auto" for best accuracy
-        series (str): if to run on only one column, pass column name. Faster than full.
-        tail (int): df.tail() of the dataset, back_forecast is only run on n most recent observations.
-            which points at eval_periods of lower-level back_forecast function
+
+        * n_splits(int): how many pieces to split data into. Pass 2 for fastest, or "auto" for best accuracy
+        * series (str): if to run on only one column, pass column name. Faster than full.
+        * tail (int): df.tail() of the dataset, back_forecast is only run on n most recent observations,
+          which points at eval_periods of lower-level back_forecast function
 
         Returns a standard prediction object (access .forecast, .lower_forecast, .upper_forecast)
         """
