@@ -723,7 +723,13 @@ class SinTrend(EmptyTransformer):
         def sinfunc(t, A, w, p, c):
             return A * np.sin(w * t + p) + c
 
-        popt, pcov = curve_fit(sinfunc, tt, yy, p0=guess, maxfev=10000, method=method)
+        try:
+            popt, pcov = curve_fit(
+                sinfunc, tt, yy, p0=guess, maxfev=10000, method=method
+            )
+        except RuntimeError:
+            # curve_fit failed to converge, fall back to the initial guess
+            popt = guess
         A, w, p, c = popt
         # f = w/(2.*np.pi)
         # fitfunc = lambda t: A * np.sin(w*t + p) + c

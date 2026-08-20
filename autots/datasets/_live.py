@@ -185,6 +185,7 @@ def load_live_daily(
         added = dataset_lists[start_len:]
         n_series = 0
         for d in added:
+            d = d[(d.index >= observation_start_timestamp) & (d.index <= current_date)]
             if isinstance(d, pd.DataFrame):
                 n_series += int(d.notna().any(axis=0).sum())
             elif isinstance(d, pd.Series):
