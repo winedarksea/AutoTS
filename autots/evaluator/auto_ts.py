@@ -114,7 +114,7 @@ class AutoTS(object):
             occurs after any aggregration is applied, so will be whatever is specified by frequency, will drop n frequencies
         drop_data_older_than_periods (int): take only the n most recent timestamps
         model_list (list): str alias or list of names of model objects to use
-            now can be a dictionary of {"model": prob} but only affects starting random templates. Genetic algorithim takes from there.
+            now can be a dictionary of {"model": prob} but only affects starting random templates. Genetic algorithm takes from there.
         transformer_list (list): list of transformers to use, or dict of transformer:probability. Note this does not apply to initial templates.
             can accept string aliases: "all", "fast", "superfast", 'scalable' (scalable is a subset of fast that should have fewer memory issues at scale)
         transformer_max_depth (int): maximum number of sequential transformers to generate for new Random Transformers. Fewer will be faster.
@@ -140,6 +140,8 @@ class AutoTS(object):
         min_allowed_train_percent (float): percent of forecast length to allow as min training, else raises error.
             0.5 with a forecast length of 10 would mean 5 training points are mandated, for a total of 15 points.
             Useful in (unrecommended) cases where forecast_length > training length.
+            If forecast_length exceeds all available rows, AutoTS instead warns and
+            uses a degraded half-history validation split.
         remove_leading_zeroes (bool): replace leading zeroes with NaN. Useful in data where initial zeroes mean data collection hasn't started yet.
         prefill_na (str): value to input to fill all NaNs with. Leaving as None and allowing model interpolation is recommended.
             None, 0, 'mean', or 'median'. 0 may be useful in for examples sales cases where all NaN can be assumed equal to zero.
@@ -1994,11 +1996,9 @@ class AutoTS(object):
                     .iloc[(n - 1) : n][template_cols]
                 )
             except IndexError:
-                raise ValueError(
-                    """No models available from validation.
+                raise ValueError("""No models available from validation.
     Try increasing models_to_validate, max_per_model_class
-    or otherwise increase models available."""
-                )
+    or otherwise increase models available.""")
         return best_model
 
     def parse_best_model(self):

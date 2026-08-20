@@ -371,9 +371,7 @@ async def handle_get_forecast_components(arguments: dict, log_progress) -> dict:
                 }
             return result
         else:
-            return {
-                "error": f"Components has unexpected type: {type(components_df)}"
-            }
+            return {"error": f"Components has unexpected type: {type(components_df)}"}
     else:
         return {
             "error": "Components not available for this model type. Only certain models (Cassandra, TVVAR) provide component decomposition."

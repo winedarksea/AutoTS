@@ -1345,5 +1345,230 @@ class TestSyntheticDataGeneration(unittest.TestCase):
         self.assertFalse(data.empty)
 
 
+class TestLatentTrendFactors(unittest.TestCase):
+    """Tests for the shared latent trend-factor mode."""
+
+    def test_latent_factors_default_off(self):
+        """n_latent_factors=0 must be byte-identical to not passing it at all."""
+        gen_a = generate_synthetic_daily_data(n_days=400, n_series=6, random_seed=7)
+        gen_b = generate_synthetic_daily_data(
+            n_days=400, n_series=6, random_seed=7, n_latent_factors=0
+        )
+        self.assertTrue(
+            gen_a.get_data().equals(gen_b.get_data()),
+            "n_latent_factors=0 must not perturb the RNG stream",
+        )
+        self.assertIsNone(gen_a.get_true_factors())
+        self.assertIsNone(gen_b.get_true_factors())
+        changepoint_keys = set(gen_b.get_trend_changepoints().keys())
+        self.assertFalse(
+            [k for k in changepoint_keys if k.startswith('factor_')],
+            "no factor_* keys should leak into trend changepoint labels",
+        )
+        self.assertNotIn('latent_factors', gen_b.get_template())
+
+    def test_latent_factors_shapes_and_names(self):
+        gen = generate_synthetic_daily_data(
+            n_days=500,
+            n_series=8,
+            random_seed=11,
+            n_latent_factors=3,
+            series_type_override='standard',
+        )
+        truth = gen.get_true_factors()
+        self.assertIsNotNone(truth)
+        factors = truth['factors']
+        self.assertEqual(factors.shape, (500, 3))
+        self.assertEqual(
+            list(factors.columns), ['factor_1', 'factor_2', 'factor_3']
+        )
+        # centered, unit-std paths
+        self.assertTrue(np.allclose(factors.mean().values, 0.0, atol=1e-8))
+        self.assertTrue(np.allclose(factors.std(ddof=0).values, 1.0, atol=1e-6))
+        # factor changepoints live outside the per-series label dict
+        self.assertEqual(set(truth['factor_changepoints'].keys()), set(factors.columns))
+        self.assertFalse(
+            [k for k in gen.get_trend_changepoints() if k.startswith('factor_')]
+        )
+        # exactly one dominant loading per (non-saturating) series
+        loadings = truth['loadings']
+        self.assertEqual(loadings.shape, (8, 3))
+        for name in loadings.index:
+            row = loadings.loc[name].values
+            self.assertEqual(
+                int((np.abs(row) >= 0.7).sum()),
+                1,
+                f"{name} should have exactly one dominant loading",
+            )
+
+    def test_latent_factors_determinism(self):
+        kwargs = dict(
+            n_days=300,
+            n_series=6,
+            random_seed=5,
+            n_latent_factors=2,
+            factor_response_lag_max=10,
+        )
+        gen_a = generate_synthetic_daily_data(**kwargs)
+        gen_b = generate_synthetic_daily_data(**kwargs)
+        self.assertTrue(gen_a.get_data().equals(gen_b.get_data()))
+        truth_a, truth_b = gen_a.get_true_factors(), gen_b.get_true_factors()
+        self.assertTrue(truth_a['factors'].equals(truth_b['factors']))
+        self.assertTrue(truth_a['loadings'].equals(truth_b['loadings']))
+        self.assertEqual(
+            truth_a['factor_response_lags'], truth_b['factor_response_lags']
+        )
+
+    def test_latent_factor_trend_composition(self):
+        """factor_strength=1.0 makes trend movement purely factor-driven."""
+        gen = generate_synthetic_daily_data(
+            n_days=800,
+            n_series=8,
+            random_seed=7,
+            n_latent_factors=3,
+            factor_strength=1.0,
+            series_type_override='standard',
+        )
+        truth = gen.get_true_factors()
+        factor_values = truth['factors'].values
+        for name in gen.get_data().columns:
+            trend = gen.get_components(name)['trend']
+            projection = factor_values @ truth['loadings'].loc[name].values
+            corr = abs(np.corrcoef(trend - trend.mean(), projection)[0, 1])
+            self.assertGreater(
+                corr, 0.95, f"{name} trend should track its factor projection"
+            )
+
+    def test_latent_factors_template_roundtrip(self):
+        gen = generate_synthetic_daily_data(
+            n_days=300, n_series=5, random_seed=13, n_latent_factors=2
+        )
+        template = gen.get_template()
+        # the latent-factor block itself must be JSON-safe
+        payload = json.dumps(template['latent_factors'])
+        self.assertGreater(len(payload), 0)
+        restored = SyntheticDailyGenerator.render_template(template)
+        original = gen.get_data()
+        self.assertTrue(
+            np.allclose(
+                restored[original.columns].values, original.values, equal_nan=True
+            )
+        )
+
+    def test_latent_factors_config_in_template(self):
+        gen = generate_synthetic_daily_data(
+            n_days=200,
+            n_series=4,
+            random_seed=3,
+            n_latent_factors=2,
+            factor_strength=0.55,
+            factor_cross_loading_prob=0.4,
+            factor_sign_flip_prob=0.2,
+            factor_response_lag_max=8,
+        )
+        config = gen.get_template()['meta']['config']
+        self.assertEqual(config['n_latent_factors'], 2)
+        self.assertFalse(config['include_factor_series'])
+        self.assertAlmostEqual(config['factor_strength'], 0.55)
+        self.assertAlmostEqual(config['factor_cross_loading_prob'], 0.4)
+        self.assertAlmostEqual(config['factor_sign_flip_prob'], 0.2)
+        self.assertEqual(config['factor_response_lag_max'], 8)
+
+    def test_saturating_series_zero_loading(self):
+        """series_1 is the saturating_trend series; it stays idiosyncratic."""
+        gen = generate_synthetic_daily_data(
+            n_days=400, n_series=6, random_seed=9, n_latent_factors=2
+        )
+        truth = gen.get_true_factors()
+        self.assertEqual(gen.series_types['series_1'], 'saturating_trend')
+        self.assertTrue(np.all(truth['loadings'].loc['series_1'].values == 0.0))
+        self.assertEqual(truth['factor_response_lags']['series_1'], 0)
+
+    def test_factor_response_lags(self):
+        """Follower series track the factors at their recorded lag."""
+        gen = generate_synthetic_daily_data(
+            n_days=900,
+            n_series=10,
+            random_seed=7,
+            n_latent_factors=2,
+            factor_strength=1.0,
+            factor_response_lag_max=10,
+            series_type_override='standard',
+        )
+        truth = gen.get_true_factors()
+        lags = truth['factor_response_lags']
+        factor_values = truth['factors'].values
+        for name, lag in lags.items():
+            base = factor_values @ truth['loadings'].loc[name].values
+            trend = gen.get_components(name)['trend']
+            trend = trend - trend.mean()
+            best_lag, best_corr = 0, -1.0
+            for candidate in range(0, 13):
+                shifted = np.empty_like(base)
+                shifted[:candidate] = base[0]
+                shifted[candidate:] = base[: len(base) - candidate]
+                corr = abs(np.corrcoef(trend, shifted)[0, 1])
+                if corr > best_corr:
+                    best_lag, best_corr = candidate, corr
+            self.assertEqual(
+                best_lag, lag, f"{name} best cross-correlation lag should equal {lag}"
+            )
+
+    def test_factor_response_lags_off_by_default(self):
+        base_kwargs = dict(
+            n_days=300, n_series=6, random_seed=21, n_latent_factors=2
+        )
+        gen = generate_synthetic_daily_data(**base_kwargs)
+        gen_explicit = generate_synthetic_daily_data(
+            **base_kwargs, factor_response_lag_max=0
+        )
+        self.assertTrue(gen.get_data().equals(gen_explicit.get_data()))
+        self.assertTrue(
+            all(v == 0 for v in gen.get_true_factors()['factor_response_lags'].values())
+        )
+
+    def test_include_factor_series(self):
+        """Observed mode exposes the factors as market_factor_* columns."""
+        latent = generate_synthetic_daily_data(
+            n_days=400, n_series=6, random_seed=17, n_latent_factors=2
+        )
+        observed = generate_synthetic_daily_data(
+            n_days=400,
+            n_series=6,
+            random_seed=17,
+            n_latent_factors=2,
+            include_factor_series=True,
+        )
+        latent_data = latent.get_data()
+        observed_data = observed.get_data()
+        self.assertNotIn('market_factor_1', latent_data.columns)
+        self.assertEqual(
+            list(observed_data.columns)[-2:], ['market_factor_1', 'market_factor_2']
+        )
+        # the flag must not change how the observed series themselves are drawn
+        self.assertTrue(latent_data.equals(observed_data[latent_data.columns]))
+
+        truth = observed.get_true_factors()
+        for k, factor_name in enumerate(truth['factors'].columns):
+            corr = np.corrcoef(
+                observed_data[f'market_factor_{k + 1}'].values,
+                truth['factors'][factor_name].values,
+            )[0, 1]
+            self.assertGreater(corr, 0.95)
+            # identity loading row so edge scoring can treat them as sources
+            row = truth['loadings'].loc[f'market_factor_{k + 1}'].values
+            self.assertAlmostEqual(row[k], 1.0)
+            self.assertAlmostEqual(float(np.abs(np.delete(row, k)).sum()), 0.0)
+
+        restored = SyntheticDailyGenerator.render_template(observed.get_template())
+        self.assertTrue(
+            np.allclose(
+                restored[observed_data.columns].values,
+                observed_data.values,
+                equal_nan=True,
+            )
+        )
+
+
 if __name__ == '__main__':
     unittest.main()

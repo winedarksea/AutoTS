@@ -164,27 +164,21 @@ if HAS_TORCH:
             """
             if prior_confidence <= 0:
                 return torch.tensor(0.0, device=learned_adjacency.device)
-            # learned adjacency is (n_global, n_global); prior may be (N, N).
-            # When sizes differ, resize prior via interpolation rather than
-            # broadcasting incorrectly, or skip if ambiguous.
+            # Both the learned adjacency and priors are series-level (N, N)
+            # now; a shape mismatch is a bug upstream, not something to paper
+            # over with interpolation (which destroyed row identity).
             if learned_adjacency.shape != prior_adjacency.shape:
-                m = learned_adjacency.shape[0]
-                if prior_adjacency.ndim == 2 and m > 0:
-                    # resize prior to latent space by adaptive avg pooling
-                    # unsqueeze to (1, 1, M_prior, M_prior) for interpolation
-                    prior_resized = (
-                        F.interpolate(
-                            prior_adjacency.unsqueeze(0).unsqueeze(0).float(),
-                            size=(m, m),
-                            mode='bilinear',
-                            align_corners=False,
-                        )
-                        .squeeze(0)
-                        .squeeze(0)
-                    )
-                    prior_adjacency = prior_resized
-                else:
-                    return torch.tensor(0.0, device=learned_adjacency.device)
+                import warnings
+
+                warnings.warn(
+                    "SoftPriorLoss shape mismatch: learned adjacency "
+                    f"{tuple(learned_adjacency.shape)} vs prior "
+                    f"{tuple(prior_adjacency.shape)}. The prior term is "
+                    "skipped — priors must be series-level (N, N).",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+                return torch.tensor(0.0, device=learned_adjacency.device)
             return (
                 self.penalty_weight
                 * float(prior_confidence)
@@ -370,6 +364,7 @@ if HAS_TORCH:
             trend_forecasts: torch.Tensor,
             prototype_weights: torch.Tensor,
             composite_per_series: torch.Tensor = None,
+            signed_adjacency: torch.Tensor = None,
         ) -> torch.Tensor:
             """
             Args:
@@ -381,6 +376,12 @@ if HAS_TORCH:
                     structural anchor instead of an emergent group consensus. The
                     penalty is gated by anchor_dir.abs() so a flat composite anchor
                     never drives the model toward flat forecasts.
+                signed_adjacency: (N, N) optional signed series graph
+                    A[source, target]. When provided, consensus is formed over
+                    each series' GRAPH NEIGHBORS (negative edges flip the
+                    expected direction) instead of prototype weights (P3-4).
+                    Keeps the |consensus| gate — the hard-won guard against
+                    the collapse-to-flat degenerate solution.
             """
             B, N, T = trend_forecasts.shape
             K = prototype_weights.shape[-1]
@@ -389,6 +390,32 @@ if HAS_TORCH:
                 return torch.tensor(0.0, device=trend_forecasts.device)
 
             soft_dir = self._trend_direction(trend_forecasts)  # (B, N)
+
+            # --- Graph-neighbor mode (preferred when a real graph exists) ---
+            if (
+                signed_adjacency is not None
+                and signed_adjacency.ndim == 2
+                and signed_adjacency.shape == (N, N)
+                and float(signed_adjacency.abs().sum()) > 0
+            ):
+                incoming = signed_adjacency.transpose(0, 1)  # (target, source)
+                strength = incoming.abs().sum(dim=-1)  # (N,)
+                denom = strength.clamp(min=1e-8)
+                growth_rate = self._relative_growth_rate(trend_forecasts)
+                consensus = torch.einsum('ij,bj->bi', incoming, soft_dir) / denom
+                consensus_growth = (
+                    torch.einsum('ij,bj->bi', incoming, growth_rate) / denom
+                )
+                has_neighbors = (strength > 1e-6).to(trend_forecasts.dtype)
+                consensus_strength = consensus.abs()  # the anti-flat gate
+                deviation = (soft_dir - consensus) ** 2
+                magnitude_deviation = (growth_rate - consensus_growth) ** 2
+                penalty = (
+                    has_neighbors
+                    * consensus_strength
+                    * (deviation + self.magnitude_weight * magnitude_deviation)
+                ).mean()
+                return self.penalty_weight * penalty
 
             # --- Composite-anchored mode ---
             # When composite_per_series is available it is the structurally derived
@@ -469,23 +496,25 @@ if HAS_TORCH:
         def __init__(
             self,
             weights: dict = None,
-            base_forecast_loss: str = 'mse',
+            base_forecast_loss: str = 'huber',
             structure_config: dict = None,
         ):
             super().__init__()
             w = weights or {}
             self.structure_config = StructureLearningConfig.from_dict(structure_config)
             self.forecast_loss = ForecastLoss(base_loss=base_forecast_loss)
-            self.orthogonality = OrthogonalityPenalty(w.get('orthogonality', 1.0))
-            self.local_trend = LocalTrendPenalty(w.get('local_trend', 1.0))
-            self.smoothness = SmoothnessPenalty(w.get('smoothness', 0.1))
-            self.soft_prior = SoftPriorLoss(w.get('soft_prior', 0.5))
+            # Defaults assume normalized (delta/scale) training targets (P1-4):
+            # the forecast term is the objective; everything else regularizes.
+            self.orthogonality = OrthogonalityPenalty(w.get('orthogonality', 0.25))
+            self.local_trend = LocalTrendPenalty(w.get('local_trend', 0.1))
+            self.smoothness = SmoothnessPenalty(w.get('smoothness', 0.02))
+            self.soft_prior = SoftPriorLoss(w.get('soft_prior', 0.25))
             self.causal_prior = SoftPriorLoss(
-                w.get('causal_prior', w.get('soft_prior', 0.5))
+                w.get('causal_prior', w.get('soft_prior', 0.25))
             )
             self.structure_prior = SoftPriorLoss(1.0)
-            self.coherence = CrossSeriesCoherenceLoss(w.get('coherence', 2.0))
-            self.probabilistic = ProbabilisticLoss(w.get('probabilistic', 0.2))
+            self.coherence = CrossSeriesCoherenceLoss(w.get('coherence', 0.25))
+            self.probabilistic = ProbabilisticLoss(w.get('probabilistic', 0.5))
             self.slope_incentive = TrendSlopeIncentive(w.get('trend_phi', 0.0))
             self._forecast_weight = w.get('forecast', 1.0)
 
@@ -661,6 +690,7 @@ if HAS_TORCH:
                     outputs['trend_forecast'],
                     outputs['prototype_weights'],
                     outputs.get('composite_trend_per_series'),
+                    signed_adjacency=outputs.get('signed_adjacency'),
                 )
                 breakdown['coherence'] = loss_ch.item()
                 total = total + loss_ch

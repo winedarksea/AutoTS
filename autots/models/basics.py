@@ -50,7 +50,6 @@ from autots.evaluator.metrics import wasserstein
 from autots.models.sklearn import rolling_x_regressor_regressor
 from autots.tools.kalman import kalman_fusion_forecasts
 
-
 # these are all optional packages
 try:
     from scipy.spatial.distance import cdist
@@ -2410,6 +2409,9 @@ class KalmanStateSpace(ModelObject):
         model_name: str = "undefined",
         forecast_length: int = None,
         subset=None,
+        level=None,
+        cov_type=None,
+        autoregressive=None,
         **kwargs,
     ):
         ModelObject.__init__(
@@ -2429,6 +2431,13 @@ class KalmanStateSpace(ModelObject):
         self.model_name = model_name
         self.forecast_length = forecast_length
         self.subset = subset
+        # Descriptive metadata emitted by the ucm_* presets in
+        # new_kalman_params. Nothing in the filter reads them, but they are
+        # part of a sampled param set, so get_params has to return them or a
+        # template silently loses them on round-trip.
+        self.level = level
+        self.cov_type = cov_type
+        self.autoregressive = autoregressive
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
@@ -2654,6 +2663,9 @@ class KalmanStateSpace(ModelObject):
             "observation_noise": self.observation_noise,
             "em_iter": self.em_iter,
             "subset": self.subset,
+            "level": self.level,
+            "cov_type": self.cov_type,
+            "autoregressive": self.autoregressive,
         }
 
 

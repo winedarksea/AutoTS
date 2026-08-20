@@ -18,6 +18,7 @@ from autots.datasets._base import (
 from autots.datasets.synthetic import (
     SyntheticDailyGenerator,
     generate_synthetic_daily_data,
+    generate_metric_surface_geo_panel,
 )
 
 __all__ = [
@@ -34,4 +35,5 @@ __all__ = [
     'load_artificial',
     'SyntheticDailyGenerator',
     'generate_synthetic_daily_data',
+    'generate_metric_surface_geo_panel',
 ]

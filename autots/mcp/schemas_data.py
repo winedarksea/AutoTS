@@ -232,8 +232,7 @@ try:
                     "long_cols": {
                         "type": "object",
                         "description": (
-                            "For long data, optional column names: "
-                            "{date, value, id}"
+                            "For long data, optional column names: " "{date, value, id}"
                         ),
                     },
                 },

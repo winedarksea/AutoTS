@@ -9,157 +9,157 @@ autots.models.arch module
 
 .. automodule:: autots.models.arch
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 autots.models.base module
 -------------------------
 
 .. automodule:: autots.models.base
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 autots.models.basics module
 ---------------------------
 
 .. automodule:: autots.models.basics
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 autots.models.cassandra module
 ------------------------------
 
 .. automodule:: autots.models.cassandra
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 autots.models.composite module
 ------------------------------
 
 .. automodule:: autots.models.composite
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 autots.models.deepssm module
 ----------------------------
 
 .. automodule:: autots.models.deepssm
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 autots.models.dnn module
 ------------------------
 
 .. automodule:: autots.models.dnn
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 autots.models.ensemble module
 -----------------------------
 
 .. automodule:: autots.models.ensemble
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 autots.models.gluonts module
 ----------------------------
 
 .. automodule:: autots.models.gluonts
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 autots.models.matrix\_var module
 --------------------------------
 
 .. automodule:: autots.models.matrix_var
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 autots.models.mlensemble module
 -------------------------------
 
 .. automodule:: autots.models.mlensemble
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 autots.models.model\_list module
 --------------------------------
 
 .. automodule:: autots.models.model_list
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 autots.models.neural\_forecast module
 -------------------------------------
 
 .. automodule:: autots.models.neural_forecast
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 autots.models.prophet module
 ----------------------------
 
 .. automodule:: autots.models.prophet
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 autots.models.pytorch module
 ----------------------------
 
 .. automodule:: autots.models.pytorch
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 autots.models.sklearn module
 ----------------------------
 
 .. automodule:: autots.models.sklearn
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 autots.models.statsmodels module
 --------------------------------
 
 .. automodule:: autots.models.statsmodels
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 autots.models.tide module
 -------------------------
 
 .. automodule:: autots.models.tide
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 autots.models.tva\_model module
 -------------------------------
 
 .. automodule:: autots.models.tva_model
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 Module contents
 ---------------
 
 .. automodule:: autots.models
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:

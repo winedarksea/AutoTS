@@ -11,6 +11,7 @@ single value by itself, and contextual anomalies are single values
 that do not fall within low-density regions yet are anomalous with
 regard to local values - https://arxiv.org/pdf/1802.04431.pdf
 """
+
 import random
 import numpy as np
 import pandas as pd
@@ -26,7 +27,6 @@ from autots.tools.calendar import (
     gregorian_to_hebrew,
     gregorian_to_hindu,
 )
-
 
 try:
     from joblib import Parallel, delayed
@@ -344,6 +344,180 @@ def values_to_anomalies(df, output, threshold_method, method_params, n_jobs=1):
         return res, scores
     else:
         raise ValueError(f"outlier method {threshold_method} not recognized.")
+
+
+# Anomaly `scores` mean different things depending on the method that produced
+# them. These groupings are what allow scores to be compared across methods.
+# p-value style: bounded (0, 1), flagged when score < alpha, smaller = stronger.
+p_value_score_methods = {
+    "zscore",
+    "rolling_zscore",
+    "mad",
+    "minmax",
+    "med_diff",
+    "max_diff",
+    "IQR",  # routed through limits_to_anomalies -> zscore_survival_function
+}
+# unbounded, smaller (more negative) = stronger
+lower_is_anomalous_methods = {
+    "IsolationForest",
+    "isolation_forest",
+    "OneClassSVM",
+    "EE",
+    "LOF",
+}
+# unbounded, larger = stronger
+higher_is_anomalous_methods = {
+    "nonparametric",
+    "GaussianMixture",
+    "GaussianMixtureBase",
+    "VAEOutlier",
+}
+
+
+def _norm_isf(p):
+    """Inverse survival function of the standard normal, vectorized.
+
+    Falls back to the Abramowitz & Stegun 26.2.23 rational approximation when
+    scipy is unavailable (``norm`` is then a mock without ``isf``).
+    """
+    p = np.asarray(p, dtype=float)
+    if hasattr(norm, "isf"):
+        return np.asarray(norm.isf(p), dtype=float)
+
+    # |error| < 4.5e-4 in z, far finer than needed for ranking
+    def _lower_tail(q):
+        t = np.sqrt(-2.0 * np.log(q))
+        return t - (
+            (2.515517 + 0.802853 * t + 0.010328 * t * t)
+            / (1.0 + 1.432788 * t + 0.189269 * t * t + 0.001308 * t * t * t)
+        )
+
+    safe = np.clip(p, 1e-300, 1.0 - 1e-16)
+    return np.where(safe <= 0.5, _lower_tail(safe), -_lower_tail(1.0 - safe))
+
+
+def _robust_standardize(values):
+    """Median/MAD standardization with a std fallback for degenerate spread."""
+    values = np.asarray(values, dtype=float)
+    finite = values[np.isfinite(values)]
+    if finite.size == 0:
+        return np.full(values.shape, np.nan)
+    center = np.median(finite)
+    scale = np.median(np.abs(finite - center)) * 1.4826
+    if not np.isfinite(scale) or scale <= 0:
+        scale = np.std(finite)
+    if not np.isfinite(scale) or scale <= 0:
+        scale = 1.0
+    return (values - center) / scale
+
+
+def anomaly_scores_to_strength(scores, method, method_params=None, anomaly_flags=None):
+    """Convert method-specific anomaly scores to a uniform strength scale.
+
+    Anomaly `scores` are not comparable across methods: the zscore family
+    returns p-values (smaller = more anomalous), the sklearn wrappers return
+    decision functions (more negative = more anomalous), and others return
+    error/likelihood magnitudes (larger = more anomalous). Ranking events
+    without accounting for that silently inverts the ordering.
+
+    The returned strength is always *higher = more anomalous* and is expressed
+    in multiples of the method's own detection threshold, so a value of 1.0
+    sits on the detection boundary regardless of method.
+
+    Args:
+        scores (pd.DataFrame, pd.Series): as returned by AnomalyRemoval.scores
+        method (str): the anomaly method that produced the scores
+        method_params (dict): method params, used for `alpha` where applicable
+        anomaly_flags (pd.DataFrame, pd.Series): matching -1/1 classifications.
+            Used to calibrate the boundary for unbounded methods, and to infer
+            polarity for methods missing from the groupings above.
+
+    Returns:
+        pd.DataFrame or pd.Series (matching the `scores` input) of floats
+    """
+    was_series = isinstance(scores, pd.Series)
+    if was_series:
+        frame = scores.to_frame()
+    else:
+        frame = scores
+    if not isinstance(frame, pd.DataFrame) or frame.empty:
+        return scores
+
+    method_params = method_params or {}
+    result = pd.DataFrame(np.nan, index=frame.index, columns=frame.columns, dtype=float)
+
+    if method in p_value_score_methods:
+        alpha = float(method_params.get("alpha", 0.05))
+        alpha = float(np.clip(alpha, 1e-300, 1.0 - 1e-16))
+        z_alpha = float(_norm_isf(alpha))
+        if not np.isfinite(z_alpha) or abs(z_alpha) < 1e-9:
+            z_alpha = 1.0
+        p_vals = np.clip(frame.to_numpy(dtype=float), 1e-300, 1.0 - 1e-16)
+        result.loc[:, :] = _norm_isf(p_vals) / z_alpha
+        return result[result.columns[0]] if was_series else result
+
+    if method in higher_is_anomalous_methods:
+        sign = 1.0
+    elif method in lower_is_anomalous_methods:
+        sign = -1.0
+    else:
+        # Unknown method: infer polarity from where the flagged points sit, so
+        # a newly added method cannot silently reintroduce an inverted ranking.
+        sign = _infer_score_polarity(frame, anomaly_flags)
+
+    flags = anomaly_flags
+    if isinstance(flags, pd.Series):
+        flags = flags.to_frame()
+
+    for col in frame.columns:
+        oriented = sign * frame[col].to_numpy(dtype=float)
+        standardized = _robust_standardize(oriented)
+        # Rescale so the weakest flagged point sits at 1.0, matching the
+        # "multiples of the detection threshold" meaning of the p-value branch.
+        boundary = None
+        if isinstance(flags, pd.DataFrame) and not flags.empty:
+            flag_col = col if col in flags.columns else flags.columns[0]
+            try:
+                mask = (flags[flag_col].to_numpy() == -1) & np.isfinite(standardized)
+            except Exception:
+                mask = None
+            if mask is not None and mask.any():
+                boundary = float(np.min(standardized[mask]))
+        if boundary is not None and np.isfinite(boundary) and boundary > 0.5:
+            standardized = standardized / boundary
+        result[col] = standardized
+
+    return result[result.columns[0]] if was_series else result
+
+
+def _infer_score_polarity(frame, anomaly_flags):
+    """Return +1 if larger scores are more anomalous, -1 otherwise."""
+    if anomaly_flags is None:
+        return 1.0
+    flags = anomaly_flags
+    if isinstance(flags, pd.Series):
+        flags = flags.to_frame()
+    if not isinstance(flags, pd.DataFrame) or flags.empty:
+        return 1.0
+    flagged, unflagged = [], []
+    for col in frame.columns:
+        flag_col = col if col in flags.columns else flags.columns[0]
+        try:
+            col_flags = flags[flag_col].to_numpy()
+            col_scores = frame[col].to_numpy(dtype=float)
+        except Exception:
+            continue
+        if len(col_flags) != len(col_scores):
+            continue
+        finite = np.isfinite(col_scores)
+        flagged.append(col_scores[(col_flags == -1) & finite])
+        unflagged.append(col_scores[(col_flags != -1) & finite])
+    flagged = np.concatenate(flagged) if flagged else np.array([])
+    unflagged = np.concatenate(unflagged) if unflagged else np.array([])
+    if flagged.size == 0 or unflagged.size == 0:
+        return 1.0
+    return 1.0 if np.median(flagged) >= np.median(unflagged) else -1.0
 
 
 def nonparametric_multivariate(df, output, method_params, n_jobs=1):

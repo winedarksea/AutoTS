@@ -27,9 +27,12 @@ from autots.tools.holiday import holiday_flag
 # these are optional packages
 try:
     from statsmodels.tsa.statespace.sarimax import SARIMAX
-    from statsmodels.api import GLM as SM_GLM
 except Exception:
-    pass
+    SARIMAX = None
+try:
+    from statsmodels.genmod.generalized_linear_model import GLM as SM_GLM
+except Exception:
+    SM_GLM = None
 try:
     from joblib import Parallel, delayed
 

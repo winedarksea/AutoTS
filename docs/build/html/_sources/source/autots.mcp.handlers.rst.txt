@@ -9,37 +9,37 @@ autots.mcp.handlers.data module
 
 .. automodule:: autots.mcp.handlers.data
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 autots.mcp.handlers.features module
 -----------------------------------
 
 .. automodule:: autots.mcp.handlers.features
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 autots.mcp.handlers.forecast module
 -----------------------------------
 
 .. automodule:: autots.mcp.handlers.forecast
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 autots.mcp.handlers.prediction module
 -------------------------------------
 
 .. automodule:: autots.mcp.handlers.prediction
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 Module contents
 ---------------
 
 .. automodule:: autots.mcp.handlers
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:

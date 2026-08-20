@@ -413,24 +413,29 @@ def simple_train_test_split(
         min_allowed_train_percent (float): - forecast length cannot be greater than 1 - this
             constrains the forecast length from being much larger than than the training data
             note this includes NaNs in current configuration
+            When forecast_length exceeds the available rows, callers that have
+            already warned about degraded validation use an approximately 50/50
+            train/test split instead.
 
     Returns:
         train, test  (both pd DataFrames)
     """
     assert forecast_length > 0, "forecast_length must be greater than 0"
 
+    if forecast_length > df.shape[0]:
+        split_point = int(df.shape[0] / 2)
+        return df.iloc[:split_point].copy(), df.iloc[split_point:].copy()
+
     if (forecast_length * min_allowed_train_percent) > int(
         (df.shape[0]) - forecast_length
     ):
-        raise ValueError(
-            """forecast_length is too large for training data.
+        raise ValueError("""forecast_length is too large for training data.
 What this means is you don't have enough history to support cross validation with your forecast_length.
 Various solutions include bringing in more data, alter min_allowed_train_percent to something smaller,
 and also setting a shorter forecast_length to class init for cross validation which you can then override with a longer value in .predict()
 This error is also often caused by errors in inputing of or preshaping the data.
 Check model.df_wide_numeric to make sure data was imported correctly.
-            """
-        )
+            """)
 
     train = df.head((df.shape[0]) - forecast_length)
     test = df.tail(forecast_length)

@@ -185,6 +185,7 @@ def load_live_daily(
         added = dataset_lists[start_len:]
         n_series = 0
         for d in added:
+            d = d[(d.index >= observation_start_timestamp) & (d.index <= current_date)]
             if isinstance(d, pd.DataFrame):
                 n_series += int(d.notna().any(axis=0).sum())
             elif isinstance(d, pd.Series):
@@ -211,9 +212,7 @@ def load_live_daily(
                 "observation_end must be a valid scalar date or datetime."
             ) from exc
         if pd.isna(current_date):
-            raise ValueError(
-                "observation_end must be a valid scalar date or datetime."
-            )
+            raise ValueError("observation_end must be a valid scalar date or datetime.")
         if current_date.tzinfo is not None:
             current_date = current_date.tz_localize(None)
     if observation_start is None:
@@ -226,9 +225,7 @@ def load_live_daily(
             "observation_start must be a valid scalar date or datetime."
         ) from exc
     if pd.isna(observation_start_timestamp):
-        raise ValueError(
-            "observation_start must be a valid scalar date or datetime."
-        )
+        raise ValueError("observation_start must be a valid scalar date or datetime.")
     if observation_start_timestamp.tzinfo is not None:
         observation_start_timestamp = observation_start_timestamp.tz_localize(None)
     if observation_start_timestamp > current_date:
@@ -238,9 +235,7 @@ def load_live_daily(
 
         s = requests.Session()
     except Exception as e:
-        raise ValueError(
-            f"Live data HTTP transport is unavailable: {e!r}"
-        ) from e
+        raise ValueError(f"Live data HTTP transport is unavailable: {e!r}") from e
 
     if fred_key is not None and fred_series is not None:
         _blk = _start_source("FRED")
@@ -842,8 +837,7 @@ def load_live_daily(
                         current_date - datetime.timedelta(days=chunk_days * x)
                     ).strftime("%Y%m%d")
                     start_nospace = (
-                        current_date
-                        - datetime.timedelta(days=chunk_days * (x + 1) + 1)
+                        current_date - datetime.timedelta(days=chunk_days * (x + 1) + 1)
                     ).strftime("%Y%m%d")
                     caiso_url = f"http://oasis.caiso.com/oasisapi/SingleZip?resultformat=6&queryname={caiso_query}&version=1&market_run_id=RTM&tac_zone_name=ALL&schedule=Generation&startdatetime={start_nospace}T00:00-0000&enddatetime={end_nospace}T23:00-0000"
                     data = pd.read_csv(caiso_url, compression='zip')
@@ -997,10 +991,7 @@ def load_live_daily(
     # column is not a usable time series and causes downstream feature
     # detection to emit nanvar warnings. Also enforce the caller's shared date
     # window after sources with coarse history controls have over-fetched.
-    df = df[
-        (df.index >= observation_start_timestamp)
-        & (df.index <= current_date)
-    ]
+    df = df[(df.index >= observation_start_timestamp) & (df.index <= current_date)]
     df = df.dropna(axis=1, how="all")
     if df.shape[0] < 1 or df.shape[1] < 1:
         raise ValueError("No data successfully downloaded!")

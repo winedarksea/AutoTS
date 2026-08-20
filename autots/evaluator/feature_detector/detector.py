@@ -107,6 +107,13 @@ class TimeSeriesFeatureDetector(
     global_holiday_anomaly_suppression : bool, default=True
         If True, anomaly detection suppresses holiday-proximate flags using a merged holiday
         date set from all series. Set False to disable this suppression.
+    extended_anomaly_params : dict, default=None
+        Opt-in second anomaly pass detecting multi-day/sustained patterns
+        (see ExtendedAnomalyDetector). Disabled unless a truthy dict is given;
+        ``default_extended_anomaly_params()`` supplies a usable starting point.
+        Off by default: sustained changes are already reported as level shifts
+        and trend changepoints, and labelling them as anomalies as well makes
+        the anomaly output span most of the timeline on typical data.
     """
 
     TEMPLATE_VERSION = "1.2"
@@ -199,10 +206,11 @@ class TimeSeriesFeatureDetector(
                 'method': 'rolling_zscore',
                 'method_params': {
                     'distribution': 'norm',
-                    'alpha': 0.001,
+                    'alpha': 0.05,
                     'rolling_periods': 200,
                     'center': False,
                 },
+                'transform_dict': None,
                 'fillna': 'ffill',
             }
         else:
@@ -277,31 +285,14 @@ class TimeSeriesFeatureDetector(
         self.global_holiday_anomaly_suppression = bool(
             global_holiday_anomaly_suppression
         )
-        # Extended anomaly detector params; falsy value disables extended detection.
-        # Default enables a conservative extended pass.
-        if extended_anomaly_params is None:
-            self.extended_anomaly_params = {
-                'sustained_window': 7,
-                'sustained_baseline': 45,
-                'sustained_threshold': 2.2,
-                'cusum_k': 0.5,
-                'cusum_h': 4.0,
-                'slope_reversion_min_hold': 5,
-                'slope_reversion_min_reversion': 7,
-                'slope_reversion_cumsum_threshold': 3.0,
-                'slope_reversion_max_duration': 84,
-                'decay_lookahead': 21,
-                'decay_fit_min_r2': 0.5,
-                'min_segment_run': 2,
-                'sustained_hysteresis': 0.7,
-                'segment_max_gap': 1,
-                'merge_distance_days': 2,
-            }
-        else:
-            # Explicitly setting to False/empty dict disables; any truthy dict enables
-            self.extended_anomaly_params = (
-                extended_anomaly_params if extended_anomaly_params else {}
-            )
+        # Extended anomaly detection is opt-in: pass a truthy dict to enable it.
+        # It is off by default because it labels sustained structure as anomalies,
+        # which on real data covers a majority of the timeline and overlaps the
+        # level_shift / changepoint outputs that already describe that structure.
+        # ``default_extended_anomaly_params()`` returns a reasonable starting dict.
+        self.extended_anomaly_params = (
+            copy.deepcopy(extended_anomaly_params) if extended_anomaly_params else {}
+        )
         self.event_dag_params = resolve_event_dag_params(event_dag_params)
 
         # Model artifacts
@@ -600,7 +591,7 @@ class TimeSeriesFeatureDetector(
             # Safe denominators so the leverage formula never divides by zero;
             # results are discarded by np.where for series with m < 2.
             _m_safe = np.where(_has_lev, _m, 1.0)
-            _Sxx = np.where(_has_lev, _m * (_m ** 2 - 1.0) / 12.0, 1.0)
+            _Sxx = np.where(_has_lev, _m * (_m**2 - 1.0) / 12.0, 1.0)
             _xbar = (_m - 1.0) / 2.0
             _h = np.arange(1, forecast_length + 1, dtype=float)[:, np.newaxis]
             # Future x measured from segment start: x0 = (m - 1) + h.
@@ -614,7 +605,9 @@ class TimeSeriesFeatureDetector(
             # shape (forecast_length, n_series)
             _sigma_total = _sigma_resid[np.newaxis, :] * np.sqrt(1.0 + _lev)
             _z = float(_scipy_norm.ppf(1.0 - (1.0 - prediction_interval) / 2.0))
-            _margin = pd.DataFrame(_z * _sigma_total, index=future_index, columns=columns)
+            _margin = pd.DataFrame(
+                _z * _sigma_total, index=future_index, columns=columns
+            )
             lower_forecast = forecast - _margin
             upper_forecast = forecast + _margin
         else:
@@ -1635,15 +1628,20 @@ class TimeSeriesFeatureDetector(
             'output': 'multivariate',
             'method': method_choice,
             'method_params': method_params,
+            'transform_dict': None,
             'fillna': 'ffill',
         }
-        if random.random() < 0.2:
+        if 'alpha' in method_params and random.random() < 0.2:
             anomaly_params['two_pass'] = True
             anomaly_params['liberal_alpha_multiplier'] = random.choice(
                 [5.0, 10.0, 20.0]
             )
         if random.random() < 0.3:
             anomaly_params['holiday_proximity_days'] = random.choice([1, 2, 3, 5])
+        if random.random() < 0.3:
+            anomaly_params['holiday_override_strength'] = random.choice(
+                [None, 1.25, 1.5, 2.0, 3.0]
+            )
 
         # Changepoint params
         changepoint_params = ChangepointDetector.get_new_params(method=method)
@@ -1660,11 +1658,13 @@ class TimeSeriesFeatureDetector(
             method="filters", allow_none=True, transformer_max_depth=2
         )
 
-        # Extended anomaly detector params (disabled ~15% of the time)
+        # Extended anomaly detection is off by default and only sampled
+        # occasionally; it is useful for transient-change labelling but tends to
+        # flood the anomaly output on series with any residual drift.
         extended_anomaly_params = (
-            None
+            ExtendedAnomalyDetector.get_new_params(method=method)
             if random.random() < 0.15
-            else ExtendedAnomalyDetector.get_new_params(method=method)
+            else None
         )
 
         return {

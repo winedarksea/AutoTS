@@ -46,7 +46,10 @@ class StructureLearningConfig:
     max_levels: int = 3
     pool_ratio: float = 0.5
     min_nodes_per_level: int = 2
-    dag_penalty: float = 0.1
+    # Lagged graphs cannot form instantaneous cycles and real panels have
+    # genuine feedback loops; acyclicity is reported as a diagnostic
+    # (cycle_score in the snapshot), not optimized against (W-6).
+    dag_penalty: float = 0.0
     dag_warmup_epochs: float = 0.2
     sparsity_weight: float = 0.01
     assignment_entropy_weight: float = 0.01
@@ -436,8 +439,15 @@ def build_graph_snapshot(
     prototype_forecasts: np.ndarray = None,
     global_prototype_weights: np.ndarray = None,
     decoded_top_trends: np.ndarray = None,
+    dag_level: str = 'top',
 ) -> GraphSnapshot:
-    """Create a serializable snapshot from TVA structure state."""
+    """Create a serializable snapshot from TVA structure state.
+
+    Args:
+        dag_level: 'top' maps the dense adjacency onto the top latent level
+            (legacy). 'series' maps it onto level 0 so the DAG is drawn over
+            real series names (W-7).
+    """
     dense = np.asarray(adjacency_dense, dtype=np.float32)
     if dense.ndim != 2 or dense.shape[0] != dense.shape[1]:
         dense = np.zeros((0, 0), dtype=np.float32)
@@ -451,9 +461,22 @@ def build_graph_snapshot(
     is_acyclic = len(topological_order) == thresholded.shape[0]
     cycle_score = _safe_cycle_score_numpy(dense)
 
+    series_level_dag = str(dag_level) == 'series'
+    # positions of anchors within the full series list, used to map anchor-
+    # indexed assignment rows onto series-level level-0 nodes
+    if anchor_mask is not None and full_series_names:
+        anchor_positions = np.where(np.asarray(anchor_mask, dtype=bool).reshape(-1))[
+            0
+        ].tolist()
+    else:
+        anchor_positions = None
+
     level_sizes = []
     if assignment_arrays:
-        level_sizes = [assignment_arrays[0].shape[0]]
+        if series_level_dag and full_series_names:
+            level_sizes = [len(full_series_names)]
+        else:
+            level_sizes = [assignment_arrays[0].shape[0]]
         level_sizes.extend([matrix.shape[1] for matrix in assignment_arrays])
     else:
         level_sizes = [dense.shape[0]]
@@ -467,12 +490,25 @@ def build_graph_snapshot(
         y_positions = np.linspace(0.9, 0.1, max(level_size, 1))
         for node_index in range(level_size):
             if level_index == 0:
-                label = (
-                    anchor_names[node_index]
-                    if anchor_names is not None and node_index < len(anchor_names)
-                    else f'anchor_{node_index}'
-                )
-                kind = 'anchor'
+                if series_level_dag and full_series_names:
+                    label = (
+                        full_series_names[node_index]
+                        if node_index < len(full_series_names)
+                        else f'series_{node_index}'
+                    )
+                    kind = 'anchor'
+                    if (
+                        anchor_positions is not None
+                        and node_index not in anchor_positions
+                    ):
+                        kind = 'responder'
+                else:
+                    label = (
+                        anchor_names[node_index]
+                        if anchor_names is not None and node_index < len(anchor_names)
+                        else f'anchor_{node_index}'
+                    )
+                    kind = 'anchor'
             elif level_index == len(level_sizes) - 1:
                 label = f'driver_{node_index + 1}'
                 if global_prototype_weights is not None:
@@ -506,15 +542,25 @@ def build_graph_snapshot(
     for level_index, matrix in enumerate(assignment_arrays):
         lower_size, upper_size = matrix.shape
         for lower_idx in range(lower_size):
+            # anchor-indexed assignment rows map onto series-level nodes
+            if (
+                level_index == 0
+                and series_level_dag
+                and anchor_positions is not None
+                and lower_idx < len(anchor_positions)
+            ):
+                source_offset = anchor_positions[lower_idx]
+            else:
+                source_offset = lower_idx
             for upper_idx in range(upper_size):
                 weight = float(matrix[lower_idx, upper_idx])
                 if weight < threshold:
                     continue
                 edge_table.append(
                     {
-                        'source': node_table[level_offsets[level_index] + lower_idx][
-                            'node_id'
-                        ],
+                        'source': node_table[
+                            level_offsets[level_index] + source_offset
+                        ]['node_id'],
                         'target': node_table[
                             level_offsets[level_index + 1] + upper_idx
                         ]['node_id'],
@@ -523,7 +569,10 @@ def build_graph_snapshot(
                     }
                 )
 
-    dag_level_offset = level_offsets[-2] if len(level_offsets) >= 2 else 0
+    if str(dag_level) == 'series':
+        dag_level_offset = 0
+    else:
+        dag_level_offset = level_offsets[-2] if len(level_offsets) >= 2 else 0
     for source in range(dense.shape[0]):
         for target in range(dense.shape[1]):
             weight = float(dense[source, target])
@@ -1035,58 +1084,106 @@ def _plot_overview_snapshot(
 
 if HAS_TORCH:
 
-    class DirectedGraphLearner(nn.Module):
-        """Learn a dense directed adjacency matrix over the top latent layer."""
+    class SeriesGraphLearner(nn.Module):
+        """Sparse series-level graph anchored at a discovered edge set (W-1).
 
-        def __init__(self, n_nodes: int, prior_adjacency: np.ndarray = None):
+        The topology comes from data-side discovery (stability-selected lasso
+        VAR, lead-lag scan, event clusters, business priors) and is FIXED —
+        buffers, not parameters. The only learnable quantities are a small
+        per-edge weight delta (init 0, L1-regularized through the sparsity
+        penalty) and a per-family gate (init 1). E ≈ 5N free parameters
+        anchored at a data estimate, versus N² free: topology seed-variance
+        is zero by construction, and direction comes from lag structure —
+        never from matrix index order.
+
+        Args:
+            n_series: Total number of series (graph is N x N).
+            edges: List of dicts with integer 'source', 'target', plus 'lag',
+                'sign', 'weight' (prior magnitude in [0, 1]), 'family'.
+            families: Ordered list of family names indexing the family gate.
+        """
+
+        def __init__(self, n_series: int, edges: list = None, families: list = None):
             super().__init__()
-            self.n_nodes = int(max(n_nodes, 1))
-            if prior_adjacency is None:
-                init = np.full((self.n_nodes, self.n_nodes), 0.5, dtype=np.float32)
-                init = self._break_symmetry(init)
-            else:
-                init = np.asarray(prior_adjacency, dtype=np.float32)
-                if init.shape != (self.n_nodes, self.n_nodes):
-                    init = np.full((self.n_nodes, self.n_nodes), 0.5, dtype=np.float32)
-                if np.allclose(init, init.T, atol=1e-6):
-                    init = self._break_symmetry(init)
-            np.fill_diagonal(init, 0.0)
-            init = np.clip(init, 1e-4, 1 - 1e-4)
-            self.edge_logits = nn.Parameter(
-                torch.logit(torch.tensor(init, dtype=torch.float32))
+            self.n_series = int(max(n_series, 1))
+            edges = list(edges or [])
+            self.families = list(
+                families
+                or sorted({str(e.get('family', 'lasso')) for e in edges})
+                or ['lasso']
             )
+            family_index = {name: i for i, name in enumerate(self.families)}
+            n_edges = len(edges)
+            self.n_edges = n_edges
 
-        @staticmethod
-        def _break_symmetry(
-            init: np.ndarray, off_diagonal_bias: float = 0.075
-        ) -> np.ndarray:
-            """Inject a small deterministic direction bias into symmetric priors."""
-            init = np.asarray(init, dtype=np.float32).copy()
-            if init.ndim != 2 or init.shape[0] != init.shape[1]:
-                return init
-            upper = np.triu(np.ones_like(init, dtype=np.float32), k=1)
-            lower = np.tril(np.ones_like(init, dtype=np.float32), k=-1)
-            init = init + off_diagonal_bias * upper - off_diagonal_bias * lower
-            np.fill_diagonal(init, 0.0)
-            return np.clip(init, 1e-4, 1 - 1e-4)
+            src = torch.tensor([int(e['source']) for e in edges], dtype=torch.long)
+            dst = torch.tensor([int(e['target']) for e in edges], dtype=torch.long)
+            lag = torch.tensor([int(e.get('lag', 0)) for e in edges], dtype=torch.long)
+            sign = torch.tensor(
+                [float(e.get('sign', 1)) for e in edges], dtype=torch.float32
+            )
+            prior = torch.tensor(
+                [abs(float(e.get('weight', 0.5))) for e in edges],
+                dtype=torch.float32,
+            )
+            if n_edges and prior.max() > 0:
+                prior = prior / prior.max()
+            fam = torch.tensor(
+                [family_index.get(str(e.get('family', 'lasso')), 0) for e in edges],
+                dtype=torch.long,
+            )
+            self.register_buffer('edge_src', src)
+            self.register_buffer('edge_dst', dst)
+            self.register_buffer('edge_lag', lag)
+            self.register_buffer('edge_sign', sign)
+            self.register_buffer('edge_prior', prior)
+            self.register_buffer('edge_family', fam)
+
+            self.edge_delta = nn.Parameter(torch.zeros(n_edges))
+            self.family_gate = nn.Parameter(torch.ones(len(self.families)))
+
+        def edge_weights(self) -> torch.Tensor:
+            """Per-edge non-negative magnitudes: prior * gate + learned delta."""
+            if self.n_edges == 0:
+                return torch.zeros(0, device=self.edge_delta.device)
+            gate = self.family_gate[self.edge_family]
+            return F.relu(self.edge_prior * gate + self.edge_delta)
 
         @property
         def adjacency(self) -> torch.Tensor:
-            logits = torch.clamp(self.edge_logits, min=-8.0, max=8.0)
-            adjacency = torch.sigmoid(logits)
-            adjacency = adjacency * (
-                1.0 - torch.eye(self.n_nodes, device=adjacency.device)
-            )
+            """(N, N) dense non-negative adjacency A[src, dst], clamped to [0, 1]."""
+            device = self.edge_delta.device
+            adjacency = torch.zeros(self.n_series, self.n_series, device=device)
+            if self.n_edges:
+                weights = self.edge_weights().clamp(max=1.0)
+                adjacency.index_put_(
+                    (self.edge_src, self.edge_dst), weights, accumulate=True
+                )
+                adjacency = adjacency.clamp(max=1.0)
             return adjacency
 
-        def attention_mask(self) -> torch.Tensor:
-            return -10.0 * (1.0 - self.adjacency)
+        @property
+        def signed_adjacency(self) -> torch.Tensor:
+            """(N, N) signed adjacency (discovered signs applied)."""
+            device = self.edge_delta.device
+            adjacency = torch.zeros(self.n_series, self.n_series, device=device)
+            if self.n_edges:
+                weights = (self.edge_weights() * self.edge_sign).clamp(-1.0, 1.0)
+                adjacency.index_put_(
+                    (self.edge_src, self.edge_dst), weights, accumulate=True
+                )
+                adjacency = adjacency.clamp(-1.0, 1.0)
+            return adjacency
 
     class DynamicHierarchyLearner(nn.Module):
         """Learn a bounded latent hierarchy with soft parent-child assignments."""
 
         def __init__(
-            self, n_anchor: int, d_token: int, config: StructureLearningConfig
+            self,
+            n_anchor: int,
+            d_token: int,
+            config: StructureLearningConfig,
+            initial_communities=None,
         ):
             super().__init__()
             self.n_anchor = int(max(n_anchor, 1))
@@ -1104,8 +1201,21 @@ if HAS_TORCH:
             # assignment adaptation used for diagnostics and optional drift loss.
             self.dynamic_assignment_mix = 0.2
 
-            for lower_size, upper_size in zip(layer_sizes[:-1], layer_sizes[1:]):
+            for level, (lower_size, upper_size) in enumerate(
+                zip(layer_sizes[:-1], layer_sizes[1:])
+            ):
                 logits = torch.zeros(lower_size, upper_size, dtype=torch.float32)
+                # W-5: zeros init makes latent nodes indistinguishable and
+                # permutation-arbitrary. When structure discovery supplies
+                # communities, seed the FIRST level at +2.0 for
+                # (series, its community) so latent nodes start with identity.
+                if level == 0 and initial_communities is not None:
+                    communities = np.asarray(initial_communities).reshape(-1)
+                    if communities.shape[0] == lower_size:
+                        for row, community in enumerate(communities):
+                            community = int(community)
+                            if 0 <= community < upper_size:
+                                logits[row, community] = 2.0
                 self.assignment_logits.append(nn.Parameter(logits))
                 self.encoder_norms.append(nn.LayerNorm(d_token))
                 self.decoder_norms.append(nn.LayerNorm(d_token))

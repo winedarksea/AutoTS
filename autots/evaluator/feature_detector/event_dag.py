@@ -7,7 +7,6 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-
 DEFAULT_EVENT_DAG_PARAMS = {
     'enabled': True,
     'source_families': ['anomalies', 'trend_changepoints', 'level_shifts'],
@@ -154,7 +153,9 @@ def _family_order_index(source_families):
     return {name: idx for idx, name in enumerate(source_families)}
 
 
-def _extract_record_fields(family, record, step, shared_default=False, max_periods=None):
+def _extract_record_fields(
+    family, record, step, shared_default=False, max_periods=None
+):
     shared_flag = bool(shared_default)
     subtype = family
     magnitude = 0.0

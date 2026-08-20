@@ -4,13 +4,13 @@ Created on Thu Jul  7 10:27:46 2022
 
 @author: Colin
 """
+
 import datetime
 import numpy as np
 import pandas as pd
 import os
 from itertools import groupby
 from operator import itemgetter
-
 
 NONPARAMETRIC_THRESHOLD_KWARGS = {
     'warmup_pts',

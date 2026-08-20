@@ -1,7 +1,10 @@
 """Time Series Feature Detection and Optimization package."""
 
 from .detector import TimeSeriesFeatureDetector
-from .extended_anomaly import ExtendedAnomalyDetector
+from .extended_anomaly import (
+    ExtendedAnomalyDetector,
+    default_extended_anomaly_params,
+)
 from .loss import FeatureDetectionLoss, ReconstructionLoss
 from .optimizer import FeatureDetectionOptimizer
 
@@ -12,6 +15,7 @@ from autots.datasets.synthetic import SyntheticDailyGenerator  # noqa: F401
 __all__ = [
     "TimeSeriesFeatureDetector",
     "ExtendedAnomalyDetector",
+    "default_extended_anomaly_params",
     "FeatureDetectionLoss",
     "ReconstructionLoss",
     "FeatureDetectionOptimizer",

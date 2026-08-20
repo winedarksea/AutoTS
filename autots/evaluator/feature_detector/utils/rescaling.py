@@ -109,6 +109,8 @@ class RescalingMixin:
                             entry['magnitude'], series_name
                         ),
                         'score': entry.get('score'),
+                        # dimensionless ratio - deliberately not rescaled
+                        'strength': entry.get('strength'),
                         'type': entry.get('type', 'spike'),
                         # Preserve duration so multi-day anomalies are not collapsed to 1
                         'duration': int(entry.get('duration', 1) or 1),

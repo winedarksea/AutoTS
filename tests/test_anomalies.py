@@ -645,5 +645,127 @@ class TestAnomalyRemoval(unittest.TestCase):
                         raise
 
 
+class TestHolidayProximitySuppression(unittest.TestCase):
+    """Holiday-proximate anomaly suppression and its strength override."""
+
+    @classmethod
+    def setUpClass(cls):
+        from autots.tools.transform import AnomalyRemoval
+
+        cls.AnomalyRemoval = AnomalyRemoval
+        rng = np.random.default_rng(0)
+        cls.index = pd.date_range('2020-01-01', periods=1095, freq='D')
+        cls.df = pd.DataFrame(
+            rng.normal(0, 1, (1095, 4)),
+            index=cls.index,
+            columns=[f'series_{i}' for i in range(4)],
+        )
+        # a recurring, same-sized "holiday" spike plus one far larger one-off
+        cls.holidays = [pd.Timestamp(f'{y}-07-04') for y in (2020, 2021, 2022)]
+        for holiday in cls.holidays:
+            cls.df.loc[holiday, :] += 8.0
+        cls.extreme_date = pd.Timestamp('2021-07-04')
+        cls.df.loc[cls.extreme_date, 'series_0'] += 40.0
+        cls.method_params = {
+            'distribution': 'norm',
+            'alpha': 0.05,
+            'rolling_periods': 200,
+            'center': False,
+        }
+
+    def _fit(self, **kwargs):
+        return self.AnomalyRemoval(
+            method='rolling_zscore',
+            method_params=self.method_params,
+            transform_dict=None,
+            **kwargs,
+        ).fit(self.df)
+
+    def test_override_none_suppresses_every_proximate_flag(self):
+        """None must reproduce the original unconditional suppression."""
+        print("Starting test_override_none_suppresses_every_proximate_flag")
+        model = self._fit(
+            holiday_dates=self.holidays,
+            holiday_proximity_days=2,
+            holiday_override_strength=None,
+        )
+        window = set()
+        for holiday in self.holidays:
+            window.update(
+                holiday + pd.Timedelta(days=offset) for offset in range(-2, 3)
+            )
+        in_window = self.index.isin(sorted(window))
+        self.assertEqual(int((model.anomalies[in_window] == -1).sum().sum()), 0)
+
+    def test_recurring_holiday_spike_stays_suppressed(self):
+        """A spike that is the same size every year is holiday behaviour."""
+        print("Starting test_recurring_holiday_spike_stays_suppressed")
+        model = self._fit(
+            holiday_dates=self.holidays,
+            holiday_proximity_days=2,
+            holiday_override_strength=1.5,
+        )
+        for holiday in self.holidays:
+            self.assertEqual(
+                model.anomalies.at[holiday, 'series_1'],
+                1,
+                msg=f"ordinary holiday spike survived suppression at {holiday}",
+            )
+
+    def test_extreme_anomaly_on_holiday_survives(self):
+        """A day far stronger than its holiday peers is a real anomaly."""
+        print("Starting test_extreme_anomaly_on_holiday_survives")
+        unconditional = self._fit(
+            holiday_dates=self.holidays,
+            holiday_proximity_days=2,
+            holiday_override_strength=None,
+        )
+        self.assertEqual(unconditional.anomalies.at[self.extreme_date, 'series_0'], 1)
+
+        override = self._fit(
+            holiday_dates=self.holidays,
+            holiday_proximity_days=2,
+            holiday_override_strength=1.5,
+        )
+        self.assertEqual(override.anomalies.at[self.extreme_date, 'series_0'], -1)
+
+    def test_suppression_is_confined_to_the_proximity_window(self):
+        print("Starting test_suppression_is_confined_to_the_proximity_window")
+        baseline = self._fit()
+        suppressed = self._fit(
+            holiday_dates=self.holidays,
+            holiday_proximity_days=1,
+            holiday_override_strength=None,
+        )
+        outside = ~self.index.isin(
+            [h + pd.Timedelta(days=o) for h in self.holidays for o in (-1, 0, 1)]
+        )
+        pd.testing.assert_frame_equal(
+            baseline.anomalies[outside], suppressed.anomalies[outside]
+        )
+
+
+class TestFeatureDetectorAnomalyParams(unittest.TestCase):
+    """Sampled anomaly blocks must describe what actually runs."""
+
+    def test_liberal_alpha_only_paired_with_alpha_methods(self):
+        print("Starting test_liberal_alpha_only_paired_with_alpha_methods")
+        from autots.evaluator.feature_detector import TimeSeriesFeatureDetector
+
+        for _ in range(400):
+            params = TimeSeriesFeatureDetector.get_new_params(method='random')[
+                'anomaly_params'
+            ]
+            # transform_dict is pinned so AnomalyRemoval's own default cannot be
+            # silently inherited in place of the sampled configuration.
+            self.assertIn('transform_dict', params)
+            if 'liberal_alpha_multiplier' in params:
+                self.assertIn(
+                    'alpha',
+                    params['method_params'],
+                    msg=f"liberal_alpha_multiplier is inert for {params['method']}",
+                )
+
+
 if __name__ == '__main__':
     unittest.main()

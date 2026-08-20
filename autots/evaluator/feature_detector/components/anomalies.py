@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import warnings
 from autots.tools.transform import AnomalyRemoval
+from autots.tools.anomaly_utils import anomaly_scores_to_strength
 
 
 class AnomalyMixin:
@@ -31,6 +32,10 @@ class AnomalyMixin:
         setattr(self, detector_attr, detector)
         anomalies = {}
 
+        # Scores are only comparable within a single method, so normalize them
+        # to a uniform higher-is-stronger scale while the method is still known.
+        strengths = self._anomaly_score_strengths(detector)
+
         # Handle both multivariate and univariate outputs
         if self.detection_mode == 'univariate':
             # Univariate mode: single column of anomaly flags for all series
@@ -44,21 +49,15 @@ class AnomalyMixin:
             for date in anomaly_dates:
                 # For univariate, we could use the max magnitude across series or mean
                 magnitudes = residual_df.loc[date, :].values
-                magnitude = float(np.nanmean(magnitudes))
-                score = None
-                if hasattr(detector, 'scores') and not detector.scores.empty:
-                    try:
-                        score = float(detector.scores.loc[date].iloc[0])
-                    except Exception:
-                        score = None
-                anomaly_type = 'point_outlier'  # Simplified for univariate
                 records.append(
-                    {
-                        'date': pd.Timestamp(date),
-                        'magnitude': magnitude,
-                        'score': score,
-                        'type': anomaly_type,
-                    }
+                    self._build_anomaly_record(
+                        date=date,
+                        magnitude=float(np.nanmean(magnitudes)),
+                        detector=detector,
+                        strengths=strengths,
+                        column=None,
+                        anomaly_type='point_outlier',  # Simplified for univariate
+                    )
                 )
             # In univariate mode, all series share the same anomalies
             for col in residual_df.columns:
@@ -78,24 +77,72 @@ class AnomalyMixin:
                 anomaly_dates = residual_df.index[mask].tolist()
                 records = []
                 for date in anomaly_dates:
-                    magnitude = residual_df.at[date, col]
-                    score = None
-                    if hasattr(detector, 'scores') and not detector.scores.empty:
-                        try:
-                            score = float(detector.scores.loc[date, col])
-                        except Exception:
-                            score = None
-                    anomaly_type = self._classify_anomaly_type(residual_df[col], date)
                     records.append(
-                        {
-                            'date': pd.Timestamp(date),
-                            'magnitude': float(magnitude),
-                            'score': score,
-                            'type': anomaly_type,
-                        }
+                        self._build_anomaly_record(
+                            date=date,
+                            magnitude=float(residual_df.at[date, col]),
+                            detector=detector,
+                            strengths=strengths,
+                            column=col,
+                            anomaly_type=self._classify_anomaly_type(
+                                residual_df[col], date
+                            ),
+                        )
                     )
                 anomalies[col] = records
         return cleaned, anomalies
+
+    @staticmethod
+    def _anomaly_score_strengths(detector):
+        """Uniform higher-is-stronger scores for a fitted AnomalyRemoval."""
+        scores = getattr(detector, 'scores', None)
+        if scores is None or getattr(scores, 'empty', True):
+            return None
+        try:
+            return anomaly_scores_to_strength(
+                scores,
+                getattr(detector, 'method', None),
+                getattr(detector, 'method_params', None),
+                getattr(detector, 'anomalies', None),
+            )
+        except Exception as exc:
+            warnings.warn(
+                f"anomaly score strength normalization failed: {exc}",
+                RuntimeWarning,
+            )
+            return None
+
+    @staticmethod
+    def _lookup_by_date(frame, date, column=None):
+        """Fetch a scalar from a scores-like frame, tolerating shape mismatches."""
+        if frame is None or getattr(frame, 'empty', True):
+            return None
+        try:
+            if column is not None and column in getattr(frame, 'columns', []):
+                return float(frame.loc[date, column])
+            return float(frame.loc[date].iloc[0])
+        except Exception:
+            return None
+
+    @classmethod
+    def _build_anomaly_record(
+        cls, date, magnitude, detector, strengths, column, anomaly_type
+    ):
+        """Assemble one pass-1 anomaly record.
+
+        ``score`` keeps the raw method-specific value (a p-value for the zscore
+        family) for backwards compatibility; ``strength`` is the normalized
+        higher-is-stronger value that ranking should use.
+        """
+        return {
+            'date': pd.Timestamp(date),
+            'magnitude': float(magnitude),
+            'score': cls._lookup_by_date(
+                getattr(detector, 'scores', None), date, column
+            ),
+            'strength': cls._lookup_by_date(strengths, date, column),
+            'type': anomaly_type,
+        }
 
     @staticmethod
     def _classify_anomaly_type(series, date):

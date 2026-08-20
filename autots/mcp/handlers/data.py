@@ -253,9 +253,7 @@ async def handle_smart_load(arguments: dict, log_progress) -> dict:
 
     csv_bytes = base64.b64decode(content_base64) if content_base64 else None
     if text is None and url is None and csv_bytes is None:
-        raise ValueError(
-            "Must provide one of: 'text', 'url', or 'content_base64'"
-        )
+        raise ValueError("Must provide one of: 'text', 'url', or 'content_base64'")
 
     await log_progress("smart_load: parsing and cleaning uploaded data")
     df, report = smart_load(

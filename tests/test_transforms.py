@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 """Overall testing."""
+import json
 import unittest
 import numpy as np
 import pandas as pd
 from autots.datasets import load_daily, load_monthly, load_artificial, load_sine
+from autots.templates.general import general_template_dict
 from autots.tools.transform import (
     ThetaTransformer,
     FIRFilter,
@@ -20,6 +22,29 @@ from autots.models.base import PredictionObject
 
 
 class TestTransforms(unittest.TestCase):
+    def test_template_50_holiday_transformer_uses_empty_anomaly_transform(self):
+        """Template 50 must retain nearest fill without a nested no-op transformer."""
+        transform_params = json.loads(
+            general_template_dict["50"]["TransformationParameters"]
+        )
+        anomaly_transform_dict = transform_params["transformation_params"]["0"][
+            "anomaly_detector_params"
+        ]["transform_dict"]
+        self.assertEqual(anomaly_transform_dict["transformations"], {})
+        self.assertEqual(anomaly_transform_dict["transformation_params"], {})
+
+        rng = np.random.default_rng(20260717)
+        df = pd.DataFrame(
+            rng.normal(size=(400, 3)),
+            index=pd.date_range("2024-01-01", periods=400, freq="D"),
+            columns=["series_a", "series_b", "series_c"],
+        )
+        transformed = GeneralTransformer(**transform_params).fit_transform(df)
+
+        self.assertEqual(transformed.shape, df.shape)
+        pd.testing.assert_index_equal(transformed.index, df.index)
+        pd.testing.assert_index_equal(transformed.columns, df.columns)
+
     def test_datepart_regression_aligns_misaligned_regressor(self):
         """Misaligned regressors should be reindexed, not expand the design matrix."""
         dates = pd.date_range(start='2020-01-01', periods=8, freq='D')

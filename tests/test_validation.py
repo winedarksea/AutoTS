@@ -7,6 +7,8 @@ Created on Wed Feb  5 08:21:47 2025
 """
 
 import unittest
+import warnings
+from unittest.mock import patch
 import numpy as np
 import pandas as pd
 
@@ -15,6 +17,7 @@ from autots.evaluator.validation import (
     validate_num_validations,
     generate_validation_indices,
 )
+from autots.tools.shaping import simple_train_test_split
 
 
 # Create a dummy DataFrame to use in tests.
@@ -279,14 +282,66 @@ class TestValidationSegments(unittest.TestCase):
         # Test that if the data is too short to allow any validations, 0 is returned.
         df = create_dummy_df(n_rows=1)
         forecast_length = 2  # longer than data
-        result = validate_num_validations(
-            validation_method="backwards",
-            num_validations=2,
-            df_wide_numeric=df,
-            forecast_length=forecast_length,
-            verbose=0,
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            result = validate_num_validations(
+                validation_method="backwards",
+                num_validations=2,
+                df_wide_numeric=df,
+                forecast_length=forecast_length,
+                verbose=0,
+            )
         self.assertEqual(result, 0)
+
+    def test_long_horizon_uses_single_half_history_validation(self):
+        df = create_dummy_df(n_rows=6)
+        with warnings.catch_warnings(record=True) as caught_warnings:
+            warnings.simplefilter("always")
+            with patch("builtins.print") as mocked_print:
+                result = validate_num_validations(
+                    validation_method="backwards",
+                    num_validations="auto",
+                    df_wide_numeric=df,
+                    forecast_length=8,
+                    verbose=0,
+                )
+        self.assertEqual(result, 0)
+        self.assertEqual(len(caught_warnings), 1)
+        self.assertIs(caught_warnings[0].category, RuntimeWarning)
+        self.assertIn("requested 8 forecast periods", str(caught_warnings[0].message))
+        mocked_print.assert_called_once()
+
+        train, test = simple_train_test_split(df, forecast_length=8)
+        self.assertEqual(train.shape[0], 3)
+        self.assertEqual(test.shape[0], 3)
+
+    def test_long_horizon_mixed_length_keeps_progressive_validations(self):
+        df = create_dummy_df(n_rows=10)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            result_count = validate_num_validations(
+                validation_method="mixed_length",
+                num_validations="auto",
+                df_wide_numeric=df,
+                forecast_length=11,
+                verbose=-1,
+            )
+        self.assertEqual(result_count, 3)
+        result = generate_validation_indices(
+            validation_method="mixed_length",
+            forecast_length=11,
+            num_validations=result_count,
+            df_wide_numeric=df,
+        )
+        self.assertEqual([len(train) for train, _ in result], [5, 6, 7, 8])
+        self.assertEqual([len(test) for _, test in result], [5, 4, 3, 2])
+
+    def test_minimum_training_requirement_still_raises_without_long_horizon(self):
+        df = create_dummy_df(n_rows=10)
+        with self.assertRaises(ValueError):
+            simple_train_test_split(
+                df, forecast_length=8, min_allowed_train_percent=0.5
+            )
 
     def test_validate_num_validations_negative_input(self):
         # If a negative number is provided, abs() is taken and the result is adjusted if needed.

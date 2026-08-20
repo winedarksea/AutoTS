@@ -291,6 +291,12 @@ class TimeSeriesdata(object):
             )
         )
         self.time_df = TimeCovariates(date_index, holiday=holiday).get_covariates()
+        # a short history can't supply the requested context: train windows start
+        # at train_range[0] + hist_len, so an oversized hist_len leaves no windows
+        # and makes the eval generator index before the start of the series
+        max_hist_len = train_range[1] - train_range[0] - pred_len - 1
+        if max_hist_len >= 1 and hist_len > max_hist_len:
+            hist_len = max_hist_len
         self.hist_len = hist_len
         self.pred_len = pred_len
         self.batch_size = batch_size
@@ -588,7 +594,10 @@ if full_import:
             self.ts_embs = tf.keras.layers.Embedding(input_dim=num_ts, output_dim=16)
             self.train_loss = keras.losses.MeanSquaredError()
 
-        @tf.function
+        # NOTE: no @tf.function here or on call(). Keras 3 uses its own Variable
+        # type, which tf.GradientTape cannot trace through a tf.function boundary,
+        # so decorating these made every gradient None ("No gradients provided for
+        # any variable"). train_step stays compiled, which is where it matters.
         def _assemble_feats(self, feats, cfeats):
             """assemble all features."""
             all_feats = [feats]
@@ -596,7 +605,6 @@ if full_import:
                 all_feats.append(tf.transpose(emb(cfeats[i, :])))
             return tf.concat(all_feats, axis=0)
 
-        @tf.function
         def call(self, inputs):
             """Call function that takes in a batch of training data and features."""
             past_data = inputs[0]
@@ -942,6 +950,15 @@ class TiDE(ModelObject):
         )
 
         optimizer = keras.optimizers.Adam(learning_rate=lr_schedule, clipvalue=1e3)
+
+        # Keras builds sublayer weights lazily on first call. train_step is a
+        # tf.function, so without this warm-up self.trainable_variables is empty
+        # when it traces and apply_gradients raises "No gradients provided for any
+        # variable" (only masked when transform=True, whose affine weights are the
+        # sole eagerly created ones - so those runs trained the affine terms alone).
+        for warmup in dtl.tf_dataset(mode="train"):
+            self.model((warmup[:3], warmup[4:6], warmup[-1]))
+            break
 
         best_loss = np.inf
         pat = 0

@@ -78,7 +78,6 @@ from autots.models.deepssm import MambaSSM, pMLP
 from autots.models.tva_model import TVAModel
 from typing import Any, Dict, Tuple
 
-
 INTERRUPT_DOUBLE_PRESS_WINDOW = 1.4
 _INTERRUPT_STATE: Dict[str, Any] = {"last_press": None}
 

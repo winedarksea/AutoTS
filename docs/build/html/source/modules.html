@@ -3,7 +3,7 @@
 <html lang="en" data-content_root="../">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-P2KLF8302E"></script>
@@ -14,12 +14,13 @@
         gtag('config', 'G-P2KLF8302E');
     </script>
     
-    <title>autots &#8212; AutoTS 1.0.3 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b76e3c8a" />
-    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=a4fa0645" />
-    <script src="../_static/documentation_options.js?v=baaebd52"></script>
-    <script src="../_static/doctools.js?v=888ff710"></script>
-    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <title>autots &#8212; AutoTS 1.0.4 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=ec641305" />
+    <script src="../_static/documentation_options.js?v=71272d9f"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="autots package" href="autots.html" />
@@ -27,8 +28,9 @@
    
   <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
   
+
   
-  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+  
 
   </head><body>
   
@@ -70,8 +72,11 @@
 <li class="toctree-l4"><a class="reference internal" href="autots.mcp.html#subpackages">Subpackages</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.mcp.html#submodules">Submodules</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.mcp.html#module-autots.mcp.cache">autots.mcp.cache module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.mcp.html#module-autots.mcp.core">autots.mcp.core module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.mcp.html#module-autots.mcp.data_utils">autots.mcp.data_utils module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.mcp.html#module-autots.mcp.ingest">autots.mcp.ingest module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.mcp.html#module-autots.mcp.prompts">autots.mcp.prompts module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.mcp.html#module-autots.mcp.pyodide_api">autots.mcp.pyodide_api module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.mcp.html#module-autots.mcp.schemas">autots.mcp.schemas module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.mcp.html#module-autots.mcp.schemas_data">autots.mcp.schemas_data module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.mcp.html#module-autots.mcp.schemas_features">autots.mcp.schemas_features module</a></li>
@@ -168,6 +173,7 @@
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.used_frequency"><code class="docutils literal notranslate"><span class="pre">AutoTS.used_frequency</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.regression_check"><code class="docutils literal notranslate"><span class="pre">AutoTS.regression_check</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.df_wide_numeric"><code class="docutils literal notranslate"><span class="pre">AutoTS.df_wide_numeric</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.initial_results.model_results"><code class="docutils literal notranslate"><span class="pre">AutoTS.initial_results.model_results</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.score_per_series"><code class="docutils literal notranslate"><span class="pre">AutoTS.score_per_series</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.back_forecast"><code class="docutils literal notranslate"><span class="pre">AutoTS.back_forecast()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.best_model_per_series_mape"><code class="docutils literal notranslate"><span class="pre">AutoTS.best_model_per_series_mape()</span></code></a></li>
@@ -222,16 +228,25 @@
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.AutoTS.validation_agg"><code class="docutils literal notranslate"><span class="pre">AutoTS.validation_agg()</span></code></a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="autots.html#autots.AutoTS.initial_results.model_results"><code class="docutils literal notranslate"><span class="pre">AutoTS.initial_results.model_results</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="autots.html#autots.Cassandra"><code class="docutils literal notranslate"><span class="pre">Cassandra</span></code></a><ul>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.fit"><code class="docutils literal notranslate"><span class="pre">Cassandra.fit()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.predict"><code class="docutils literal notranslate"><span class="pre">Cassandra.predict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.holiday_detector.dates_to_holidays"><code class="docutils literal notranslate"><span class="pre">Cassandra.holiday_detector.dates_to_holidays()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.create_forecast_index"><code class="docutils literal notranslate"><span class="pre">Cassandra.create_forecast_index()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.plot_forecast"><code class="docutils literal notranslate"><span class="pre">Cassandra.plot_forecast()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.plot_components"><code class="docutils literal notranslate"><span class="pre">Cassandra.plot_components()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.plot_trend"><code class="docutils literal notranslate"><span class="pre">Cassandra.plot_trend()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.get_new_params"><code class="docutils literal notranslate"><span class="pre">Cassandra.get_new_params()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.return_components"><code class="docutils literal notranslate"><span class="pre">Cassandra.return_components()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra..anomaly_detector.anomalies"><code class="docutils literal notranslate"><span class="pre">Cassandra..anomaly_detector.anomalies</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra..anomaly_detector.scores"><code class="docutils literal notranslate"><span class="pre">Cassandra..anomaly_detector.scores</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra..holiday_count"><code class="docutils literal notranslate"><span class="pre">Cassandra..holiday_count</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra..holidays"><code class="docutils literal notranslate"><span class="pre">Cassandra..holidays</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra..params"><code class="docutils literal notranslate"><span class="pre">Cassandra..params</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra..x_array"><code class="docutils literal notranslate"><span class="pre">Cassandra..x_array</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra..predict_x_array"><code class="docutils literal notranslate"><span class="pre">Cassandra..predict_x_array</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra..trend_train"><code class="docutils literal notranslate"><span class="pre">Cassandra..trend_train</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra..predicted_trend"><code class="docutils literal notranslate"><span class="pre">Cassandra..predicted_trend</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.analyze_trend"><code class="docutils literal notranslate"><span class="pre">Cassandra.analyze_trend()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.auto_fit"><code class="docutils literal notranslate"><span class="pre">Cassandra.auto_fit()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.base_scaler"><code class="docutils literal notranslate"><span class="pre">Cassandra.base_scaler()</span></code></a></li>
@@ -259,16 +274,6 @@
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.trend_analysis"><code class="docutils literal notranslate"><span class="pre">Cassandra.trend_analysis()</span></code></a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="autots.html#autots.Cassandra.holiday_detector.dates_to_holidays"><code class="docutils literal notranslate"><span class="pre">Cassandra.holiday_detector.dates_to_holidays()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="autots.html#autots.Cassandra..anomaly_detector.anomalies"><code class="docutils literal notranslate"><span class="pre">Cassandra..anomaly_detector.anomalies</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="autots.html#autots.Cassandra..anomaly_detector.scores"><code class="docutils literal notranslate"><span class="pre">Cassandra..anomaly_detector.scores</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="autots.html#autots.Cassandra..holiday_count"><code class="docutils literal notranslate"><span class="pre">Cassandra..holiday_count</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="autots.html#autots.Cassandra..holidays"><code class="docutils literal notranslate"><span class="pre">Cassandra..holidays</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="autots.html#autots.Cassandra..params"><code class="docutils literal notranslate"><span class="pre">Cassandra..params</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="autots.html#autots.Cassandra..x_array"><code class="docutils literal notranslate"><span class="pre">Cassandra..x_array</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="autots.html#autots.Cassandra..predict_x_array"><code class="docutils literal notranslate"><span class="pre">Cassandra..predict_x_array</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="autots.html#autots.Cassandra..trend_train"><code class="docutils literal notranslate"><span class="pre">Cassandra..trend_train</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="autots.html#autots.Cassandra..predicted_trend"><code class="docutils literal notranslate"><span class="pre">Cassandra..predicted_trend</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="autots.html#autots.EventRiskForecast"><code class="docutils literal notranslate"><span class="pre">EventRiskForecast</span></code></a><ul>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.EventRiskForecast.fit"><code class="docutils literal notranslate"><span class="pre">EventRiskForecast.fit()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.EventRiskForecast.predict"><code class="docutils literal notranslate"><span class="pre">EventRiskForecast.predict()</span></code></a></li>
@@ -327,6 +332,8 @@
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.SyntheticDailyGenerator.get_anomalies"><code class="docutils literal notranslate"><span class="pre">SyntheticDailyGenerator.get_anomalies()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.SyntheticDailyGenerator.get_components"><code class="docutils literal notranslate"><span class="pre">SyntheticDailyGenerator.get_components()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.SyntheticDailyGenerator.get_data"><code class="docutils literal notranslate"><span class="pre">SyntheticDailyGenerator.get_data()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.SyntheticDailyGenerator.get_derived_ratios"><code class="docutils literal notranslate"><span class="pre">SyntheticDailyGenerator.get_derived_ratios()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.SyntheticDailyGenerator.get_frozen_tails"><code class="docutils literal notranslate"><span class="pre">SyntheticDailyGenerator.get_frozen_tails()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.SyntheticDailyGenerator.get_holiday_config"><code class="docutils literal notranslate"><span class="pre">SyntheticDailyGenerator.get_holiday_config()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.SyntheticDailyGenerator.get_holiday_impacts"><code class="docutils literal notranslate"><span class="pre">SyntheticDailyGenerator.get_holiday_impacts()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.SyntheticDailyGenerator.get_holiday_splash_impacts"><code class="docutils literal notranslate"><span class="pre">SyntheticDailyGenerator.get_holiday_splash_impacts()</span></code></a></li>
@@ -344,12 +351,30 @@
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.SyntheticDailyGenerator.get_template"><code class="docutils literal notranslate"><span class="pre">SyntheticDailyGenerator.get_template()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.SyntheticDailyGenerator.get_trend_changepoints"><code class="docutils literal notranslate"><span class="pre">SyntheticDailyGenerator.get_trend_changepoints()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.SyntheticDailyGenerator.get_true_event_statistics"><code class="docutils literal notranslate"><span class="pre">SyntheticDailyGenerator.get_true_event_statistics()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.SyntheticDailyGenerator.get_true_factors"><code class="docutils literal notranslate"><span class="pre">SyntheticDailyGenerator.get_true_factors()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.SyntheticDailyGenerator.machine_summary"><code class="docutils literal notranslate"><span class="pre">SyntheticDailyGenerator.machine_summary()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.SyntheticDailyGenerator.plot"><code class="docutils literal notranslate"><span class="pre">SyntheticDailyGenerator.plot()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.SyntheticDailyGenerator.render_template"><code class="docutils literal notranslate"><span class="pre">SyntheticDailyGenerator.render_template()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.SyntheticDailyGenerator.summary"><code class="docutils literal notranslate"><span class="pre">SyntheticDailyGenerator.summary()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.SyntheticDailyGenerator.to_csv"><code class="docutils literal notranslate"><span class="pre">SyntheticDailyGenerator.to_csv()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.SyntheticDailyGenerator.tune_to_data"><code class="docutils literal notranslate"><span class="pre">SyntheticDailyGenerator.tune_to_data()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="autots.html#autots.TimeSeriesFeatureDetector"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.TimeSeriesFeatureDetector.TEMPLATE_VERSION"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.TEMPLATE_VERSION</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.TimeSeriesFeatureDetector.fit"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.fit()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.TimeSeriesFeatureDetector.forecast"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.forecast()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.TimeSeriesFeatureDetector.get_cleaned_data"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.get_cleaned_data()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.TimeSeriesFeatureDetector.get_detected_features"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.get_detected_features()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.TimeSeriesFeatureDetector.get_event_dag"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.get_event_dag()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.TimeSeriesFeatureDetector.get_new_params"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.get_new_params()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.TimeSeriesFeatureDetector.get_template"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.get_template()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.TimeSeriesFeatureDetector.plot"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.plot()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.TimeSeriesFeatureDetector.plot_event_dag"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.plot_event_dag()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.TimeSeriesFeatureDetector.query_features"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.query_features()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.TimeSeriesFeatureDetector.render_template"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.render_template()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.TimeSeriesFeatureDetector.summary"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.summary()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.TimeSeriesFeatureDetector.tune_with_synthetic"><code class="docutils literal notranslate"><span class="pre">TimeSeriesFeatureDetector.tune_with_synthetic()</span></code></a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="autots.html#autots.TransformTS"><code class="docutils literal notranslate"><span class="pre">TransformTS</span></code></a></li>
@@ -383,11 +408,11 @@
           
         </div>
       </div>
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
         <div class="sphinxsidebarwrapper">
 <p class="logo">
   <a href="../index.html">
-    <img class="logo" src="../_static/autots_logo.png" alt="Logo"/>
+    <img class="logo" src="../_static/autots_logo.png" alt="Logo" />
     
   </a>
 </p>
@@ -408,7 +433,16 @@
 
 
 
-<h3>Navigation</h3>
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="intro.html">Intro</a></li>
 <li class="toctree-l1"><a class="reference internal" href="intro.html#autots">AutoTS</a></li>
@@ -431,16 +465,6 @@
   </ul></li>
 </ul>
 </div>
-<div id="searchbox" style="display: none" role="search">
-  <h3 id="searchlabel">Quick search</h3>
-    <div class="searchformwrapper">
-    <form class="search" action="../search.html" method="get">
-      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
-      <input type="submit" value="Go" />
-    </form>
-    </div>
-</div>
-<script>document.getElementById('searchbox').style.display = "block"</script>
 
 
 
@@ -454,7 +478,7 @@
       <div class="clearer"></div>
     </div>
     <div class="footer">
-      &copy;2026, Colin Catlin.
+      &#169;2026, Colin Catlin.
       
       |
       <a href="../_sources/source/modules.rst.txt"

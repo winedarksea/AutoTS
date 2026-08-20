@@ -9,13 +9,13 @@ autots.templates.general module
 
 .. automodule:: autots.templates.general
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 Module contents
 ---------------
 
 .. automodule:: autots.templates
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
