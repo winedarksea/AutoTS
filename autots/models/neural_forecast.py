@@ -225,7 +225,9 @@ class NeuralForecast(ModelObject):
         if self.regression_type in ['User', 'user', True]:
             regr_cols = future_regressor.columns.tolist()
             if regressor_per_series is not None:
-                regr_cols + next(iter(regressor_per_series.values())).columns.tolist()
+                regr_cols = regr_cols + next(
+                    iter(regressor_per_series.values())
+                ).columns.tolist()
             self.base_args["futr_exog_list"] = regr_cols
             self.base_args['stat_exog_list'] = static_cols
 

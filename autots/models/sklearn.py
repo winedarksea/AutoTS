@@ -1852,7 +1852,7 @@ class RollingRegression(ModelObject):
             features = pd.DataFrame(transformed, index=features.index)
             features = features.replace([np.inf, -np.inf], 0).fillna(0)
         elif isinstance(features, pd.DataFrame):
-            features = features.replace([np.inf, -np.inf], 0)
+            features = features.replace([np.inf, -np.inf], 0).fillna(0)
         if isinstance(features, pd.DataFrame):
             features.columns = [str(col) for col in features.columns]
         return features
@@ -1980,6 +1980,18 @@ class RollingRegression(ModelObject):
                 index=[forecast_idx],
                 columns=history.columns,
             )
+            # RadiusNeighbors emits NaN when no neighbors are found
+            arr = rf_pred.to_numpy(dtype=float)
+            if not np.isfinite(arr).all():
+                bad = ~np.isfinite(arr)
+                fill = np.nan_to_num(
+                    history.iloc[-1].to_numpy(dtype=float),
+                    nan=0.0,
+                    posinf=0.0,
+                    neginf=0.0,
+                )
+                arr[bad] = np.broadcast_to(fill, arr.shape)[bad]
+                rf_pred = pd.DataFrame(arr, index=rf_pred.index, columns=rf_pred.columns)
             forecasts.append(rf_pred.copy())
             history = pd.concat([history, rf_pred], axis=0)
 

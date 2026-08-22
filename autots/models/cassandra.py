@@ -975,11 +975,17 @@ class Cassandra(ModelObject):
                     verbose=self.verbose,
                     n_jobs=self.n_jobs,
                 ).forecast
+                anomaly_scores = pd.concat(
+                    [self.anomaly_detector.scores, new_scores], axis=0
+                )
+            else:
+                # all requested dates already have anomaly scores, nothing to forecast
+                anomaly_scores = self.anomaly_detector.scores
             # need to model these for prediction
             x_list.append(
-                pd.concat([self.anomaly_detector.scores, new_scores], axis=0)
-                .reindex(dates)
-                .rename(columns=lambda x: "anomalyscores_" + str(x))
+                anomaly_scores.reindex(dates).rename(
+                    columns=lambda x: "anomalyscores_" + str(x)
+                )
             )
         if self.multivariate_feature == 'fft':
             # need to translate the 'dates' into integer time steps ahead
