@@ -20,6 +20,10 @@ def infer_frequency(df_wide, warn=True, **kwargs):
         raise ValueError(
             "infer_frequency failed due to input not being pandas DF or DT index"
         )
+    if len(DTindex) < 3:
+        if len(DTindex) == 2:
+            return pd.tseries.frequencies.to_offset(DTindex[1] - DTindex[0]).freqstr
+        return None
     # 'warn' arg removed in pandas 2.0.0
     frequency = pd.infer_freq(DTindex)
     if frequency is None:

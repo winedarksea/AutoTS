@@ -4128,7 +4128,8 @@ class PreprocessingRegression(ModelObject):
 
         full_end = df.shape[0] - 1
         window_end = full.shape[0] - 1
-        max_hist_rev = df.shape[0] - max_history if max_history != 0 else 0
+
+        max_hist_rev = max(0, df.shape[0] - max_history) if max_history != 0 else 0
 
         if one_step:
             self.X = full[:-1].reshape(-1, full.shape[-1])

@@ -345,7 +345,9 @@ class GLM(ModelObject):
                 self.future_regressor_train = np.array(
                     self.future_regressor_train
                 ).reshape(-1, 1)
-            X = np.concatenate((X.reshape(-1, 1), self.future_regressor_train), axis=1)
+            if X.ndim == 1:
+                X = X.reshape(-1, 1)
+            X = np.concatenate((X, self.future_regressor_train), axis=1)
 
         self.df_train = self.df_train.replace(0, np.nan)
         fill_vals = self.df_train.abs().min(axis=0, skipna=True)
@@ -373,7 +375,9 @@ class GLM(ModelObject):
         if self.regression_type == 'User':
             if future_regressor.ndim == 1:
                 future_regressor = np.array(future_regressor).reshape(-1, 1)
-            Xf = np.concatenate((Xf.reshape(-1, 1), future_regressor), axis=1)
+            if Xf.ndim == 1:
+                Xf = Xf.reshape(-1, 1)
+            Xf = np.concatenate((Xf, future_regressor), axis=1)
 
         parallel = True
         cols = self.df_train.columns.tolist()
@@ -1437,10 +1441,10 @@ class DynamicFactor(ModelObject):
                 k_factors=self.k_factors,
                 factor_order=self.factor_order,
             ).fit(disp=self.verbose, maxiter=100)
-            if future_regressor.values.ndim == 1:
-                exog = future_regressor.values.reshape(-1, 1)
-            else:
-                exog = future_regressor.values
+
+            exog = np.asarray(future_regressor)
+            if exog.ndim == 1:
+                exog = exog.reshape(-1, 1)
             forecast = maModel.predict(
                 start=test_index[0], end=test_index[-1], exog=exog
             )
@@ -1489,9 +1493,8 @@ class DynamicFactor(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        k_factors_choice = random.choices([0, 1, 2, 3, 10], [0.1, 0.4, 0.2, 0.2, 0.1])[
-            0
-        ]
+        # k_factors=0 divides by zero inside statsmodels
+        k_factors_choice = random.choices([1, 2, 3, 10], [0.4, 0.2, 0.2, 0.1])[0]
         factor_order_choice = random.choices([0, 1, 2, 3], [0.4, 0.3, 0.2, 0.1])[0]
 
         if "regressor" in method:
@@ -1930,10 +1933,19 @@ class VAR(ModelObject):
 
             transformer = EmptyTransformer()
 
+        # statsmodels refuses to estimate when maxlags is too large for the panel
+        maxlags = self.maxlags
+        if maxlags is not None:
+            nobs, neqs = self.df_train.shape
+            maxlags = max(0, min(maxlags, int((nobs - 1) / (neqs + 1)) - 1))
         if self.regression_type in ["User", "Holiday"]:
             self.model = VAR(
                 self.df_train, freq=self.frequency, exog=self.regressor_train
-            ).fit(maxlags=self.maxlags, ic=self.ic, trend='n')
+            ).fit(maxlags=maxlags, ic=self.ic, trend='n')
+            if self.model.k_ar < 1:
+                self.model = VAR(
+                    self.df_train, freq=self.frequency, exog=self.regressor_train
+                ).fit(maxlags=1, trend='n')
             forecast, lower_forecast, upper_forecast = self.model.forecast_interval(
                 steps=len(test_index),
                 exog_future=future_regressor,
@@ -1941,8 +1953,10 @@ class VAR(ModelObject):
             )
         else:
             self.model = VAR(self.df_train, freq=self.frequency).fit(
-                ic=self.ic, maxlags=self.maxlags
+                ic=self.ic, maxlags=maxlags
             )
+            if self.model.k_ar < 1:
+                self.model = VAR(self.df_train, freq=self.frequency).fit(maxlags=1)
             forecast, lower_forecast, upper_forecast = self.model.forecast_interval(
                 steps=len(test_index),
                 y=self.df_train.values,

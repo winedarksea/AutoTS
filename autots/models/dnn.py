@@ -463,6 +463,9 @@ class ElasticNetwork(object):
         from tensorflow.keras.layers import Dense, Layer
         from tensorflow.keras.regularizers import L1L2
 
+        tf.keras.backend.clear_session()
+        tf.random.set_seed(self.random_seed)
+
         # hiding this here as TF is an optional import
         class SubsetDense(Layer):
             def __init__(self, units, input_dim, feature_subsample_rate=0.5, **kwargs):

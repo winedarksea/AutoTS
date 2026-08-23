@@ -713,6 +713,9 @@ class MotifSimulation(ModelObject):
         # else:
         # self.comparison = 'magnitude'
 
+        # a phrase longer than the available history leaves max_samps negative
+        phrase_n = min(phrase_n, max(1, df.shape[0] - 1))
+
         if 'pct_change_sign' in comparison:
             last_motif = df.where(df >= 0, -1).where(df <= 0, 1).tail(phrase_n)
         else:
@@ -1054,13 +1057,13 @@ class MotifSimulation(ModelObject):
                     'dice',
                     'hamming',
                     'jaccard',
-                    'kulczynski1',
+                    # 'kulczynski1',  # removed from scipy in 1.15
                     'mahalanobis',
                     'minkowski',
                     'rogerstanimoto',
                     'russellrao',
                     # 'seuclidean',
-                    'sokalmichener',
+                    # 'sokalmichener',  # removed from scipy in 1.15
                     'sokalsneath',
                     'sqeuclidean',
                     'yule',
@@ -1154,7 +1157,9 @@ def looped_motif(
             if k > A.shape[0]:
                 print("k too large for size of data in motif")
                 k = A.shape[0]
-            idx = np.argpartition(A, k, axis=0)[:k].flatten()
+            # argpartition's kth must be a valid index, so k == len(A) raises
+            kth = min(k, A.shape[0] - 1)
+            idx = np.argpartition(A, kth, axis=0)[:k].flatten()
     # distances for weighted mean
     results = y[idx]
     if point_method == "weighted_mean":
@@ -1381,7 +1386,7 @@ class Motif(ModelObject):
             'rogerstanimoto',
             'russellrao',
             # 'seuclidean',
-            'sokalmichener',
+            # 'sokalmichener',  # removed from scipy in 1.15
             'sokalsneath',
             'sqeuclidean',
             'yule',
@@ -1404,7 +1409,6 @@ class Motif(ModelObject):
             1.0,  # minkowski
             1.0,  # rogerstanimoto
             1.0,  # russellrao
-            1.0,  # sokalmichener
             1.0,  # sokalsneath
             1.0,  # sqeuclidean
             1.0,  # yule
@@ -2158,14 +2162,17 @@ class SectionalMotif(ModelObject):
         # find the lowest distance historical windows
         res_sum = np.nansum(res, axis=0)
         num_top = self.k
-        res_idx = np.argpartition(res_sum, num_top, axis=0)[0:num_top]
+        # argpartition's kth must be a valid index into res_sum
+        kth = max(0, min(num_top, res_sum.shape[0] - 1))
+        res_idx = np.argpartition(res_sum, kth, axis=0)[0:num_top]
         self.windows = window_idxs[res_idx, window_size:]
         # handle window being too big for data, too close to end
         if self.windows.size == 0:
             count = 1
             while self.windows.size == 0:
                 count += 1
-                res_idx = np.argpartition(res_sum, num_top, axis=0)[0 : num_top * count]
+                kth = max(0, min(num_top * count, res_sum.shape[0] - 1))
+                res_idx = np.argpartition(res_sum, kth, axis=0)[0 : num_top * count]
                 self.windows = window_idxs[res_idx, window_size:]
                 # prevent overflow
                 if count > 5:
@@ -2179,6 +2186,9 @@ class SectionalMotif(ModelObject):
                 **self.combination_transformation
             )
             array = self.combination_transformer.fit_transform(self.df).to_numpy()
+            if array.shape[0] != self.df.shape[0]:
+                # a row-dropping transform
+                array = self.df.to_numpy()
         else:
             array = self.df.to_numpy()
         results = array[self.windows]
@@ -2303,14 +2313,14 @@ class SectionalMotif(ModelObject):
             'hamming',
             'jaccard',
             # 'jensenshannon',
-            'kulczynski1',
+            # 'kulczynski1',  # removed from scipy in 1.15
             'mahalanobis',
             'matching',
             'minkowski',
             'rogerstanimoto',
             'russellrao',
             # 'seuclidean',
-            'sokalmichener',
+            # 'sokalmichener',  # removed from scipy in 1.15
             'sokalsneath',
             'sqeuclidean',
             'yule',
@@ -3459,8 +3469,8 @@ class BallTreeMultivariateMotif(ModelObject):
                 else:
                     sample_size = (
                         int(self.sample_fraction)
-                        if Xa.shape[0] < self.sample_fraction
-                        else int(Xa.shape[0] - 1)
+                        if self.sample_fraction < Xa.shape[0]
+                        else int(Xa.shape[0])
                     )
                 Xa = np.random.default_rng().choice(Xa, size=sample_size, axis=0)
         else:

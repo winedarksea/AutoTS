@@ -358,6 +358,8 @@ class Detrend(EmptyTransformer):
                         log=False, center_one=True, squared=False
                     )
                     Y = pd.DataFrame(self.trnd_trans.fit_transform(df)).to_numpy()
+                    if self.window is not None:
+                        Y = Y[-self.window :]
                 X = X.reshape((-1, 1))
                 self.trained_model.fit(X, Y)
         self.shape = df.shape
@@ -713,6 +715,8 @@ class SinTrend(EmptyTransformer):
 
         tt = np.array(tt)
         yy = np.array(yy)
+        if len(tt) < 4:
+            return {"amp": 0.0, "omega": 0.0, "phase": 0.0, "offset": np.mean(yy)}
         ff = np.fft.fftfreq(len(tt), (tt[1] - tt[0]))  # assume uniform spacing
         Fyy = abs(np.fft.fft(yy))
         guess_freq = abs(
@@ -755,6 +759,7 @@ class SinTrend(EmptyTransformer):
         X = pd.to_numeric(df.index, errors="coerce", downcast="integer").values
         # make this faster (250 columns in 2.5 seconds isn't bad, though)
         cols = df.columns.tolist()
+        parallel = True
         if self.n_jobs in [0, 1] or len(cols) < 100:
             parallel = False
         # joblib multiprocessing to loop through series
@@ -1240,6 +1245,9 @@ class SeasonalDifference(EmptyTransformer):
             N = self.lag_1
             span = self.method
             num_slices = arr.shape[0] // N
+            if num_slices < 1:
+                arr = np.tile(arr, (int(np.ceil(N / arr.shape[0])), 1))[-N:]
+                num_slices = 1
             # (slices, lag size, num seriesd)
             arr_3d = arr[-(num_slices * N) :].reshape(num_slices, N, -1)
             alpha = 2 / (span + 1)
@@ -1714,7 +1722,7 @@ class DifferencedTransformer:
         """
         differenced = df.diff(self.lag)
         if self.fill == 'bfill':
-            return differenced.bfill()
+            return differenced.bfill().fillna(0)
         elif self.fill == 'zero':
             return differenced.fillna(0)
         elif self.fill == 'one':
@@ -2553,9 +2561,9 @@ class ScipyFilter(EmptyTransformer):
                 mysize = self.method_args.get("mysize", 3)
                 if isinstance(mysize, int):
                     mysize = (mysize, 1)
-            return pd.DataFrame(
-                wiener(df.values, mysize=mysize), columns=df.columns, index=df.index
-            )
+            filtered = wiener(df.values, mysize=mysize)
+            filtered = np.where(np.isfinite(filtered), filtered, df.values)
+            return pd.DataFrame(filtered, columns=df.columns, index=df.index)
         elif self.method == "savgol_filter":
             # args = [5, 2]
             return pd.DataFrame(
@@ -2719,7 +2727,7 @@ class FastICA(EmptyTransformer):
             "fun": random.choice(["logcosh", "exp", "cube"]),
             "max_iter": random.choices([100, 250, 500], [0.7, 0.2, 0.1])[0],
             "whiten": random.choices(
-                ['unit-variance', 'arbitrary-variance', False], [0.9, 0.1, 0.1]
+                ['unit-variance', 'arbitrary-variance'], [0.9, 0.1]
             )[0],
         }
 
@@ -2745,7 +2753,11 @@ class PCA(EmptyTransformer):
 
         self.columns = df.columns
         self.index = df.index
-        self.transformer = PCA(**self.kwargs)
+        kwargs = dict(self.kwargs)
+        n_comp = kwargs.get("n_components")
+        if isinstance(n_comp, int) and not isinstance(n_comp, bool):
+            kwargs["n_components"] = min(n_comp, min(df.shape))
+        self.transformer = PCA(**kwargs)
         return_df = self.transformer.fit_transform(df)
         if isinstance(return_df, pd.DataFrame):
             if return_df.shape[1] == len(self.columns):
@@ -3410,6 +3422,8 @@ class AlignLastValue(EmptyTransformer):
 
     @staticmethod
     def find_centerpoint(df, rows, lag, mean_type="arithmetic"):
+        # a lag longer than the history indexes off the front of the frame
+        lag = min(lag, df.shape[0])
         if rows <= 1:
             if lag > 1:
                 center = df.iloc[-lag, :]
@@ -4084,6 +4098,7 @@ class LocalLinearTrend(EmptyTransformer):
             raise ValueError(f"rolling_window {self.rolling_window} arg is not valid")
         elif self.rolling_window < 1:
             self.rolling_window = int(self.rolling_window * len(self.dates))
+        self.rolling_window = int(min(max(self.rolling_window, 2), len(self.dates)))
 
         """
         if self.n_tails <= 0:
@@ -6766,6 +6781,9 @@ class FIRFilter(EmptyTransformer):
         selection = random.choices([True, False], [0.8, 0.2])[0]
         params = generate_random_fir_params(method=method)
         params["sampling_frequency"] = seasonal_int(include_one=False)
+        nyquist = params["sampling_frequency"] / 2
+        if params.get("cutoff_hz", 0) >= nyquist:
+            params["cutoff_hz"] = round(nyquist * 0.9, 6)
         params["on_transform"] = selection
         params["on_inverse"] = not selection
         if not selection:
@@ -8490,7 +8508,7 @@ class GeneralTransformer(object):
                 quants = int(df.shape[0] / 10)
             else:
                 quants = quants if df.shape[0] > quants else int(df.shape[0] / 3)
-            param["n_quantiles"] = quants
+            param["n_quantiles"] = max(1, quants)
             return QuantileTransformer(copy=True, **param)
 
         elif transformation == "StandardScaler":
@@ -8522,15 +8540,13 @@ class GeneralTransformer(object):
             )
 
         elif transformation == "FastICA":
-            from sklearn.decomposition import FastICA
-
             if df.shape[1] > 5000:
                 raise ValueError("FastICA fails with > 5000 series for speed reasons")
-            return FastICA(
-                n_components=df.shape[1],
-                random_state=random_seed,
-                **param,
-            )
+            # the module's wrapper class (not the raw sklearn estimator): sklearn
+            # silently caps n_components at n_samples, and the raw estimator then
+            # returns fewer columns than _fit_one rebuilds with. Same reason the
+            # PCA branch above was retired.
+            return FastICA(**param)
 
         elif transformation in ["RollingMean", "FixedRollingMean"]:
             param = 10 if param is None else param

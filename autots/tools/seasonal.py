@@ -503,13 +503,13 @@ def date_part(
         if expansion_flag:
             date_part_df = date_part_df.reindex(requested_index)
     if holiday_country is not None and holiday_countries_used:
+        holidays = holiday_flag(
+            output_index, country=holiday_country, encode_holiday_type=True
+        )
+        if not set_index and len(holidays) == len(date_part_df):
+            holidays.index = date_part_df.index
         date_part_df = pd.concat(
-            [
-                date_part_df,
-                holiday_flag(
-                    output_index, country=holiday_country, encode_holiday_type=True
-                ),
-            ],
+            [date_part_df, holidays],
             axis=1,
             ignore_index=not set_index,
         )
@@ -530,7 +530,7 @@ def date_part(
                 forward_lags=None,
                 set_index=False,
             ).rename(columns=lambda x: str(x) + f"_lag{laggy}")
-            add_X.index = output_index
+            add_X.index = date_part_df.index
             date_part_df = pd.concat([date_part_df, add_X], axis=1)
     if forward_lags is not None:
         frequency = infer_frequency(output_index)
@@ -550,7 +550,7 @@ def date_part(
                 forward_lags=None,
                 set_index=False,
             ).rename(columns=lambda x: str(x) + f"_flag{laggy}")
-            add_X.index = output_index
+            add_X.index = date_part_df.index
             date_part_df = pd.concat([date_part_df, add_X], axis=1)
     return date_part_df
 
