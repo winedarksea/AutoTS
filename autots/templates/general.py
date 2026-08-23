@@ -174,7 +174,7 @@ general_template_dict = {
     },
     "29": {
         "Model": "SectionalMotif",
-        "ModelParameters": "{\"window\": 10, \"point_method\": \"weighted_mean\", \"distance_metric\": \"sokalmichener\", \"include_differenced\": true, \"k\": 20, \"stride_size\": 1, \"regression_type\": null}",
+        "ModelParameters": "{\"window\": 10, \"point_method\": \"weighted_mean\", \"distance_metric\": \"rogerstanimoto\", \"include_differenced\": true, \"k\": 20, \"stride_size\": 1, \"regression_type\": null}",
         "TransformationParameters": "{\"fillna\": \"zero\", \"transformations\": {\"0\": null}, \"transformation_params\": {\"0\": {}}}",
         "Ensemble": 0,
     },
@@ -222,7 +222,7 @@ general_template_dict = {
     },
     "37": {
         'Model': 'MotifSimulation',
-        'ModelParameters': '{"phrase_len": 10, "comparison": "magnitude_pct_change_sign", "shared": false, "distance_metric": "sokalmichener", "max_motifs": 0.2, "recency_weighting": 0.01, "cutoff_minimum": 20, "point_method": "median"}',
+        'ModelParameters': '{"phrase_len": 10, "comparison": "magnitude_pct_change_sign", "shared": false, "distance_metric": "rogerstanimoto", "max_motifs": 0.2, "recency_weighting": 0.01, "cutoff_minimum": 20, "point_method": "median"}',
         'TransformationParameters': '{"fillna": "ffill", "transformations": {"0": "MaxAbsScaler", "1": "Detrend"}, "transformation_params": {"0": {}, "1": {"model": "Linear", "phi": 1, "window": null}}}',
         'Ensemble': 0,
     },
