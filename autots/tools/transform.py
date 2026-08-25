@@ -8838,7 +8838,7 @@ transformer_dict = {
     "LevelShiftTransformer": 0.03,
     "CenterSplit": 0.01,
     "FFTFilter": 0.01,
-    "FFTDecomposition": 0.01,
+    "FFTDecomposition": 0.005,  # slow: ~3.9s median vs ~0.01s typical
     "ReplaceConstant": 0.02,
     "AlignLastDiff": 0.01,
     "DiffSmoother": 0.005,

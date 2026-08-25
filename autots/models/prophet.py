@@ -489,8 +489,13 @@ class FBProphet(ModelObject):
                 [0.4, 0.3, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
             )[0]
         else:
+            if method == "fast":
+                spacing_options, spacing_weights = [60, 180], [0.7, 0.3]
+            else:
+                spacing_options = [10, 20, 180, 30, 40, 50, 60]
+                spacing_weights = [0.005, 0.02, 0.2, 0.05, 0.1, 0.05, 0.9]
             params["changepoint_spacing"] = random.choices(
-                [10, 20, 180, 30, 40, 50, 60], [0.05, 0.1, 0.1, 0.1, 0.1, 0.05, 0.9]
+                spacing_options, spacing_weights
             )[0]
             params["changepoint_distance_end"] = random.choices(
                 [10, 20, 180, 30, 40, 50, 60], [0.05, 0.1, 0.1, 0.1, 0.1, 0.05, 0.9]

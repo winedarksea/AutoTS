@@ -1493,15 +1493,28 @@ class DynamicFactor(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        # k_factors=0 divides by zero inside statsmodels
-        k_factors_choice = random.choices([1, 2, 3, 10], [0.4, 0.2, 0.2, 0.1])[0]
-        factor_order_choice = random.choices([0, 1, 2, 3], [0.4, 0.3, 0.2, 0.1])[0]
+        if method == "fast":
+            k_factors_choice = 1
+            factor_order_choice = 0
+        elif method == "deep":
+            # deep is explicitly unbudgeted, so the expensive cells stay available
+            k_factors_choice = random.choices([1, 2, 3, 10], [0.4, 0.2, 0.2, 0.1])[0]
+            factor_order_choice = random.choices([0, 1, 2, 3], [0.4, 0.3, 0.2, 0.1])[0]
+        else:
+            k_factors_choice = random.choices([1, 2, 3], [0.5, 0.3, 0.2])[0]
+            if k_factors_choice >= 3:
+                # slow: (3, 3) is ~376s, the rest of the k=3 row stays under 220s
+                factor_order_choice = random.choices([0, 1, 2], [0.4, 0.35, 0.25])[0]
+            else:
+                factor_order_choice = random.choices([0, 1, 2, 3], [0.4, 0.3, 0.2, 0.1])[0]
 
         if "regressor" in method:
             regression_choice = "User"
+        elif method == "fast":
+            regression_choice = None
         else:
             regression_list = [None, 'User', 'Holiday']
-            regression_probability = [0.6, 0.2, 0.2]
+            regression_probability = [0.8, 0.1, 0.1]
             regression_choice = random.choices(regression_list, regression_probability)[
                 0
             ]
@@ -2672,14 +2685,39 @@ class DynamicFactorMQ(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        k_factors_choice = random.choices([1, 2, 3, 10], [0.4, 0.2, 0.2, 0.1])[0]
-        factor_order_choice = random.choices([1, 2, 3, 4], [0.3, 0.2, 0.1, 0.02])[0]
+        if method == "fast":
+            k_factors_choice = random.choices([1, 2, 3], [0.5, 0.3, 0.2])[0]
+        elif method == "deep":
+            # deep is explicitly unbudgeted
+            k_factors_choice = random.choices([1, 2, 3, 10], [0.4, 0.2, 0.2, 0.1])[0]
+        else:
+            k_factors_choice = random.choices([1, 2, 3, 10], [0.4, 0.2, 0.2, 0.05])[0]
+
+        if method == "deep" or k_factors_choice == 1:
+            factor_order_choice = random.choices([1, 2, 3, 4], [0.3, 0.2, 0.1, 0.02])[0]
+            multiplicities_choice = random.choice([None, 2])
+            ar1_choice = random.choice([True, False])
+        else:
+            # from factors=2 up these get expensive fast, so bias to the cheap values
+            if method == "fast":
+                factor_order_choice = 1
+            else:
+                factor_order_choice = random.choices(
+                    [1, 2, 3, 4], [0.5, 0.15, 0.05, 0.01]
+                )[0]
+            multiplicities_choice = (
+                # slow: multiplicities=2 at factors=10 is ~291s
+                None
+                if k_factors_choice >= 10
+                else random.choices([None, 2], [0.8, 0.2])[0]
+            )
+            ar1_choice = random.choices([True, False], [0.8, 0.2])[0]
 
         parameter_dict = {
             'factors': k_factors_choice,
             'factor_orders': factor_order_choice,
-            "factor_multiplicities": random.choice([None, 2]),
-            'idiosyncratic_ar1': random.choice([True, False]),
+            "factor_multiplicities": multiplicities_choice,
+            'idiosyncratic_ar1': ar1_choice,
         }
         return parameter_dict
 
