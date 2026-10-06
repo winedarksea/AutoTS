@@ -70,8 +70,15 @@ class TrendMixin:
 
         # Trend changepoint detection on: original - anomalies - seasonality - holidays - level_shifts
         trend_input = residual_for_level_shifts - level_shift_component_valid_scaled
-        changepoints, trend_component_scaled = self._detect_trend_changepoints(
-            trend_input
+        (
+            changepoints,
+            trend_component_scaled,
+            level_shift_component_valid_scaled,
+        ) = self._detect_trend_changepoints(
+            trend_input,
+            trend_and_shift_target=residual_for_level_shifts,
+            validated_level_shifts=validated_level_shifts,
+            level_shift_component=level_shift_component_valid_scaled,
         )
         slope_info = self._compute_trend_slopes(trend_component_scaled, changepoints)
 
@@ -97,8 +104,9 @@ class TrendMixin:
         params = self.level_shift_validation
         window = int(params.get('window', 14))
         pad = int(params.get('pad', 2))
-        rel_thresh = float(params.get('relative_threshold', 0.1))
-        abs_thresh = float(params.get('absolute_threshold', 0.5))
+        # None = adaptive (tightened to each series' noise); explicit values are honored.
+        rel_thresh = params.get('relative_threshold')
+        abs_thresh = params.get('absolute_threshold')
 
         # LevelShiftMagic.lvlshft is a reverse cumsum (non-zero before a shift, zero
         # after), and candidate dates are the first post-shift date. Removing a shift
@@ -111,12 +119,18 @@ class TrendMixin:
             series_std = float(series.std()) or 1e-9
             series_iqr = float(series.quantile(0.75) - series.quantile(0.25)) or 1e-9
             series_median = float(np.nanmedian(series.to_numpy(dtype=float)))
-            adaptive_abs_thresh = min(abs_thresh, series_std * 0.3)
             # Guard against near-zero medians which can explode relative thresholds.
             robust_scale = max(abs(series_median), series_iqr, series_std, 1e-6)
-            dynamic_rel = 0.05 + 0.5 * (series_iqr / robust_scale)
-            dynamic_rel = float(np.clip(dynamic_rel, 0.05, 0.75))
-            adaptive_rel_thresh = min(rel_thresh, dynamic_rel)
+            if abs_thresh is None:
+                adaptive_abs_thresh = min(0.5, series_std * 0.3)
+            else:
+                adaptive_abs_thresh = float(abs_thresh)
+            if rel_thresh is None:
+                dynamic_rel = 0.05 + 0.5 * (series_iqr / robust_scale)
+                dynamic_rel = float(np.clip(dynamic_rel, 0.05, 0.75))
+                adaptive_rel_thresh = min(0.1, dynamic_rel)
+            else:
+                adaptive_rel_thresh = float(rel_thresh)
             entries = []
             for candidate in candidates.get(col, []):
                 date = candidate['date']
@@ -143,7 +157,9 @@ class TrendMixin:
                 after = float(np.nanmedian(right_window))
                 change = after - before
                 abs_change = abs(change)
-                rel_change = abs_change / max(abs(before), 1e-9)
+                # The residual is roughly zero-centred, so dividing by the local level
+                # alone makes nearly every change "relatively" large.
+                rel_change = abs_change / max(abs(before), robust_scale)
 
                 if (
                     abs_change >= adaptive_abs_thresh
@@ -164,7 +180,22 @@ class TrendMixin:
             validated[col] = entries
         return validated_component, validated
 
-    def _detect_trend_changepoints(self, trend_input):
+    def _detect_trend_changepoints(
+        self,
+        trend_input,
+        trend_and_shift_target=None,
+        validated_level_shifts=None,
+        level_shift_component=None,
+    ):
+        """Detect trend changepoints on ``trend_input`` and fit the trend.
+
+        When validated level shifts are given, step magnitudes are re-estimated
+        jointly with the hinge trend on ``trend_and_shift_target`` (the residual
+        before level-shift removal). LevelShiftMagic's own magnitudes come from
+        long rolling windows, so any slope over that window leaks into them.
+        Returns (changepoints, trend_component, level_shift_component); entries in
+        ``validated_level_shifts`` get their 'magnitude' updated in place.
+        """
         detector_params = self.changepoint_params.copy()
         aggregate_method = detector_params.pop('aggregate_method', 'individual')
         method = detector_params.pop('method', 'pelt')
@@ -206,34 +237,95 @@ class TrendMixin:
             changepoint_indices = {col: np.array([], dtype=int) for col in series_names}
             changepoints = {col: [] for col in series_names}
 
-        values = safe_df.to_numpy(dtype=float, copy=False)
+        validated_level_shifts = validated_level_shifts or {}
+        joint_shift_fit = trend_and_shift_target is not None and any(
+            validated_level_shifts.get(col) for col in series_names
+        )
+        fit_df = (
+            trend_and_shift_target.reindex(columns=series_names).ffill().bfill()
+            if joint_shift_fit
+            else safe_df
+        )
+        values = fit_df.to_numpy(dtype=float, copy=False)
         time_index = np.arange(n_samples, dtype=float)
         trend_matrix = np.full((n_samples, n_series), np.nan)
+        if level_shift_component is not None:
+            level_shift_matrix = (
+                level_shift_component.reindex(columns=series_names)
+                .to_numpy(dtype=float)
+                .copy()
+            )
+        else:
+            level_shift_matrix = np.zeros((n_samples, n_series))
 
         # Fit the continuous piecewise-linear (hinge) model jointly. Fitting each
         # segment's slope separately and chaining them from the first intercept lets
         # per-segment mismatches accumulate into a growing level error. Series sharing
-        # a changepoint set share a design matrix, so they are solved together.
+        # changepoint and shift positions share a design matrix and are solved together.
         finite_cols = np.isfinite(values).all(axis=0)
         groups = {}
         for j, col in enumerate(series_names):
-            if finite_cols[j]:
-                indices = changepoint_indices.get(col, np.array([], dtype=int))
-                groups.setdefault(tuple(int(cp) for cp in indices), []).append(j)
-        for cp_key, col_positions in groups.items():
-            design = np.column_stack(
+            if not finite_cols[j]:
+                continue
+            indices = changepoint_indices.get(col, np.array([], dtype=int))
+            shift_positions = ()
+            if joint_shift_fit:
+                shift_positions = tuple(
+                    sorted(
+                        {
+                            int(p)
+                            for p in self.date_index.searchsorted(
+                                pd.DatetimeIndex(
+                                    [
+                                        entry['date']
+                                        for entry in validated_level_shifts.get(col, [])
+                                    ]
+                                )
+                            )
+                            if 0 < p < n_samples
+                        }
+                    )
+                )
+            cp_key = tuple(int(cp) for cp in indices)
+            groups.setdefault((cp_key, shift_positions), []).append(j)
+        for (cp_key, shift_positions), col_positions in groups.items():
+            hinge_design = np.column_stack(
                 [np.ones(n_samples), time_index]
                 + [np.maximum(0.0, time_index - float(cp)) for cp in cp_key]
             )
+            # LevelShiftMagic convention: -magnitude before the shift, 0 after.
+            step_design = (
+                np.column_stack(
+                    [-(time_index < p).astype(float) for p in shift_positions]
+                )
+                if shift_positions
+                else np.zeros((n_samples, 0))
+            )
+            design = np.column_stack([hinge_design, step_design])
             beta, _, _, _ = np.linalg.lstsq(
                 design, values[:, col_positions], rcond=None
             )
-            trend_matrix[:, col_positions] = design @ beta
+            n_hinge = hinge_design.shape[1]
+            trend_matrix[:, col_positions] = hinge_design @ beta[:n_hinge]
+            if shift_positions:
+                step_magnitudes = beta[n_hinge:]
+                level_shift_matrix[:, col_positions] = step_design @ step_magnitudes
+                for k, j in enumerate(col_positions):
+                    magnitude_by_position = dict(
+                        zip(shift_positions, step_magnitudes[:, k])
+                    )
+                    for entry in validated_level_shifts.get(series_names[j], []):
+                        position = int(self.date_index.searchsorted(entry['date']))
+                        if position in magnitude_by_position:
+                            entry['magnitude'] = float(magnitude_by_position[position])
 
         trend_component = pd.DataFrame(
             trend_matrix, index=self.date_index, columns=series_names
         )
-        return changepoints, trend_component
+        level_shift_out = pd.DataFrame(
+            level_shift_matrix, index=self.date_index, columns=series_names
+        )
+        return changepoints, trend_component, level_shift_out
 
     def _compute_trend_slopes(self, trend_component, changepoints):
         slopes = {}

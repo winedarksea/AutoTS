@@ -91,9 +91,12 @@ class TimeSeriesFeatureDetector(
     level_shift_params : dict, optional
         Parameters for LevelShiftMagic
     level_shift_validation : dict, optional
-        Validation parameters for level shifts
+        Validation parameters for level shifts: 'window', 'pad',
+        'absolute_threshold', 'relative_threshold'. Thresholds that are omitted
+        adapt to each series' noise; thresholds that are given are used as-is.
     general_transformer_params : dict, optional
-        Parameters for GeneralTransformer applied before trend detection
+        Parameters for GeneralTransformer applied before trend detection.
+        None uses default filters; {} disables the transform.
     smoothing_window : int, optional
         Window size for smoothing before trend detection
     standardize : bool, default=True
@@ -259,29 +262,33 @@ class TimeSeriesFeatureDetector(
             self.level_shift_params = level_shift_params.copy()
             # Override output to match detection_mode
             self.level_shift_params['output'] = self.detection_mode
-        self.level_shift_validation = level_shift_validation or {
-            'window': 14,
-            'pad': 2,
-            'relative_threshold': 0.1,
-            'absolute_threshold': 0.5,
-        }
-        self.general_transformer_params = general_transformer_params or {
-            'fillna': 'ffill_mean_biased',
-            'transformations': {0: 'ClipOutliers', 1: 'ScipyFilter'},
-            'transformation_params': {
-                0: {'method': 'clip', 'std_threshold': 3.5, 'fillna': None},
-                1: {
-                    'method': 'butter',
-                    'method_args': {
-                        'N': 3,
-                        'btype': 'lowpass',
-                        'analog': False,
-                        'output': 'sos',
-                        'Wn': 0.5,
+        # Thresholds are deliberately absent from the default so they stay adaptive.
+        self.level_shift_validation = (
+            copy.deepcopy(level_shift_validation)
+            if level_shift_validation is not None
+            else {'window': 14, 'pad': 2}
+        )
+        self.general_transformer_params = (
+            copy.deepcopy(general_transformer_params)
+            if general_transformer_params is not None
+            else {
+                'fillna': 'ffill_mean_biased',
+                'transformations': {0: 'ClipOutliers', 1: 'ScipyFilter'},
+                'transformation_params': {
+                    0: {'method': 'clip', 'std_threshold': 3.5, 'fillna': None},
+                    1: {
+                        'method': 'butter',
+                        'method_args': {
+                            'N': 3,
+                            'btype': 'lowpass',
+                            'analog': False,
+                            'output': 'sos',
+                            'Wn': 0.5,
+                        },
                     },
                 },
-            },
-        }
+            }
+        )
         self.smoothing_window = smoothing_window
         self.standardize = standardize
         self.global_holiday_anomaly_suppression = bool(
@@ -415,6 +422,36 @@ class TimeSeriesFeatureDetector(
             changepoints,
             slope_info,
         ) = self._detect_trend_and_shifts(final_residual, holiday_component_scaled)
+
+        # Second pass: a level shift inflates the first trend prior's slope and the
+        # mismatch is absorbed as seasonality. Refit with steps at the validated
+        # shift dates so trend, steps and seasonality are separated jointly.
+        level_shift_dates = {
+            col: [entry['date'] for entry in entries]
+            for col, entries in validated_level_shifts.items()
+            if entries
+        }
+        if level_shift_dates:
+            (
+                final_residual,
+                final_seasonality,
+                seasonality_strength,
+                holiday_component_scaled,
+                holiday_coefficients,
+                holiday_splash_impacts_scaled,
+            ) = self._final_seasonality_fit(
+                df_work,
+                rough_residual,
+                rough_seasonality,
+                level_shift_dates=level_shift_dates,
+            )
+            (
+                trend_component_scaled,
+                level_shift_component_scaled,
+                validated_level_shifts,
+                changepoints,
+                slope_info,
+            ) = self._detect_trend_and_shifts(final_residual, holiday_component_scaled)
 
         # Step 8: Noise analysis
         noise_component_scaled, anomaly_component_scaled = self._analyze_noise(

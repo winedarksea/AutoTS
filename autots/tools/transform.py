@@ -3759,14 +3759,25 @@ class AnomalyRemoval(EmptyTransformer):
         return validated
 
     def transform(self, df):
+        anomaly_mask = self.anomalies == -1
+        if anomaly_mask.shape[1] == 1 and not anomaly_mask.columns.equals(df.columns):
+            # univariate output is one shared flag column; label alignment would
+            # otherwise match no data columns and silently remove nothing
+            anomaly_mask = pd.DataFrame(
+                np.repeat(anomaly_mask.to_numpy(), df.shape[1], axis=1),
+                index=anomaly_mask.index,
+                columns=df.columns,
+            )
+        anomaly_mask = anomaly_mask.reindex(
+            index=df.index, columns=df.columns, fill_value=False
+        )
         if self.fillna is not None:
             # Set anomalies to NaN, then fill them
-            df2 = df.copy()
-            df2[self.anomalies == -1] = np.nan
+            df2 = df.mask(anomaly_mask)
             df2 = FillNA(df2, method=self.fillna, window=10)
         else:
-            # Remove anomaly rows only if no fillna method specified
-            df2 = df[self.anomalies != -1]
+            # No fill method: anomalies are left as NaN
+            df2 = df.mask(anomaly_mask)
         return df2
 
     def fit_transform(self, df):
