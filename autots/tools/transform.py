@@ -5114,7 +5114,8 @@ class LevelShiftMagic(EmptyTransformer):
 
         # Store the shift mask - broadcast to all series in univariate mode
         self.shift_mask_ = pd.DataFrame(
-            np.broadcast_to(max_mask.values, (len(df), len(df.columns))),
+            # broadcast_to returns a read-only view; copy so downstream edits can't raise
+            np.broadcast_to(max_mask.values, (len(df), len(df.columns))).copy(),
             index=df.index,
             columns=df.columns,
         )

@@ -928,7 +928,8 @@ def plot_risk_score_bar(
     ax.grid(axis="y", linestyle=":", alpha=0.3)
 
     # Rotate x-axis labels if they're datetime-like
-    if isinstance(index, pd.Index) and not index.is_numeric():
+    # Index.is_numeric was removed in pandas 2.0; the dtype check works on all versions
+    if isinstance(index, pd.Index) and not pd.api.types.is_numeric_dtype(index):
         ax.tick_params(axis="x", rotation=45)
 
     return ax
