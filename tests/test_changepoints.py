@@ -887,11 +887,11 @@ class TestEdPelt(unittest.TestCase):
         pd.testing.assert_frame_equal(df, reconstructed, atol=1e-8, check_dtype=False)
 
     # ------------------------------------------------------------------
-    # get_new_params includes 'ed' and scales penalty
+    # get_new_params includes 'ed' on the same penalty scale as 'l2'
     # ------------------------------------------------------------------
 
-    def test_get_new_params_pelt_ed_penalty_scaled(self):
-        """When 'ed' is drawn, penalty is scaled ×5 relative to the base sample."""
+    def test_get_new_params_pelt_ed_penalty_unscaled(self):
+        """ED cost is length-normalized, so 'ed' draws the same penalties as 'l2'."""
         # get_new_params(method='pelt') uses 'random' selection_mode (full param space).
         # 'ed' weight is 0.08; 100 trials gives P(never hit) = 0.92^100 < 0.01%.
         found_ed = False
@@ -901,10 +901,7 @@ class TestEdPelt(unittest.TestCase):
             params = ChangepointDetector.get_new_params(method="pelt")
             mp = params.get("method_params", {})
             if mp.get("loss_function") == "ed":
-                self.assertGreaterEqual(
-                    mp.get("penalty", 0), 50,
-                    f"ED penalty not scaled up: {mp}",
-                )
+                self.assertIn(mp.get("penalty"), [10, 20, 50, 100, 200], mp)
                 found_ed = True
                 break
         self.assertTrue(found_ed, "get_new_params never returned loss_function='ed' in 300 tries")
