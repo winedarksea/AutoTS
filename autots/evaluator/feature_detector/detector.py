@@ -328,6 +328,8 @@ class TimeSeriesFeatureDetector(
         self.series_season_types = {}
         self.series_types = {}
         self.detected_seasonal_periods = None
+        self._adaptive_n_obs = None
+        self._seasonal_offset = None
         self._seasonality_changepoints = {}
         self._holiday_regressors_temp = None
         self._holiday_regressor_columns = None
@@ -519,18 +521,24 @@ class TimeSeriesFeatureDetector(
             # Rebuild adaptive Fourier features for the future index if they were
             # added to the regressor during fit (detected_seasonal_periods is set
             # only when build_adaptive_fourier_features was actually used).
+            holiday_columns = list(future_reg.columns) if future_reg is not None else []
             detected_periods = getattr(self, 'detected_seasonal_periods', None)
             if detected_periods is not None:
+                # Harmonic count must match fit, so size it by the training length.
                 adaptive_features = build_adaptive_fourier_features(
-                    future_index, detected_periods, max_order=12
+                    future_index,
+                    detected_periods,
+                    max_order=12,
+                    n_obs=getattr(self, '_adaptive_n_obs', None),
                 )
                 if future_reg is not None:
                     future_reg = pd.concat([future_reg, adaptive_features], axis=1)
                 else:
                     future_reg = adaptive_features
             if future_reg is not None:
+                # Zero only holiday columns; adaptive Fourier columns are seasonality.
                 zero_reg = future_reg.copy()
-                zero_reg.loc[:, :] = 0.0
+                zero_reg.loc[:, holiday_columns] = 0.0
                 seasonal = self.seasonality_model.inverse_transform(
                     zeros, regressor=zero_reg
                 )
@@ -542,6 +550,11 @@ class TimeSeriesFeatureDetector(
                 )
             else:
                 seasonal = self.seasonality_model.inverse_transform(zeros)
+            # Fit moved the intercept out of seasonality into trend; match it here
+            # so the level is not counted twice.
+            seasonal_offset = getattr(self, '_seasonal_offset', None)
+            if seasonal_offset is not None:
+                seasonal = seasonal - seasonal_offset.reindex(columns).fillna(0.0)
         trend = pd.DataFrame(0.0, index=future_index, columns=columns)
         # level shift by the logic of this detector might always be 0 for forecast, but for now it is here.
         level_shifts = pd.DataFrame(0.0, index=future_index, columns=columns)
@@ -1041,6 +1054,13 @@ class TimeSeriesFeatureDetector(
         # Get components in original scale
         cleaned_data = pd.DataFrame(index=self.date_index)
 
+        def _component_array(components, key):
+            # Components are stored as numpy arrays aligned to date_index.
+            values = components.get(key)
+            if values is None:
+                return np.zeros(len(self.date_index))
+            return np.asarray(values, dtype=float)
+
         for name in series_names:
             components = self.components.get(name)
             if components is None:
@@ -1048,27 +1068,13 @@ class TimeSeriesFeatureDetector(
                 cleaned_data[name] = self.df_original[name]
                 continue
 
-            # Start with trend (which includes mean)
-            trend = components.get('trend')
-            if trend is None or not isinstance(trend, pd.Series):
-                trend = pd.Series(0.0, index=self.date_index)
-
-            # Add seasonality
-            seasonality = components.get('seasonality')
-            if seasonality is None or not isinstance(seasonality, pd.Series):
-                seasonality = pd.Series(0.0, index=self.date_index)
-
-            # Add holidays
-            holidays = components.get('holidays')
-            if holidays is None or not isinstance(holidays, pd.Series):
-                holidays = pd.Series(0.0, index=self.date_index)
-
-            # Combine: trend + seasonality + holidays
+            # Combine: trend (which includes mean) + seasonality + holidays
             # Note: level shifts are NOT included, effectively correcting for them
-            cleaned_series = trend + seasonality + holidays
-
-            # Ensure alignment with original index
-            cleaned_data[name] = cleaned_series.reindex(self.date_index)
+            cleaned_data[name] = (
+                _component_array(components, 'trend')
+                + _component_array(components, 'seasonality')
+                + _component_array(components, 'holidays')
+            )
 
         return cleaned_data
 
@@ -1393,10 +1399,11 @@ class TimeSeriesFeatureDetector(
                 # Noise changepoints
                 noise_cp = self.noise_changepoints.get(col, [])
                 if noise_cp:
-                    filtered_ncp = _filter_by_date(noise_cp)
+                    # Entries are bare timestamps; wrap them for _filter_by_date.
+                    filtered_ncp = _filter_by_date([(ncp,) for ncp in noise_cp])
                     if filtered_ncp:
                         metadata['noise_changepoints'] = [
-                            pd.to_datetime(ncp).isoformat() for ncp in filtered_ncp
+                            pd.to_datetime(ncp[0]).isoformat() for ncp in filtered_ncp
                         ]
 
                 if metadata:
@@ -1459,29 +1466,15 @@ class TimeSeriesFeatureDetector(
         # Add shared events if in univariate mode
         if self.detection_mode == 'univariate':
             shared = {}
-            if self.shared_events.get('anomalies'):
-                filtered_shared_an = _filter_by_date(self.shared_events['anomalies'])
-                if filtered_shared_an:
-                    shared['anomalies'] = [
-                        {
-                            'date': pd.to_datetime(an[0]).isoformat(),
-                            'magnitude': float(an[1]),
-                            'type': an[2],
-                        }
-                        for an in filtered_shared_an
-                    ]
-
-            if self.shared_events.get('level_shifts'):
-                filtered_shared_ls = _filter_by_date(self.shared_events['level_shifts'])
-                if filtered_shared_ls:
-                    shared['level_shifts'] = [
-                        {
-                            'date': pd.to_datetime(ls[0]).isoformat(),
-                            'magnitude': float(ls[1]),
-                            'type': ls[2],
-                        }
-                        for ls in filtered_shared_ls
-                    ]
+            # shared_events stores integer day offsets from the first date.
+            base_date = pd.Timestamp(self.date_index[0])
+            for event_key in ('anomalies', 'level_shifts'):
+                offsets = self.shared_events.get(event_key) or []
+                filtered = _filter_by_date(
+                    [(base_date + pd.Timedelta(days=int(off)),) for off in offsets]
+                )
+                if filtered:
+                    shared[event_key] = [{'date': ev[0].isoformat()} for ev in filtered]
 
             if shared:
                 result['shared_events'] = shared

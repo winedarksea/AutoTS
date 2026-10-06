@@ -641,11 +641,11 @@ class Cassandra(ModelObject):
         # remove colinear features
         # NOTE THESE REMOVALS REMOVE THE FIRST OF PAIR COLUMN FIRST
         corr = np.corrcoef(x_array, rowvar=0)  # second one
-        w, vec = np.linalg.eig(np.nan_to_num(corr))
         np.fill_diagonal(corr, 0)
         if self.max_colinearity is not None:
             corel = x_array.columns[
-                np.min(corr * np.tri(corr.shape[0]), axis=0) > self.max_colinearity
+                np.max(np.abs(np.nan_to_num(corr) * np.tri(corr.shape[0])), axis=0)
+                > self.max_colinearity
             ]
             if len(corel) > 0:
                 if self.verbose > 2:
@@ -654,12 +654,20 @@ class Cassandra(ModelObject):
                 self.drop_colz.extend(corel.tolist())
 
         if self.max_multicolinearity is not None:
-            colin = x_array.columns[w < self.max_multicolinearity]
-            if len(colin) > 1:
+            # greedily drop the highest-loading column of the smallest eigenvector
+            remaining = [c for c in x_array.columns if c not in self.drop_colz]
+            colin = []
+            while len(remaining) > 1:
+                w, vec = np.linalg.eigh(
+                    np.nan_to_num(np.corrcoef(x_array[remaining], rowvar=0))
+                )
+                if w[0] >= self.max_multicolinearity:
+                    break
+                colin.append(remaining.pop(int(np.argmax(np.abs(vec[:, 0])))))
+            if len(colin) > 0:
                 if self.verbose > 2:
                     print(f"Dropping multi-colinear feature columns {colin}")
-                # x_array = x_array.drop(columns=colin)
-                self.drop_colz.extend(colin.tolist())
+                self.drop_colz.extend(colin)
         if len(set(self.drop_colz)) == x_array.shape[1]:
             self.drop_colz = list(set(self.drop_colz))[1:]
         x_array = x_array.drop(columns=self.drop_colz)
@@ -954,12 +962,14 @@ class Cassandra(ModelObject):
         if isinstance(self.anomaly_intervention, dict):
             # forecast anomaly scores as time series
             len_inter = len(dates.intersection(self.anomaly_detector.scores.index))
+            new_scores = None
             if len_inter < len(dates):
                 amodel_params = self.anomaly_intervention['ModelParameters']
+                if isinstance(amodel_params, str):
+                    amodel_params = json.loads(amodel_params)
                 # no regressors passed here
                 if "regression_type" in amodel_params:
-                    amodel_params = json.loads(amodel_params)
-                    amodel_params['regression_type'] = None
+                    amodel_params = {**amodel_params, 'regression_type': None}
                 new_scores = model_forecast(
                     model_name=self.anomaly_intervention['Model'],
                     model_param_dict=amodel_params,
@@ -1029,6 +1039,7 @@ class Cassandra(ModelObject):
                 multivar_df = (
                     trs_df.T.groupby(self.categorical_groups)  # axis=1
                     .mean()
+                    .transpose()
                     .iloc[lag_1_indx]
                 )
                 multivar_df.index = full_idx
@@ -1436,14 +1447,15 @@ class Cassandra(ModelObject):
         include_history=False,
         past_impacts=None,
     ):
-        self.df = self.preprocesser.transform(self.df)
         if self.past_impacts_intervention == "remove":
             try:
-                self.df = self.df / (1 + past_impacts)
+                df = df / (1 + past_impacts)
             except TypeError:
                 raise ValueError(
                     "if using past impact with df updates, must pass past_impacts to .fit_data or .predict"
                 )
+        if past_impacts is not None:
+            self.past_impacts = past_impacts
         self.df = self.scale_data(df)
         (
             self.regr_ps_fore,
@@ -1937,6 +1949,8 @@ class Cassandra(ModelObject):
                 )
                 if future_impacts is not None:
                     future_impts = ((1 + future_impts) * (1 + future_impacts)) - 1
+            elif future_impacts is not None and forecast_length is not None:
+                future_impts = future_impacts
             else:
                 future_impts = pd.DataFrame()
             if self.past_impacts is not None or future_impacts is not None:
@@ -2430,6 +2444,8 @@ class Cassandra(ModelObject):
             plt_idx = None
         if to_origin_space:
             trend = self._trend_to_origin()
+        else:
+            trend = self.predicted_trend.copy()
         plot_list.append(trend[series].rename("trend"))
         if self.impacts is not None:
             plot_list.append((self.impacts[series].rename("impact %") - 1.0) * 100)
@@ -2483,6 +2499,8 @@ class Cassandra(ModelObject):
         plot_list.append(self.process_components(to_origin_space=to_origin_space))
         if to_origin_space:
             trend = self._trend_to_origin()
+        else:
+            trend = self.predicted_trend.copy()
         trend.columns = pd.MultiIndex.from_arrays(
             [trend.columns, ['trend'] * len(trend.columns)]
         )
@@ -2558,7 +2576,7 @@ class Cassandra(ModelObject):
         if self.trend_anomaly_detector is not None:
             if self.trend_anomaly_detector.output == "univariate":
                 i_anom = self.trend_anomaly_detector.anomalies.index[
-                    self.anomaly_detector.anomalies.iloc[:, 0] == -1
+                    self.trend_anomaly_detector.anomalies.iloc[:, 0] == -1
                 ]
             else:
                 series_anom = self.trend_anomaly_detector.anomalies[series]
@@ -2610,9 +2628,9 @@ class Cassandra(ModelObject):
         """
         if series is None:
             series = random.choice(self.column_names)
-        if actuals is None or not isinstance(
-            actuals, (pd.DataFrame, np.array, pd.Series)
-        ):
+        if isinstance(actuals, pd.Series):
+            actuals = actuals.to_frame()
+        if actuals is None or not isinstance(actuals, pd.DataFrame):
             actuals_used = prediction.forecast
             actuals_flag = False
         else:
@@ -2686,7 +2704,7 @@ class Cassandra(ModelObject):
         if self.trend_anomaly_detector is not None:
             if self.trend_anomaly_detector.output == "univariate":
                 i_anom = self.trend_anomaly_detector.anomalies.index[
-                    self.anomaly_detector.anomalies.iloc[:, 0] == -1
+                    self.trend_anomaly_detector.anomalies.iloc[:, 0] == -1
                 ]
             else:
                 series_anom = self.trend_anomaly_detector.anomalies[series]

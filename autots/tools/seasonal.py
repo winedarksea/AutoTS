@@ -841,7 +841,9 @@ def fourier_df(DTindex, seasonality, order=10, t=None, history_days=None):
     )
 
 
-def build_adaptive_fourier_features(DTindex, detected_periods, max_order=12):
+def build_adaptive_fourier_features(
+    DTindex, detected_periods, max_order=12, n_obs=None
+):
     """Build Fourier features using FFT-detected dominant periods.
 
     Parameters
@@ -852,6 +854,10 @@ def build_adaptive_fourier_features(DTindex, detected_periods, max_order=12):
         Sequence of `(period, strength)` tuples from `FFT.detect_dominant_periods()`.
     max_order : int
         Upper bound for harmonics generated per detected period.
+    n_obs : int, optional
+        Number of observations used to size the harmonic order. Pass the
+        training length when building features for a forecast index so the
+        columns match those used at fit time. Defaults to ``len(DTindex)``.
 
     Returns
     -------
@@ -865,9 +871,11 @@ def build_adaptive_fourier_features(DTindex, detected_periods, max_order=12):
     t_arr = np.asarray(t, dtype=float)
     seasonal_list = []
     period_labels = []
+    if n_obs is None:
+        n_obs = len(DTindex)
 
     for period, _strength in detected_periods[:5]:
-        n_order = min(max_order, max(2, int(len(DTindex) / period / 2)))
+        n_order = min(max_order, max(2, int(n_obs / period / 2)))
         fs = fourier_series(t_arr, p=period, n=n_order)
         seasonal_list.append(fs)
         for k in range(1, n_order + 1):

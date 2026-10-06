@@ -1,8 +1,5 @@
-# 1.0.4 🇺🇦 🇺🇦 🇺🇦
-* more tuning of MCP download install
-* TVA optimizations
-* Synthetic data minor new options
-* Feature detector and associated transformer bug fixes
+# 1.0.5 🇺🇦 🇺🇦 🇺🇦
+
 
 ### New Model Checklist:
 * Add to ModelMonster in auto_model.py

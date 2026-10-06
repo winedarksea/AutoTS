@@ -100,6 +100,9 @@ class TrendMixin:
         rel_thresh = float(params.get('relative_threshold', 0.1))
         abs_thresh = float(params.get('absolute_threshold', 0.5))
 
+        # LevelShiftMagic.lvlshft is a reverse cumsum (non-zero before a shift, zero
+        # after), and candidate dates are the first post-shift date. Removing a shift
+        # therefore adjusts the points before it.
         validated_component = lvlshft.copy()
         validated = {}
 
@@ -131,7 +134,9 @@ class TrendMixin:
                 right_window = series.iloc[right_start:right_end]
 
                 if left_window.empty or right_window.empty:
-                    validated_component.loc[date:, col] -= magnitude
+                    validated_component.loc[
+                        validated_component.index < date, col
+                    ] += magnitude
                     continue
 
                 before = float(np.nanmedian(left_window))
@@ -153,7 +158,9 @@ class TrendMixin:
                         }
                     )
                 else:
-                    validated_component.loc[date:, col] -= magnitude
+                    validated_component.loc[
+                        validated_component.index < date, col
+                    ] += magnitude
             validated[col] = entries
         return validated_component, validated
 
@@ -199,91 +206,29 @@ class TrendMixin:
             changepoint_indices = {col: np.array([], dtype=int) for col in series_names}
             changepoints = {col: [] for col in series_names}
 
-        max_segments = 1
-        if changepoint_indices:
-            max_segments = (
-                max((len(idx) + 1) for idx in changepoint_indices.values()) or 1
-            )
-
-        segment_starts = np.zeros((max_segments, n_series), dtype=int)
-        segment_ends = np.zeros((max_segments, n_series), dtype=int)
-        valid_mask = np.zeros((max_segments, n_series), dtype=bool)
-
-        for j, col in enumerate(series_names):
-            indices = changepoint_indices.get(col, np.array([], dtype=int))
-            if indices.size:
-                indices = indices[(indices > 0) & (indices < n_samples)]
-                if indices.size:
-                    indices = np.unique(indices)
-            breaks = np.concatenate(([0], indices, [n_samples]))
-            seg_len = len(breaks) - 1
-            segment_starts[:seg_len, j] = breaks[:-1]
-            segment_ends[:seg_len, j] = breaks[1:]
-            valid_mask[:seg_len, j] = True
-
         values = safe_df.to_numpy(dtype=float, copy=False)
         time_index = np.arange(n_samples, dtype=float)
+        trend_matrix = np.full((n_samples, n_series), np.nan)
 
-        prefix_y = np.vstack([np.zeros((1, n_series)), np.cumsum(values, axis=0)])
-        prefix_ty = np.vstack(
-            [np.zeros((1, n_series)), np.cumsum(values * time_index[:, None], axis=0)]
-        )
-        prefix_t = np.concatenate(([0.0], np.cumsum(time_index)))
-        prefix_t2 = np.concatenate(([0.0], np.cumsum(time_index**2)))
-
-        prefix_y_T = prefix_y.T
-        sum_y = np.take_along_axis(
-            prefix_y_T, segment_ends.T, axis=1
-        ) - np.take_along_axis(prefix_y_T, segment_starts.T, axis=1)
-        sum_y = sum_y.T
-
-        prefix_ty_T = prefix_ty.T
-        sum_ty = np.take_along_axis(
-            prefix_ty_T, segment_ends.T, axis=1
-        ) - np.take_along_axis(prefix_ty_T, segment_starts.T, axis=1)
-        sum_ty = sum_ty.T
-
-        sum_t = prefix_t[segment_ends] - prefix_t[segment_starts]
-        sum_t2 = prefix_t2[segment_ends] - prefix_t2[segment_starts]
-        lengths = (segment_ends - segment_starts).astype(float)
-
-        sum_y = np.where(valid_mask, sum_y, 0.0)
-        sum_ty = np.where(valid_mask, sum_ty, 0.0)
-        sum_t = np.where(valid_mask, sum_t, 0.0)
-        sum_t2 = np.where(valid_mask, sum_t2, 0.0)
-        lengths = np.where(valid_mask, lengths, 0.0)
-
-        numerator = lengths * sum_ty - sum_t * sum_y
-        denominator = lengths * sum_t2 - sum_t**2
-        slope = np.divide(
-            numerator,
-            denominator,
-            out=np.zeros_like(numerator, dtype=float),
-            where=(denominator != 0) & valid_mask,
-        )
-
-        base_slope = slope[0, :]
-        base_length = lengths[0, :]
-        base_intercept = np.divide(
-            sum_y[0, :] - base_slope * sum_t[0, :],
-            base_length,
-            out=np.zeros_like(base_slope),
-            where=base_length != 0,
-        )
-        zero_length_mask = base_length == 0
-        if np.any(zero_length_mask):
-            base_intercept[zero_length_mask] = values[0, zero_length_mask]
-
-        trend_matrix = base_intercept + base_slope * time_index[:, None]
-
-        if max_segments > 1:
-            slope_changes = slope[1:, :] - slope[:-1, :]
-            slope_changes = np.where(valid_mask[1:, :], slope_changes, 0.0)
-            hinge_positions = segment_starts[1:, :].astype(float)
-            hinge_contrib = np.maximum(
-                0.0, time_index[:, None, None] - hinge_positions[None, :, :]
+        # Fit the continuous piecewise-linear (hinge) model jointly. Fitting each
+        # segment's slope separately and chaining them from the first intercept lets
+        # per-segment mismatches accumulate into a growing level error. Series sharing
+        # a changepoint set share a design matrix, so they are solved together.
+        finite_cols = np.isfinite(values).all(axis=0)
+        groups = {}
+        for j, col in enumerate(series_names):
+            if finite_cols[j]:
+                indices = changepoint_indices.get(col, np.array([], dtype=int))
+                groups.setdefault(tuple(int(cp) for cp in indices), []).append(j)
+        for cp_key, col_positions in groups.items():
+            design = np.column_stack(
+                [np.ones(n_samples), time_index]
+                + [np.maximum(0.0, time_index - float(cp)) for cp in cp_key]
             )
-            trend_matrix += np.sum(hinge_contrib * slope_changes[None, :, :], axis=1)
+            beta, _, _, _ = np.linalg.lstsq(
+                design, values[:, col_positions], rcond=None
+            )
+            trend_matrix[:, col_positions] = design @ beta
 
         trend_component = pd.DataFrame(
             trend_matrix, index=self.date_index, columns=series_names

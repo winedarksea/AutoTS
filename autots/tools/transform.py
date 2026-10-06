@@ -4825,7 +4825,7 @@ class LevelShiftMagic(EmptyTransformer):
         group_ids_np = group_ids.to_numpy()
         diff_abs_np = diff_abs.to_numpy()
         diff_mask_np = diff_mask.to_numpy()
-        max_mask_np = max_mask.to_numpy()
+        max_mask_np = max_mask.to_numpy(copy=True)
 
         # Initialize curr_diff_np
         used_groups_np = np.where(max_mask_np, group_ids_np, np.nan)
@@ -5070,7 +5070,7 @@ class LevelShiftMagic(EmptyTransformer):
         max_mask = diff_abs == maxes
 
         # Progressively identify level shifts
-        max_mask_np = max_mask.to_numpy()
+        max_mask_np = max_mask.to_numpy(copy=True)
         group_ids_np = group_ids.to_numpy()
         diff_abs_np = diff_abs.to_numpy()
         diff_mask_np = diff_mask.to_numpy()

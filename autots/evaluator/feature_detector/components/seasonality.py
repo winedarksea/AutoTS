@@ -65,14 +65,18 @@ class SeasonalityMixin:
             (residual, seasonal_component, strength, model, holiday_component, holiday_coefficients, holiday_splash_impacts)
         """
         regressor = None
+        holiday_columns = []
         if holiday_regressors is not None and not holiday_regressors.empty:
             regressor = holiday_regressors.reindex(df.index).fillna(0.0)
+            holiday_columns = list(regressor.columns)
 
         seasonality_params = copy.deepcopy(self.seasonality_params)
 
         # Adaptive Fourier mode: detect dominant periods with FFT, then augment
         # regressors with period-specific Fourier features.
         self.detected_seasonal_periods = None
+        self._adaptive_n_obs = None
+        self._seasonal_offset = None
         if seasonality_params.get('datepart_method') == 'adaptive_fourier':
             try:
                 fft_model = FFT(n_harm=None, detrend='linear')
@@ -88,14 +92,17 @@ class SeasonalityMixin:
 
                 if len(detected) >= 2:
                     self.detected_seasonal_periods = detected
+                    self._adaptive_n_obs = len(df.index)
                     adaptive_features = build_adaptive_fourier_features(
-                        df.index, detected, max_order=12
+                        df.index, detected, max_order=12, n_obs=self._adaptive_n_obs
                     )
                     if regressor is not None:
                         regressor = pd.concat([regressor, adaptive_features], axis=1)
                     else:
                         regressor = adaptive_features
-                    seasonality_params['datepart_method'] = 'simple_3'
+                    # 'simple_3' includes an unscaled epoch (Julian date) column that
+                    # stalls linear solvers and folds trend into seasonality.
+                    seasonality_params['datepart_method'] = 'recurring'
                 else:
                     seasonality_params['datepart_method'] = 'common_fourier'
             except Exception:
@@ -118,9 +125,10 @@ class SeasonalityMixin:
         holiday_coefficients = {col: {} for col in df.columns}
         holiday_splash_impacts = {col: {} for col in df.columns}
 
-        if regressor is not None:
+        if holiday_columns:
+            # Zero only holiday columns; adaptive Fourier columns are seasonality.
             zero_regressor = regressor.copy()
-            zero_regressor.loc[:, :] = 0.0
+            zero_regressor.loc[:, holiday_columns] = 0.0
             zeros_df = pd.DataFrame(0.0, index=df.index, columns=df.columns)
             try:
                 baseline_pred = model.inverse_transform(
@@ -150,8 +158,15 @@ class SeasonalityMixin:
                 )
                 seasonal_component = seasonal_total
             holiday_coefficients = self._solve_holiday_coefficients(
-                regressor, holiday_component
+                regressor[holiday_columns], holiday_component
             )
+
+        # The regression intercept carries the series level; move it to the
+        # residual so trend (not seasonality) owns the level.
+        seasonal_offset = seasonal_component.mean().fillna(0.0)
+        seasonal_component = seasonal_component - seasonal_offset
+        residual = residual + seasonal_offset
+        self._seasonal_offset = seasonal_offset
 
         strength = self._compute_seasonality_strength(df, residual, seasonal_component)
         return (
@@ -235,7 +250,10 @@ class SeasonalityMixin:
             (valid.index[-1] - valid.index[0]).days if len(valid.index) > 1 else 0
         )
         if date_range_days >= 180:
-            yearly_groups = valid.groupby(valid.index.dayofyear).mean()
+            # With few years, each day-of-year group holds 1-3 points from different
+            # weekdays, so remove the weekday pattern before grouping.
+            deweekly = valid - valid.groupby(valid.index.dayofweek).transform('mean')
+            yearly_groups = deweekly.groupby(deweekly.index.dayofyear).mean()
             if len(yearly_groups) > 1:
                 yearly_strength = float(np.nanstd(yearly_groups)) / series_scale
 
