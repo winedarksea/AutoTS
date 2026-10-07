@@ -752,9 +752,13 @@ class TimeSeriesFeatureDetector(
             _m_safe = np.where(_has_lev, _m, 1.0)
             _Sxx = np.where(_has_lev, segment_sxx(_m), 1.0)
             _xbar = (_m - 1.0) / 2.0
-            # Future x measured from segment start: x0 = (m - 1) + steps[h], the
-            # same damped step the point forecast extrapolates the slope by.
-            _x0 = (_m - 1.0)[np.newaxis, :] + steps[:, np.newaxis]
+            _h = np.arange(1, forecast_length + 1, dtype=float)[:, np.newaxis]
+            # Future x measured from segment start: x0 = (m - 1) + h. Deliberately
+            # the raw h, not the damped steps: damping biases the point forecast
+            # if the trend persists, and the undamped leverage covers that bias.
+            # Swapping in damped steps lowered coverage and worsened Winkler in
+            # every h<=182 bucket (examples/detector_trend_forecast_eval.py).
+            _x0 = (_m - 1.0)[np.newaxis, :] + _h
             _lev = np.where(
                 _has_lev[np.newaxis, :],
                 1.0 / _m_safe[np.newaxis, :]
