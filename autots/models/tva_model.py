@@ -118,10 +118,10 @@ class TVAModel(ModelObject):
         detector_params: dict = None,
         holiday_country: str = "US",
         holiday_countries: dict = None,
-        fit_horizon: int = None,
         random_seed: int = 42,
         verbose: int = 0,
         n_jobs: int = None,
+        fit_horizon: int = None,
         **kwargs,
     ):
         ModelObject.__init__(

@@ -5,6 +5,7 @@ Tests for Feature Detector
 @author: Colin
 """
 
+import importlib.util
 import unittest
 from unittest.mock import patch
 import ast
@@ -2346,6 +2347,10 @@ class TestFeatureDetectorCalendarHolidayFusion(unittest.TestCase):
         )
         self.assertGreater(np.abs(holiday_component[july_fourth_mask]).sum(), 0.0)
 
+    @unittest.skipUnless(
+        importlib.util.find_spec('holidays') is not None,
+        "non-US calendars need the optional 'holidays' package",
+    )
     def test_per_series_country_mapping_uses_distinct_calendar_dates(self):
         df = self._make_calendar_spike_df()
         detector = TimeSeriesFeatureDetector(

@@ -219,7 +219,6 @@ class TVA:
         batch_size: int = 32,
         window_size: int = 91,
         forecast_horizon: int = 28,
-        fit_horizon: Optional[int] = None,
         recency_halflife_days: Optional[float] = None,
         loss_weights: dict = None,
         reconciliation_method: str = None,
@@ -240,6 +239,7 @@ class TVA:
         derived_definitions: dict = None,
         factor_deconfound_edges: bool = False,
         reconciliation_covariance: str = 'auto',
+        fit_horizon: Optional[int] = None,
     ):
         if not HAS_TORCH and str(trend_network) != 'none':
             raise ImportError(

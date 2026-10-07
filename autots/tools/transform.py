@@ -8558,7 +8558,7 @@ class GeneralTransformer(object):
             # silently caps n_components at n_samples, and the raw estimator then
             # returns fewer columns than _fit_one rebuilds with. Same reason the
             # PCA branch above was retired.
-            return FastICA(**param)
+            return FastICA(**{"random_state": random_seed, **(param or {})})
 
         elif transformation in ["RollingMean", "FixedRollingMean"]:
             param = 10 if param is None else param
