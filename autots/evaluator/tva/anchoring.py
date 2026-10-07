@@ -16,6 +16,12 @@ Modes:
         from both windows first, so an origin inside a holiday season isn't
         anchored to the holiday-depressed level.
 
+A multiplicative anchor scales the whole path, so a badly placed first step
+(observed / forecast start far from 1) multiplies every later step too: the
+LRP detector review saw 180x blow-ups. Ratios outside ``max_ratio`` therefore
+fall back to an additive shift, which corrects the same start gap without
+rescaling the trend.
+
 Pure numpy.
 """
 
@@ -26,6 +32,7 @@ import warnings
 import numpy as np
 
 ORIGIN_ANCHOR_MODES = ('last_value', 'deseasonalized')
+DEFAULT_ORIGIN_ANCHOR_MAX_RATIO = 1.5
 
 
 def origin_anchor_adjustment(
@@ -35,6 +42,7 @@ def origin_anchor_adjustment(
     mode: str = 'last_value',
     history_periodic: np.ndarray = None,
     forecast_periodic: np.ndarray = None,
+    max_ratio: float = DEFAULT_ORIGIN_ANCHOR_MAX_RATIO,
 ) -> dict:
     """Per-series adjustment that moves the forecast's start to the recent level.
 
@@ -47,6 +55,8 @@ def origin_anchor_adjustment(
             'deseasonalized' only.
         forecast_periodic: (H, N) future seasonality + holidays; used by
             'deseasonalized' only.
+        max_ratio: multiplicative ratios outside ``[1/max_ratio, max_ratio]``
+            switch that series to an additive shift. None = unbounded.
 
     Returns:
         dict with ``ratio`` (N,) multiplicative factor (1.0 where unused),
@@ -90,6 +100,15 @@ def origin_anchor_adjustment(
     ratio[multiplicative] = (
         observed_level[multiplicative] / forecast_level[multiplicative]
     )
+    if max_ratio is not None:
+        bound = float(max_ratio)
+        if not bound >= 1.0:
+            raise ValueError(f"max_ratio must be >= 1 or None, got {max_ratio!r}")
+        out_of_bounds = multiplicative & (
+            (ratio > bound) | (ratio < 1.0 / bound)
+        )
+        multiplicative = multiplicative & ~out_of_bounds
+        ratio[out_of_bounds] = 1.0
     additive = usable & ~multiplicative
     offset[additive] = observed_level[additive] - forecast_level[additive]
     return {'ratio': ratio, 'offset': offset, 'multiplicative': multiplicative}

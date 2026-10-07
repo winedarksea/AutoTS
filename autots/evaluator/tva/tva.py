@@ -1730,6 +1730,7 @@ class TVA:
                 self._anchor_info = None
             return forecast_values, None
         from autots.evaluator.tva.anchoring import (
+            DEFAULT_ORIGIN_ANCHOR_MAX_RATIO,
             apply_origin_anchor,
             origin_anchor_adjustment,
         )
@@ -1758,6 +1759,10 @@ class TVA:
             mode=str(mode),
             history_periodic=in_sample_periodic,
             forecast_periodic=forecast_periodic,
+            # a missing key (configs saved before the guard) still gets it
+            max_ratio=cfg.get(
+                'origin_anchor_max_ratio', DEFAULT_ORIGIN_ANCHOR_MAX_RATIO
+            ),
         )
         if upto is None:
             self._anchor_info = adjustment

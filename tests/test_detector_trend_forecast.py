@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-"""Tests for the detector's trend forecast helpers (future-change variance, slope shrinkage)."""
+"""Tests for the detector's trend forecast helpers (future-change variance, slope
+shrinkage, trend damping)."""
 
 import unittest
 
@@ -9,10 +10,14 @@ import pandas as pd
 from autots.datasets import load_daily
 from autots.evaluator.feature_detector import TimeSeriesFeatureDetector
 from autots.evaluator.feature_detector.utils.trend_forecast import (
+    DEFAULT_TREND_DAMPING_PER_DAY,
+    damped_trend_steps,
     future_trend_change_variance,
+    resolve_trend_damping,
     segment_sxx,
     shrink_last_slope,
     trend_change_rates,
+    validate_trend_damping,
 )
 
 
@@ -89,6 +94,48 @@ class TestShrinkLastSlope(unittest.TestCase):
         self.assertLess(shrunk, 5.0)
 
 
+class TestTrendDamping(unittest.TestCase):
+    def test_invalid_phi_raises(self):
+        for bad in (0.0, -0.5, 1.2):
+            with self.assertRaises(ValueError):
+                validate_trend_damping(bad)
+            with self.assertRaises(ValueError):
+                TimeSeriesFeatureDetector(trend_damping=bad)
+        with self.assertRaises(ValueError):
+            TimeSeriesFeatureDetector()._apply_detector_params({'trend_damping': 2.0})
+
+    def test_phi_one_is_undamped(self):
+        np.testing.assert_array_equal(damped_trend_steps(10, 1.0), np.arange(1, 11))
+        np.testing.assert_array_equal(damped_trend_steps(10, None), np.arange(1, 11))
+
+    def test_auto_compounds_per_day_rate_over_period(self):
+        daily = pd.date_range('2020-01-01', periods=50, freq='D')
+        weekly = pd.date_range('2020-01-05', periods=50, freq='W')
+        hourly = pd.date_range('2020-01-01', periods=50, freq='h')
+        base = DEFAULT_TREND_DAMPING_PER_DAY
+        self.assertAlmostEqual(resolve_trend_damping('auto', daily), base)
+        self.assertAlmostEqual(resolve_trend_damping('auto', weekly), base**7)
+        self.assertAlmostEqual(resolve_trend_damping('auto', hourly), base ** (1 / 24))
+        self.assertAlmostEqual(resolve_trend_damping('auto', pd.RangeIndex(50)), base)
+        self.assertIsNone(resolve_trend_damping(None, daily))
+        self.assertEqual(resolve_trend_damping(0.9, weekly), 0.9)
+        with self.assertRaises(ValueError):
+            validate_trend_damping('fast')
+
+    def test_template_none_stays_undamped(self):
+        detector = TimeSeriesFeatureDetector()
+        self.assertEqual(detector.trend_damping, 'auto')
+        detector._apply_detector_params({'trend_damping': None})
+        self.assertIsNone(detector.trend_damping)
+
+    def test_increment_bounded_by_geometric_limit(self):
+        for phi in (0.9, 0.99, 0.995):
+            steps = damped_trend_steps(5000, phi)
+            self.assertTrue((np.diff(steps) >= 0).all())
+            self.assertLessEqual(steps[-1], phi / (1.0 - phi) + 1e-9)
+            self.assertAlmostEqual(steps[0], phi)
+
+
 class TestDetectorForecastOptions(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -107,13 +154,36 @@ class TestDetectorForecastOptions(unittest.TestCase):
         self.assertTrue((np.diff(width_on, axis=0) >= -1e-9).all())
 
     def test_slope_shrinkage_keeps_anchor_and_finite(self):
-        base = self.detector.forecast(30, slope_shrinkage=False)
-        shrunk = self.detector.forecast(30, slope_shrinkage=True)
+        # undamped so the gap grows linearly in h and the 1/29 bound is exact
+        base = self.detector.forecast(30, slope_shrinkage=False, trend_damping=1.0)
+        shrunk = self.detector.forecast(30, slope_shrinkage=True, trend_damping=1.0)
         self.assertTrue(np.isfinite(shrunk.forecast.to_numpy()).all())
         # Same anchor level; only the slope differs, so the step-1 gap is tiny
         # relative to the step-30 gap.
         gap = (shrunk.forecast - base.forecast).abs().to_numpy()
         self.assertTrue((gap[0] <= gap[-1] / 29.0 + 1e-6).all())
+
+    def test_damping_init_matches_call_and_none_matches_one(self):
+        original = self.detector.trend_damping
+        try:
+            self.detector.trend_damping = None
+            undamped = self.detector.forecast(60).forecast
+            pd.testing.assert_frame_equal(
+                undamped, self.detector.forecast(60, trend_damping=1.0).forecast
+            )
+            by_call = self.detector.forecast(60, trend_damping=0.97).forecast
+            self.detector.trend_damping = 0.97
+            pd.testing.assert_frame_equal(by_call, self.detector.forecast(60).forecast)
+        finally:
+            self.detector.trend_damping = original
+
+    def test_default_auto_is_daily_rate_on_daily_data(self):
+        self.assertEqual(self.detector.trend_damping, 'auto')
+        auto = self.detector.forecast(60).forecast
+        explicit = self.detector.forecast(
+            60, trend_damping=DEFAULT_TREND_DAMPING_PER_DAY
+        ).forecast
+        pd.testing.assert_frame_equal(auto, explicit)
 
 
 if __name__ == '__main__':

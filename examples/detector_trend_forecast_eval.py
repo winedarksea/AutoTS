@@ -5,6 +5,7 @@ Arms (one detector fit per origin, three forecasts from it):
 - baseline:  trend_change_variance=False, slope_shrinkage=False (pre-change behaviour)
 - variance:  trend_change_variance=True
 - shrink:    trend_change_variance=True, slope_shrinkage=True
+- damp<phi>: shrink + trend_damping=phi (per period)
 
 Reports per horizon bucket: 90% interval coverage, scaled Winkler interval score,
 and point MASE / sMAPE. Also checks the premise behind the variance term on the
@@ -12,6 +13,9 @@ synthetic panel: detected rate * E[slope_change^2] vs the generator's truth.
 
 Usage:
   python examples/detector_trend_forecast_eval.py --datasets synthetic,daily,weekly
+  # long-horizon damping check (the LRP review's gains were largest at 1-2 years)
+  python examples/detector_trend_forecast_eval.py --datasets daily --horizon 365 \
+      --skip-premise --log
 """
 
 import argparse
@@ -31,6 +35,22 @@ ARMS = {
     'variance': dict(trend_change_variance=True, slope_shrinkage=False),
     'shrink': dict(trend_change_variance=True, slope_shrinkage=True),
 }
+DAMPING_GRID = (0.998, 0.995, 0.99)
+
+
+def set_damping_grid(grid):
+    """(Re)build the damp<phi> arms; grid is per period (step)."""
+    global DAMPING_GRID
+    for arm in [a for a in ARMS if a.startswith('damp')]:
+        del ARMS[arm]
+    DAMPING_GRID = tuple(grid)
+    for phi in DAMPING_GRID:
+        ARMS[f'damp{phi}'] = dict(
+            trend_change_variance=True, slope_shrinkage=True, trend_damping=phi
+        )
+
+
+set_damping_grid(DAMPING_GRID)
 ALPHA = 0.1
 
 
@@ -39,22 +59,26 @@ def make_synthetic(seed, n_days=1460, n_series=12):
     return gen.get_data(), gen
 
 
-def load_dataset(name, seed):
+def load_dataset(name, seed, horizon=None):
     if name == 'synthetic':
-        return make_synthetic(seed)[0], 90, 5, 60
-    if name == 'daily':
+        out = make_synthetic(seed)[0], 90, 5, 60
+    elif name == 'daily':
         df = load_daily(long=False)
         df = df.loc[:, df.notna().mean() > 0.9]
-        return df, 90, 5, 60
-    if name == 'weekly':
+        out = df, 90, 5, 60
+    elif name == 'weekly':
         df = load_weekly(long=False)
         df = df.loc[:, df.notna().mean() > 0.9]
-        return df, 26, 5, 13
-    raise ValueError(name)
+        out = df, 26, 5, 13
+    else:
+        raise ValueError(name)
+    if horizon is not None:
+        out = (out[0], int(horizon)) + out[2:]
+    return out
 
 
 def horizon_buckets(horizon):
-    edges = sorted({min(7, horizon), min(30, horizon), horizon})
+    edges = sorted({min(e, horizon) for e in (7, 30, 90, 182, 365)} | {horizon})
     buckets, lo = [], 0
     for hi in edges:
         if hi > lo:
@@ -85,15 +109,18 @@ def score_origin(train, actual, pred):
     }
 
 
-def run_dataset(name, seed):
-    df, horizon, n_origins, spacing = load_dataset(name, seed)
+def run_dataset(name, seed, horizon=None, log=False, detector_kwargs=None):
+    df, horizon, n_origins, spacing = load_dataset(name, seed, horizon)
     df = df.astype(float)
+    if log:
+        # log space, as the LRP review ran it; scores are then in log units
+        df = np.log1p(df.clip(lower=0))
     origins = [len(df) - horizon - k * spacing for k in range(n_origins)]
     buckets = horizon_buckets(horizon)
     rows = []
     for origin in origins:
         train, actual = df.iloc[:origin], df.iloc[origin : origin + horizon]
-        det = TimeSeriesFeatureDetector()
+        det = TimeSeriesFeatureDetector(**(detector_kwargs or {}))
         t0 = time.time()
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
@@ -145,6 +172,20 @@ def summarize(results):
             f'  {ds:9s} h{bucket:7s} median ratio={np.median(ratio):.3f} '
             f'better={np.mean(ratio < 0.999):.2f} worse>10%={np.mean(ratio > 1.1):.2f}'
         )
+    print('\n=== Damping vs shrink: MASE ratio (mean-MASE ratio, paired over origins) ===')
+    mase = results[results.metric == 'mase']
+    for (ds, bucket), grp in mase.groupby(['dataset', 'bucket'], sort=False):
+        by_arm = grp.pivot_table(index='origin', columns='arm', values='value')
+        base = by_arm['shrink']
+        parts = []
+        for phi in DAMPING_GRID:
+            arm = f'damp{phi}'
+            per_origin = by_arm[arm] / base
+            parts.append(
+                f'{phi}: {by_arm[arm].mean() / base.mean():.3f} '
+                f'[{per_origin.min():.3f},{per_origin.max():.3f}]'
+            )
+        print(f'  {ds:9s} h{bucket:8s} ' + '  '.join(parts))
 
 
 def premise_check(seed):
@@ -193,11 +234,29 @@ def main():
     parser.add_argument('--datasets', default='synthetic,daily,weekly')
     parser.add_argument('--seed', type=int, default=7)
     parser.add_argument('--skip-premise', action='store_true')
+    parser.add_argument('--horizon', type=int, default=None)
+    parser.add_argument('--log', action='store_true')
+    parser.add_argument(
+        '--joint', action='store_true', help="changepoint method 'joint_hinge_step'"
+    )
+    parser.add_argument(
+        '--damping-grid', type=str, default=None, help='comma-separated phi values'
+    )
     args = parser.parse_args()
+    if args.damping_grid:
+        set_damping_grid(float(v) for v in args.damping_grid.split(','))
     if not args.skip_premise:
         premise_check(args.seed)
+    detector_kwargs = (
+        {'changepoint_params': {'method': 'joint_hinge_step'}}
+        if args.joint
+        else None
+    )
     results = pd.concat(
-        [run_dataset(name, args.seed) for name in args.datasets.split(',')],
+        [
+            run_dataset(name, args.seed, args.horizon, args.log, detector_kwargs)
+            for name in args.datasets.split(',')
+        ],
         ignore_index=True,
     )
     summarize(results)

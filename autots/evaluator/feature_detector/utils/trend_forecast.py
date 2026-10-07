@@ -6,6 +6,7 @@ Two additions over plain last-segment OLS extrapolation:
   have not happened yet, at the rates the detector observed in training.
 - shrink_last_slope: empirical-Bayes shrinkage of a noisy last-segment slope
   toward a recency-weighted average of earlier segment slopes.
+- damped_trend_steps: per-period damping phi of the extrapolated slope.
 
 All rates are per observation step (not per day) because forecast horizons and
 stored slopes are both in steps.
@@ -13,6 +14,67 @@ stored slopes are both in steps.
 
 import numpy as np
 import pandas as pd
+
+
+# Calendar damping used by trend_damping='auto'. Undamped extrapolation of a
+# precise last-segment slope overshoots at long horizons: on the LRP review panel
+# 0.99/day cut 366-730 d MASE to 0.23-0.82x of undamped, and on load_daily /
+# synthetic / weekly it improved every bucket on every origin (on top of
+# slope_shrinkage, intervals included). Stronger damping scored better still on
+# those flat-ish panels, so 0.99 is kept as the more conservative choice that
+# still lets genuine growth extrapolate (half-life ~69 days).
+DEFAULT_TREND_DAMPING_PER_DAY = 0.99
+
+
+def validate_trend_damping(trend_damping):
+    """Return phi as a float in (0, 1], 'auto', or None (undamped).
+
+    Raises instead of silently ignoring an out-of-range phi: phi > 1 would be an
+    accelerating trend and phi <= 0 is meaningless, both almost surely typos.
+    """
+    if trend_damping is None:
+        return None
+    if isinstance(trend_damping, str):
+        if trend_damping == 'auto':
+            return 'auto'
+        raise ValueError(f"trend_damping must be 'auto', a float in (0, 1] or None, got {trend_damping!r}")
+    phi = float(trend_damping)
+    if not 0.0 < phi <= 1.0:
+        raise ValueError(f"trend_damping must be 'auto', a float in (0, 1] or None, got {trend_damping!r}")
+    return phi
+
+
+def resolve_trend_damping(trend_damping, date_index=None):
+    """Per-period phi (float) or None from a validated trend_damping.
+
+    'auto' is DEFAULT_TREND_DAMPING_PER_DAY compounded over the median period
+    length, so the calendar half-life is the same for hourly, daily or weekly
+    data (weekly 0.99**7 ~= 0.932). A non-datetime index counts as daily.
+    """
+    phi = validate_trend_damping(trend_damping)
+    if phi != 'auto':
+        return phi
+    period_days = 1.0
+    if isinstance(date_index, pd.DatetimeIndex) and len(date_index) > 1:
+        median_gap = pd.Series(date_index).diff().median()
+        if pd.notna(median_gap) and median_gap > pd.Timedelta(0):
+            period_days = median_gap / pd.Timedelta(days=1)
+    return float(DEFAULT_TREND_DAMPING_PER_DAY**period_days)
+
+
+def damped_trend_steps(forecast_length, trend_damping=None):
+    """Effective step counts sum_{i<=h} phi^i for h = 1..forecast_length.
+
+    The trend at step h is ``last + slope * steps[h-1]``; the total increment is
+    bounded by slope * phi / (1 - phi) for phi < 1. phi None or 1 gives 1..H.
+    """
+    steps = np.arange(1, int(forecast_length) + 1, dtype=float)
+    phi = validate_trend_damping(trend_damping)
+    if phi == 'auto':
+        raise ValueError("resolve 'auto' with resolve_trend_damping first")
+    if phi is None or phi == 1.0:
+        return steps
+    return np.cumsum(phi**steps)
 
 
 def segment_sxx(segment_length):

@@ -122,6 +122,9 @@ DEFAULT_FACTOR_CONFIG = {
     # to max(7, season length)
     'origin_anchor': None,
     'origin_anchor_window': None,
+    # multiplicative anchor ratios beyond [1/x, x] shift additively instead;
+    # None = unbounded (the pre-guard behavior)
+    'origin_anchor_max_ratio': 1.5,
     'inner_folds': 3,
     # refit the factor stage on truncated history so inner validation origins
     # aren't in-sample (only the factor stage is refit, the extrapolation

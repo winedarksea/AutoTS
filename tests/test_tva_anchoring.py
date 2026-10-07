@@ -73,6 +73,40 @@ class TestOriginAnchorMath(unittest.TestCase):
             adj = origin_anchor_adjustment(history, forecast, window=7)
         np.testing.assert_array_equal(apply_origin_anchor(forecast, adj)[:, 1], forecast[:, 1])
 
+    def test_extreme_ratio_falls_back_to_additive(self):
+        # LRP review: a first step 180x below the observed level scaled the
+        # whole path 180x; the guard shifts it instead
+        history = _weekly(56)[:, None]
+        forecast = (_weekly(28, start=56) / 180.0 + np.linspace(0, 1, 28))[:, None]
+        adj = origin_anchor_adjustment(history, forecast, window=7)
+        out = apply_origin_anchor(forecast, adj)
+        self.assertFalse(adj['multiplicative'][0])
+        self.assertEqual(adj['ratio'][0], 1.0)
+        self.assertAlmostEqual(out[:7].mean(), history[-7:].mean(), places=8)
+        # additive: the forecast's own increments are preserved, not scaled
+        np.testing.assert_allclose(np.diff(out[:, 0]), np.diff(forecast[:, 0]))
+
+    def test_in_bound_ratio_unchanged_by_guard(self):
+        history = _weekly(56)[:, None]
+        forecast = (_weekly(28, start=56) * 0.9)[:, None]
+        guarded = origin_anchor_adjustment(history, forecast, window=7)
+        unbounded = origin_anchor_adjustment(
+            history, forecast, window=7, max_ratio=None
+        )
+        for key in ('ratio', 'offset', 'multiplicative'):
+            np.testing.assert_array_equal(guarded[key], unbounded[key])
+
+    def test_unbounded_reproduces_pre_guard_scaling(self):
+        history = _weekly(56)[:, None]
+        forecast = (_weekly(28, start=56) / 180.0)[:, None]
+        adj = origin_anchor_adjustment(history, forecast, window=7, max_ratio=None)
+        self.assertTrue(adj['multiplicative'][0])
+        self.assertGreater(adj['ratio'][0], 100.0)
+
+    def test_invalid_max_ratio_raises(self):
+        with self.assertRaises(ValueError):
+            origin_anchor_adjustment(np.ones((10, 1)), np.ones((5, 1)), max_ratio=0.5)
+
     def test_unknown_mode_raises(self):
         with self.assertRaises(ValueError):
             origin_anchor_adjustment(np.ones((10, 1)), np.ones((5, 1)), mode='nope')

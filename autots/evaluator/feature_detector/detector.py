@@ -55,10 +55,13 @@ from .event_dag_view import filter_event_dag, plot_event_dag_timeline
 from .utils.rescaling import RescalingMixin
 from .utils.formatting import FormattingMixin
 from .utils.trend_forecast import (
+    damped_trend_steps,
     future_trend_change_variance,
     segment_sxx,
+    resolve_trend_damping,
     shrink_last_slope,
     trend_change_rates,
+    validate_trend_damping,
 )
 
 
@@ -132,12 +135,14 @@ class TimeSeriesFeatureDetector(
         Opt-in second anomaly pass detecting multi-day/sustained patterns
         (see ExtendedAnomalyDetector). Disabled unless a truthy dict is given;
         ``default_extended_anomaly_params()`` supplies a usable starting point.
-    trend_damping : float, optional
-        Per-period damping factor phi applied to the extrapolated slope in
-        ``forecast()`` (trend increment at step h is slope * phi**h). None = undamped.
         Off by default: sustained changes are already reported as level shifts
         and trend changepoints, and labelling them as anomalies as well makes
         the anomaly output span most of the timeline on typical data.
+    trend_damping : {'auto', float, None}, default='auto'
+        Per-period damping factor phi in (0, 1] applied to the extrapolated slope
+        in ``forecast()`` (trend increment at step h is slope * phi**h).
+        'auto' = 0.99 per day, compounded to the data's period length.
+        None or 1.0 = undamped; values outside (0, 1] raise ValueError.
     """
 
     TEMPLATE_VERSION = "1.2"
@@ -160,7 +165,7 @@ class TimeSeriesFeatureDetector(
         event_dag_params=None,
         holiday_country=None,
         holiday_countries=None,
-        trend_damping=None,
+        trend_damping='auto',
     ):
         # Set detection_mode first so it can be used in other initializations
         self.detection_mode = detection_mode
@@ -323,7 +328,7 @@ class TimeSeriesFeatureDetector(
             copy.deepcopy(extended_anomaly_params) if extended_anomaly_params else {}
         )
         self.event_dag_params = resolve_event_dag_params(event_dag_params)
-        self.trend_damping = None if trend_damping is None else float(trend_damping)
+        self.trend_damping = validate_trend_damping(trend_damping)
 
         # Model artifacts
         self.scaler = None
@@ -582,8 +587,9 @@ class TimeSeriesFeatureDetector(
                 the last segment is short.
             slope_recency_days (float): e-folding age, in calendar days, of the
                 earlier-segment weights used by slope_shrinkage.
-            trend_damping (float): per-period damping phi of the extrapolated
-                slope; None uses the detector's ``trend_damping`` (default undamped).
+            trend_damping (float or 'auto'): per-period damping phi of the
+                extrapolated slope; None uses the detector's ``trend_damping``
+                (default 'auto'). Pass 1.0 for undamped.
         """
         if self.df_original is None or self.date_index is None:
             raise ValueError(
@@ -676,12 +682,15 @@ class TimeSeriesFeatureDetector(
         trend = pd.DataFrame(0.0, index=future_index, columns=columns)
         # level shift by the logic of this detector might always be 0 for forecast, but for now it is here.
         level_shifts = pd.DataFrame(0.0, index=future_index, columns=columns)
-        steps = np.arange(1, forecast_length + 1, dtype=float)
-        damping = trend_damping if trend_damping is not None else self.trend_damping
-        if damping is not None and 0.0 < float(damping) < 1.0:
-            # Cumulative damped steps: sum_{i<=h} phi^i. Precise slopes extrapolated
-            # undamped over long horizons overshoot more than slope noise does.
-            steps = np.cumsum(float(damping) ** steps)
+        # Precise slopes extrapolated undamped over long horizons overshoot more
+        # than slope noise does.
+        steps = damped_trend_steps(
+            forecast_length,
+            resolve_trend_damping(
+                trend_damping if trend_damping is not None else self.trend_damping,
+                self.date_index,
+            ),
+        )
         for col_idx, col in enumerate(columns):
             comp = self.components.get(col, {})
             trend_hist = np.asarray(comp.get('trend', []), dtype=float)
@@ -1843,8 +1852,10 @@ class TimeSeriesFeatureDetector(
             )[0],
             'extended_anomaly_params': extended_anomaly_params,
             'level_shift_validation': level_shift_validation,
+            # forecast() is not in the optimizer loss, so this only carries the
+            # measured default forward; None keeps undamped reachable
             'trend_damping': random.choices(
-                [None, 0.98, 0.99, 0.995], [0.85, 0.05, 0.05, 0.05]
+                ['auto', None, 0.98, 0.995], [0.7, 0.1, 0.1, 0.1]
             )[0],
         }
 
@@ -1916,9 +1927,9 @@ class TimeSeriesFeatureDetector(
             self.level_shift_validation = copy.deepcopy(
                 params['level_shift_validation']
             ) or {'window': 14, 'pad': 2}
+        # None in a template means undamped (templates saved before 'auto')
         if 'trend_damping' in params:
-            damping = params['trend_damping']
-            self.trend_damping = None if damping is None else float(damping)
+            self.trend_damping = validate_trend_damping(params['trend_damping'])
         if 'event_dag_params' in params:
             self.event_dag_params = resolve_event_dag_params(
                 copy.deepcopy(params['event_dag_params'])
