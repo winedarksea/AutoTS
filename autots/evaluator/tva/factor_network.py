@@ -103,6 +103,9 @@ DEFAULT_FACTOR_CONFIG = {
     'continuation_select': False,
     'continuation_origins': 3,
     'continuation_config': None,
+    # force one continuation spec (e.g. 'constant') on every factor, skipping
+    # selection; takes precedence over continuation_select
+    'continuation_force': None,
     # 1c: zero loadings of series the factor model forecasts worse than a
     # damped local-linear baseline on their own raw target
     'gate_forecast_margin': None,
@@ -114,6 +117,11 @@ DEFAULT_FACTOR_CONFIG = {
     'error_cap': False,
     'reanchor': False,
     'conformal_sigma': False,
+    # R1: pin the forecast start to the recent observed level, None |
+    # 'last_value' | 'deseasonalized' (see tva/anchoring.py); window defaults
+    # to max(7, season length)
+    'origin_anchor': None,
+    'origin_anchor_window': None,
     'inner_folds': 3,
     # refit the factor stage on truncated history so inner validation origins
     # aren't in-sample (only the factor stage is refit, the extrapolation
@@ -1460,6 +1468,22 @@ if HAS_TORCH:
         result['origins'] = [int(o) for o in origins]
         return result
 
+    def _forced_continuation(name: str, n_factors: int, cfg: dict) -> dict:
+        """Continuation record applying spec ``name`` to all factors."""
+        from autots.evaluator.tva.continuation import build_specs
+
+        names = [spec['name'] for spec in build_specs(cfg.get('continuation_config'))]
+        if name not in names:
+            raise ValueError(
+                f"continuation_force={name!r} is not a continuation spec; "
+                f"choose from {names}"
+            )
+        return {
+            'choice': {k: name for k in range(int(n_factors))},
+            'forced': name,
+            'origins': [],
+        }
+
     def selected_continuation_deltas(
         model,
         horizon: int,
@@ -1488,6 +1512,9 @@ if HAS_TORCH:
             )
             model_deltas = model.continuation_deltas(origins, H).cpu().numpy()
         choice = {int(k): v for k, v in continuation['choice'].items()}
+        if continuation.get('forced'):
+            # group factors can be attached after the fit; they follow the rule too
+            choice = {k: continuation['forced'] for k in range(paths.shape[1])}
         return apply_choice(
             paths,
             np.array([int(origin)]),
@@ -1747,7 +1774,12 @@ if HAS_TORCH:
 
         # ---- 1a: validation-selected factor continuation --------------------
         continuation = None
-        if cfg.get('continuation_select'):
+        forced = cfg.get('continuation_force')
+        if forced:
+            # one rule for every factor, no in-sample scoring: selection scores
+            # on smoothed in-sample paths, which carry look-ahead at past origins
+            continuation = _forced_continuation(str(forced), model.K, cfg)
+        elif cfg.get('continuation_select'):
             try:
                 continuation = _select_continuation(model, y, H, cfg)
             except Exception as exc:  # pragma: no cover - never fail the fit

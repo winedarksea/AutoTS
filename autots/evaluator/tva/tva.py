@@ -75,6 +75,23 @@ except Exception:
 RECONCILIATION_COVARIANCE_AUTO = 'structural'
 
 
+
+def resolve_fit_horizon(
+    trend_network: str, forecast_horizon: int, fit_horizon, n_periods: int
+) -> int:
+    """Horizon TVA trains and validates at, decoupled from the output length.
+
+    'factor'/'none' extrapolate to any length, so their internal horizon is
+    capped at max(28, T // 4): beyond that stage-B damping, inner folds and
+    continuation origins have no room and silently switch off. v1/v2 emit a
+    fixed-length head and must train at ``forecast_horizon``.
+    """
+    if trend_network not in ('factor', 'none'):
+        return int(forecast_horizon)
+    if fit_horizon:
+        return max(int(fit_horizon), 1)
+    return max(min(int(forecast_horizon), max(28, int(n_periods) // 4)), 1)
+
 class TVA:
     """Time Variant Architecture — end-to-end coherent forecasting graph.
 
@@ -139,6 +156,11 @@ class TVA:
         batch_size: Training batch size.
         window_size: Input trend window length.
         forecast_horizon: Output forecast length.
+        fit_horizon: Horizon the factor/'none' modes are validated and
+            calibrated at. None caps it at max(28, T // 4) so long forecasts
+            keep usable inner origins (a 730-step horizon on 900 rows leaves
+            none); predict still returns any requested length. v1/v2 always
+            use forecast_horizon, their output head is that length.
         loss_weights: Dict overriding loss component weights.
         reconciliation_method: None, 'mint', 'erm', etc.
         reconciliation_covariance: how MinT's W is obtained when no per-node
@@ -197,6 +219,7 @@ class TVA:
         batch_size: int = 32,
         window_size: int = 91,
         forecast_horizon: int = 28,
+        fit_horizon: Optional[int] = None,
         recency_halflife_days: Optional[float] = None,
         loss_weights: dict = None,
         reconciliation_method: str = None,
@@ -279,6 +302,8 @@ class TVA:
         self.batch_size = batch_size
         self.window_size = window_size
         self.forecast_horizon = forecast_horizon
+        self.fit_horizon = fit_horizon
+        self._fit_horizon = forecast_horizon
         self.recency_halflife_days = recency_halflife_days
         self.loss_weights = loss_weights
         self.reconciliation_method = reconciliation_method
@@ -335,6 +360,7 @@ class TVA:
             torch.manual_seed(self.random_seed)
         np.random.seed(self.random_seed)
         self._df_original = df
+        self._fit_horizon = self._resolve_fit_horizon(len(df))
 
         # Step 0: normalize whatever prior form the user supplied into one
         # signed (N, N) matrix over this panel's column order. Every
@@ -1031,7 +1057,7 @@ class TVA:
         cfg = dict(self.factor_config or {})
         cfg.setdefault(
             'min_observed_multiple',
-            max(float(self.min_anchor_history) / max(self.forecast_horizon, 1), 1.0),
+            max(float(self.min_anchor_history) / max(self._fit_horizon, 1), 1.0),
         )
         # D: make the user's graph prior available to the loading penalty.
         # w_prior_loadings stays at its 0.0 default, so this changes nothing
@@ -1044,7 +1070,7 @@ class TVA:
             n_factors=n_factors,
             knot_spacing=self.factor_knot_spacing,
             max_lag=self.factor_max_lag,
-            horizon=self.forecast_horizon,
+            horizon=self._fit_horizon,
             config=cfg,
             seed=self.random_seed,
             device=self.device,
@@ -1274,6 +1300,12 @@ class TVA:
                 method=self._reconciliation_method_effective
             )
 
+    def _resolve_fit_horizon(self, n_periods: int) -> int:
+        """Internal training/validation horizon; see ``fit_horizon``."""
+        return resolve_fit_horizon(
+            self.trend_network_type, self.forecast_horizon, self.fit_horizon, n_periods
+        )
+
     def predict(self, forecast_length: int = None) -> pd.DataFrame:
         """Generate forecasts for all series.
 
@@ -1431,7 +1463,7 @@ class TVA:
         """
         trend = self._components['trend'].values
         T, N = trend.shape
-        L = max(min(self.window_size, 4 * self.forecast_horizon), 2)
+        L = max(min(self.window_size, 4 * self._fit_horizon), 2)
         L = min(L, T)
         x = trend[-L:]
         t_idx = np.arange(L) - (L - 1) / 2.0
@@ -1447,6 +1479,10 @@ class TVA:
             + forecast_comps['holidays'].values
             + forecast_comps['level_shifts'].values
         )
+        forecast_values, anchor = self._apply_origin_anchor(
+            forecast_values,
+            forecast_comps['seasonality'].values + forecast_comps['holidays'].values,
+        )
         future_index = forecast_comps['trend'].index[:forecast_length]
         result = pd.DataFrame(
             forecast_values,
@@ -1459,8 +1495,11 @@ class TVA:
         if hasattr(self._decomposer, 'get_residual_sigma'):
             resid_sigma = self._decomposer.get_residual_sigma()
         if resid_sigma is not None:
+            resid_sigma = np.asarray(resid_sigma, dtype=float)
+            if anchor is not None:
+                resid_sigma = resid_sigma * anchor['ratio']
             self._last_sigma = pd.DataFrame(
-                np.tile(np.asarray(resid_sigma)[np.newaxis, :], (forecast_length, 1)),
+                np.tile(resid_sigma[np.newaxis, :], (forecast_length, 1)),
                 index=future_index,
                 columns=self._df_original.columns,
             )
@@ -1496,7 +1535,7 @@ class TVA:
         if requested != 'auto':
             return
 
-        horizon = max(int(self.forecast_horizon or 28), 1)
+        horizon = max(int(self._fit_horizon or 28), 1)
         best = None
         for space in ('level', 'log'):
             try:
@@ -1669,6 +1708,71 @@ class TVA:
         except Exception:  # pragma: no cover - diagnostics only, never fatal
             return None
 
+    def _apply_origin_anchor(
+        self,
+        forecast_values: np.ndarray,
+        forecast_periodic: np.ndarray,
+        upto: int = None,
+        in_sample_periodic: np.ndarray = None,
+    ):
+        """Pin the forecast's start to the recent observed level (R1).
+
+        Controlled by ``factor_config['origin_anchor']`` (None = off, bit for
+        bit). ``upto`` anchors against history ending at an inner origin.
+
+        Returns:
+            (anchored (H, N) forecast, adjustment dict or None when off).
+        """
+        cfg = (self._factor_info or {}).get('config') or self.factor_config or {}
+        mode = cfg.get('origin_anchor')
+        if not mode:
+            if upto is None:
+                self._anchor_info = None
+            return forecast_values, None
+        from autots.evaluator.tva.anchoring import (
+            apply_origin_anchor,
+            origin_anchor_adjustment,
+        )
+
+        df = self._df_original
+        end = len(df) if upto is None else int(upto) + 1
+        history = df.to_numpy(dtype=float)[:end]
+        if in_sample_periodic is None and mode == 'deseasonalized':
+            in_sample_periodic = sum(
+                self._components[key]
+                .reindex(index=df.index, columns=df.columns)
+                .fillna(0.0)
+                .to_numpy(dtype=float)
+                for key in ('seasonality', 'holidays')
+                if self._components.get(key) is not None
+            )
+        if isinstance(in_sample_periodic, np.ndarray):
+            in_sample_periodic = in_sample_periodic[:end]
+        else:
+            in_sample_periodic = None
+        default_window = max(7, int(getattr(self, 'season_length', 7) or 7))
+        adjustment = origin_anchor_adjustment(
+            history,
+            forecast_values,
+            window=int(cfg.get('origin_anchor_window') or default_window),
+            mode=str(mode),
+            history_periodic=in_sample_periodic,
+            forecast_periodic=forecast_periodic,
+        )
+        if upto is None:
+            self._anchor_info = adjustment
+        return apply_origin_anchor(forecast_values, adjustment), adjustment
+
+    def _reanchor_window(self) -> int:
+        """Recent-level window shared by the reanchor folds and live offset."""
+        from autots.evaluator.tva.safety import DEFAULT_SAFETY_CONFIG
+
+        cfg = (self._factor_info or {}).get('config') or self.factor_config or {}
+        sconf = cfg.get('safety_config') or {}
+        return int(
+            sconf.get('reanchor_window') or DEFAULT_SAFETY_CONFIG['reanchor_window']
+        )
+
     def _factor_inner_folds(self, horizon: int, n_folds: int = 3) -> dict:
         """Inner rolling origins, in level space, for the safety selections.
 
@@ -1686,7 +1790,7 @@ class TVA:
 
         adjusted = self._factor_input_panel()
         cfg_all = (self._factor_info or {}).get('config') or {}
-        window = int(((self.factor_config or {}).get('reanchor_window')) or 14)
+        window = self._reanchor_window()
 
         origins = []
         for i in range(max(int(n_folds), 0)):
@@ -1743,7 +1847,14 @@ class TVA:
             # a level shift is a step: the only thing knowable at the origin is
             # that it persists
             add_back = periodic + shift_level[origin][np.newaxis, :]
-            tva_folds.append(trend + add_back)
+            tva_folds.append(
+                self._apply_origin_anchor(
+                    trend + add_back,
+                    periodic,
+                    upto=origin,
+                    in_sample_periodic=comps['seasonality'] + comps['holidays'],
+                )[0]
+            )
             sn_folds.append(seasonal_naive_forecast(values[: origin + 1], H, season))
             actual_folds.append(values[window_slice])
             recent = adjusted[max(origin + 1 - window, 0) : origin + 1]
@@ -2101,12 +2212,14 @@ class TVA:
                 scale,
                 sconf,
             )
-            window = int(sconf.get('reanchor_window', 14) or 14)
+            window = self._reanchor_window()
             adjusted = self._factor_input_panel()
             anchor_now = np.nanmedian(adjusted[-window:], axis=0)
+            # live origin is the last observation, defined exactly as the folds
+            # define theirs (anchor at origin minus the model's step-0 level),
+            # so the alpha selected on folds means the same thing here
             offset = (
-                anchor_now
-                - self._factor_trend_at_origin(len(values) - 1 - horizon, horizon)[0]
+                anchor_now - self._factor_trend_at_origin(len(values) - 1, horizon)[0]
             )
             offsets_by_fold = folds['anchor_levels'] - folds['origin_levels']
             tva_folds = [
@@ -2215,6 +2328,10 @@ class TVA:
             + forecast_comps['holidays'].values
             + shift_add_back
         )
+        # before the safety layer, whose folds are anchored the same way
+        forecast_values, anchor = self._apply_origin_anchor(
+            forecast_values, seasonal_path + forecast_comps['holidays'].values
+        )
 
         forecast_values, safety = self._apply_safety_layer(
             forecast_values, forecast_length
@@ -2235,8 +2352,14 @@ class TVA:
             )
         from autots.evaluator.tva.safety import conformal_sigma
 
+        sigma_values = conformal_sigma(
+            model_sigma, forecast_length, safety.get('bucket_scales')
+        )
+        if anchor is not None:
+            # a scaled path carries proportionally scaled uncertainty
+            sigma_values = sigma_values * anchor['ratio'][np.newaxis, :]
         self._last_sigma = pd.DataFrame(
-            conformal_sigma(model_sigma, forecast_length, safety.get('bucket_scales')),
+            sigma_values,
             index=future_index,
             columns=self._df_original.columns,
         )
@@ -2293,7 +2416,7 @@ class TVA:
         """
         if self._components is None or self._df_original is None:
             return None
-        H = int(horizon) if horizon else int(self.forecast_horizon)
+        H = int(horizon) if horizon else int(self._fit_horizon)
         H = max(H, 1)
         try:
             if self.trend_network_type == 'factor' and self._factor_network is not None:
@@ -2321,7 +2444,7 @@ class TVA:
         N = self._df_original.shape[1]
         info = self._factor_info or {}
         stored = info.get('residual_matrix')
-        if stored is not None and int(horizon) == int(self.forecast_horizon):
+        if stored is not None and int(horizon) == int(self._fit_horizon):
             stored = np.asarray(stored, dtype=float)
             if stored.ndim == 2 and stored.shape[1] == N and stored.shape[0] >= 2:
                 return np.where(np.isfinite(stored), stored, 0.0)
@@ -2434,7 +2557,7 @@ class TVA:
         trend = self._components['trend'].values
         T, N = trend.shape
         H = max(int(horizon), 1)
-        L = max(min(self.window_size, 4 * self.forecast_horizon), 2)
+        L = max(min(self.window_size, 4 * self._fit_horizon), 2)
         L = min(L, T)
         if T - H < L:
             return None
@@ -2986,6 +3109,12 @@ class TVA:
                 or None,
                 'capped_cells': safety.get('capped_cells'),
                 'summary': safety.get('summary'),
+            }
+        anchor = getattr(self, '_anchor_info', None)
+        if anchor:
+            out['origin_anchor'] = {
+                'ratio': dict(zip(columns, anchor['ratio'].tolist())),
+                'offset': dict(zip(columns, anchor['offset'].tolist())),
             }
         if seasonal:
             out['seasonal_paths'] = {

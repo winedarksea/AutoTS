@@ -72,6 +72,9 @@ class TVAModel(ModelObject):
         structure_learning_config: Additional structure-learning penalties and options.
         holiday_country: Shared default country for TVA calendar holiday fusion.
         holiday_countries: Optional per-series country override map.
+        fit_horizon: internal validation/calibration horizon for the 'factor'
+            and 'none' modes; None caps it at max(28, T // 4) so long forecasts
+            keep usable inner origins. Forecasts still cover forecast_length.
         random_seed: Reproducibility seed.
         verbose: 0=silent, 1=progress bar, 2=per-epoch loss.
         n_jobs: Unused, kept for API compatibility.
@@ -115,6 +118,7 @@ class TVAModel(ModelObject):
         detector_params: dict = None,
         holiday_country: str = "US",
         holiday_countries: dict = None,
+        fit_horizon: int = None,
         random_seed: int = 42,
         verbose: int = 0,
         n_jobs: int = None,
@@ -162,6 +166,7 @@ class TVAModel(ModelObject):
         self.structure_learning_config = structure_learning_config
         self.detector_params = detector_params
         self.holiday_countries = holiday_countries
+        self.fit_horizon = fit_horizon
         self._tva = None
 
     def fit(self, df, future_regressor=None):
@@ -174,18 +179,24 @@ class TVAModel(ModelObject):
         Returns:
             self
         """
-        from autots.evaluator.tva.tva import TVA
+        from autots.evaluator.tva.tva import TVA, resolve_fit_horizon
 
         df = self.basic_profile(df)
         self.df_train = df
 
-        # warn if training data is very short relative to window_size + forecast_length
-        min_required = self.window_size + self.forecast_length + 1
+        # factor/'none' modes train at a capped horizon (TVA.fit_horizon) and
+        # extrapolate to any length; v1/v2 must train at the full length
+        train_horizon = resolve_fit_horizon(
+            self.trend_network, self.forecast_length, self.fit_horizon, len(df)
+        )
+
+        # warn if training data is very short relative to window_size + horizon
+        min_required = self.window_size + train_horizon + 1
         if len(df) < min_required:
-            effective_window = max(10, len(df) - self.forecast_length - 1)
+            effective_window = max(10, len(df) - train_horizon - 1)
             warnings.warn(
                 f"TVAModel: training length {len(df)} is less than window_size "
-                f"({self.window_size}) + forecast_length ({self.forecast_length}) + 1. "
+                f"({self.window_size}) + horizon ({train_horizon}) + 1. "
                 f"Reducing window_size to {effective_window}.",
                 UserWarning,
                 stacklevel=2,
@@ -197,7 +208,7 @@ class TVAModel(ModelObject):
         # more than the data holds leaves nothing to anchor on and the forecast
         # comes back all NaN
         effective_min_anchor = min(
-            self.min_anchor_history, max(10, len(df) - self.forecast_length - 1)
+            self.min_anchor_history, max(10, len(df) - train_horizon - 1)
         )
 
         structure_learning_config = {"enabled": self.structure_learning_enabled}
@@ -226,6 +237,7 @@ class TVAModel(ModelObject):
             batch_size=self.batch_size,
             window_size=effective_window,
             forecast_horizon=self.forecast_length,
+            fit_horizon=self.fit_horizon,
             loss_weights=self.loss_weights,
             series_metadata=self._coerced_series_metadata(),
             prior_adjacency=self.prior_adjacency,
@@ -408,6 +420,7 @@ class TVAModel(ModelObject):
             "structure_learning_config": self.structure_learning_config,
             "detector_params": self.detector_params,
             "holiday_countries": self.holiday_countries,
+            "fit_horizon": self.fit_horizon,
         }
 
     @staticmethod
@@ -551,9 +564,23 @@ class TVAModel(ModelObject):
         # 1d: quarantine series whose recent tail is numerically constant
         cfg["frozen_tail_gate"] = random.choices([True, False], weights=[0.35, 0.65])[0]
         # 1a: pick the factor continuation rule by held-out reconstruction
-        cfg["continuation_select"] = random.choices([True, False], weights=[0.3, 0.7])[
+        # Kept rare: candidates are scored on smoothed in-sample factor paths,
+        # which carry look-ahead at past origins; the LRP backtest measured it
+        # 40-65% worse at 185-730 steps.
+        cfg["continuation_select"] = random.choices([True, False], weights=[0.1, 0.9])[
             0
         ]
+        # R2: hold factor paths at their origin value (idio line still damped);
+        # inert alone, but with the anchor it was best on 4/5 built-in panels
+        cfg["continuation_force"] = random.choices(
+            [None, "constant"], weights=[0.5, 0.5]
+        )[0]
+        # R1: pin the forecast start to the recent level. last_value took the
+        # unblended factor default from 1.3-18.9x to 0.84-1.86x SeasonalNaive
+        # on the built-in panels; deseasonalized lost to it on 4/5
+        cfg["origin_anchor"] = random.choices(
+            [None, "last_value", "deseasonalized"], weights=[0.25, 0.55, 0.2]
+        )[0]
         # 1c: zero loadings of series the factor model forecasts worse than a
         # damped local-linear baseline on their own raw target (None == off)
         cfg["gate_forecast_margin"] = random.choices(
