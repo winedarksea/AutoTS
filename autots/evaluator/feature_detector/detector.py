@@ -50,6 +50,12 @@ from .event_dag import (
 from .event_dag_view import filter_event_dag, plot_event_dag_timeline
 from .utils.rescaling import RescalingMixin
 from .utils.formatting import FormattingMixin
+from .utils.trend_forecast import (
+    future_trend_change_variance,
+    segment_sxx,
+    shrink_last_slope,
+    trend_change_rates,
+)
 
 
 class TimeSeriesFeatureDetector(
@@ -507,9 +513,26 @@ class TimeSeriesFeatureDetector(
 
         return self
 
-    def forecast(self, forecast_length, frequency=None, prediction_interval=0.9):
+    def forecast(
+        self,
+        forecast_length,
+        frequency=None,
+        prediction_interval=0.9,
+        trend_change_variance=True,
+        slope_shrinkage=True,
+        slope_recency_days=180.0,
+    ):
         """Generate a simple forward projection similar to BasicLinearModel.
         This detector is not optimized for forecasting; dedicated forecasting models may provide better results.
+
+        Args:
+            trend_change_variance (bool): widen intervals for future changepoints
+                and level shifts at the rates detected in training.
+            slope_shrinkage (bool): shrink the last trend segment's slope toward a
+                recency-weighted average of earlier segment slopes, strongest when
+                the last segment is short.
+            slope_recency_days (float): e-folding age, in calendar days, of the
+                earlier-segment weights used by slope_shrinkage.
         """
         if self.df_original is None or self.date_index is None:
             raise ValueError(
@@ -592,11 +615,18 @@ class TimeSeriesFeatureDetector(
             seasonal_offset = getattr(self, '_seasonal_offset', None)
             if seasonal_offset is not None:
                 seasonal = seasonal - seasonal_offset.reindex(columns).fillna(0.0)
+        _sigma_resid = self._forecast_residual_sigma(columns)
+        _change_rates = trend_change_rates(
+            self.trend_changepoints,
+            self.level_shifts,
+            columns,
+            len(self.date_index),
+        )
         trend = pd.DataFrame(0.0, index=future_index, columns=columns)
         # level shift by the logic of this detector might always be 0 for forecast, but for now it is here.
         level_shifts = pd.DataFrame(0.0, index=future_index, columns=columns)
         steps = np.arange(1, forecast_length + 1, dtype=float)
-        for col in columns:
+        for col_idx, col in enumerate(columns):
             comp = self.components.get(col, {})
             trend_hist = np.asarray(comp.get('trend', []), dtype=float)
             if trend_hist.size:
@@ -609,7 +639,16 @@ class TimeSeriesFeatureDetector(
             else:
                 last_val = float(self.df_original[col].iloc[-1])
             slope_info = self.trend_slopes.get(col, [])
-            slope = float(slope_info[-1]['slope']) if slope_info else 0.0
+            if slope_shrinkage and _sigma_resid is not None:
+                slope = shrink_last_slope(
+                    slope_info,
+                    self.date_index,
+                    _sigma_resid[col_idx],
+                    _change_rates['mean_sq_slope_change'][col_idx],
+                    recency_days=slope_recency_days,
+                )
+            else:
+                slope = float(slope_info[-1]['slope']) if slope_info else 0.0
             trend[col] = last_val + slope * steps
             level_shift_hist = np.asarray(comp.get('level_shift', []), dtype=float)
             if level_shift_hist.size:
@@ -624,7 +663,7 @@ class TimeSeriesFeatureDetector(
         forecast = trend + level_shifts + seasonal + holidays
 
         # --- Prediction intervals (OLS extrapolation prediction variance) ---
-        # Two independent uncertainty sources combined in quadrature:
+        # Independent uncertainty sources combined in quadrature:
         #   1. Irreducible residual sigma (constant in h) from the full model
         #      misfit; reconstruction_error already absorbs seasonal/holiday error
         #      so there is no separate seasonal-amplitude inflation.
@@ -632,7 +671,10 @@ class TimeSeriesFeatureDetector(
         #      variance of the last trend segment, which the point forecast
         #      extrapolates. Leverage = 1/m + (x0 - xbar)^2 / Sxx widens the band
         #      with horizon at a statistically correct rate.
-        _sigma_resid = self._forecast_residual_sigma(columns)
+        #   3. Future trend changes (trend_change_variance): changepoints and level
+        #      shifts not yet observed, at detected rates, growing ~h^3 and ~h.
+        #      Detection misses small changepoints but overstates kept ones, so
+        #      rate * E[delta^2] is roughly preserved.
         if _sigma_resid is not None and 0.0 < prediction_interval < 1.0:
             # Last-segment length m per series (integer positions 0..m-1).
             _m = np.array(
@@ -643,7 +685,7 @@ class TimeSeriesFeatureDetector(
             # Safe denominators so the leverage formula never divides by zero;
             # results are discarded by np.where for series with m < 2.
             _m_safe = np.where(_has_lev, _m, 1.0)
-            _Sxx = np.where(_has_lev, _m * (_m**2 - 1.0) / 12.0, 1.0)
+            _Sxx = np.where(_has_lev, segment_sxx(_m), 1.0)
             _xbar = (_m - 1.0) / 2.0
             _h = np.arange(1, forecast_length + 1, dtype=float)[:, np.newaxis]
             # Future x measured from segment start: x0 = (m - 1) + h.
@@ -655,7 +697,12 @@ class TimeSeriesFeatureDetector(
                 0.0,
             )
             # shape (forecast_length, n_series)
-            _sigma_total = _sigma_resid[np.newaxis, :] * np.sqrt(1.0 + _lev)
+            _variance = _sigma_resid[np.newaxis, :] ** 2 * (1.0 + _lev)
+            if trend_change_variance:
+                _variance = _variance + future_trend_change_variance(
+                    _change_rates, forecast_length
+                )
+            _sigma_total = np.sqrt(_variance)
             _z = float(_scipy_norm.ppf(1.0 - (1.0 - prediction_interval) / 2.0))
             _margin = pd.DataFrame(
                 _z * _sigma_total, index=future_index, columns=columns

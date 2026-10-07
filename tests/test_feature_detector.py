@@ -258,11 +258,15 @@ class TestFeatureDetector(unittest.TestCase):
 
         # The step-1 band must be on the order of the residual sigma (the noise
         # component), not a degenerate ~0 band and not the seasonal amplitude.
+        # At h=1 future slope changes contribute nothing; level shifts add rate*E[s^2].
         z = 1.6448536269514722  # norm.ppf(0.95)
+        n_obs = len(self.data)
         for col in self.data.columns:
             sigma = float(np.nanstd(detector.components[col]['noise'], ddof=1))
             m = detector._last_trend_segment_length(col)
-            expected_h1 = 2 * z * sigma * np.sqrt(1.0 + 1.0 / m)
+            shifts = np.array([ls[1] for ls in detector.level_shifts[col]], dtype=float)
+            shift_var = float(np.sum(shifts**2)) / n_obs
+            expected_h1 = 2 * z * np.sqrt(sigma**2 * (1.0 + 1.0 / m) + shift_var)
             actual_h1 = float((upper[col] - lower[col]).iloc[0])
             self.assertGreater(actual_h1, 0.5 * sigma)  # clearly non-degenerate
             self.assertAlmostEqual(actual_h1, expected_h1, delta=0.05 * expected_h1)
