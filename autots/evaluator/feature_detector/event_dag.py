@@ -14,7 +14,23 @@ DEFAULT_EVENT_DAG_PARAMS = {
     'family_similarity_threshold': 0.6,
     'min_family_occurrences': 2,
     'build_singleton_clusters': True,
+    # Opt-in options (defaults reproduce the original behavior exactly):
+    # 'series_scale' divides each event magnitude by a per-series scale so events
+    # from different metrics/families are comparable, and makes family signatures
+    # scale-invariant. Slope deltas become level effects via slope_horizon_periods.
+    'magnitude_normalization': 'none',
+    'slope_horizon_periods': 90,
+    # Diagnostic only: tag events that repeat near the same day-of-year across years.
+    'tag_recurring_doy': False,
 }
+
+# ~1.5x the per-series date jitter (sd ~9 d) of a shared event on daily data; the
+# reviewer measured 3.7 / 2.0 / 1.0 clusters per shared event at 1 / 7 / 14 days.
+_AUTO_WINDOW_DAYS = 14
+_RECURRING_DOY_TOLERANCE_DAYS = 7
+# Floor on residual noise as a fraction of series std so near-noiseless series do
+# not turn every event into an astronomically large normalized magnitude.
+_MIN_NOISE_FRACTION_OF_SCALE = 0.01
 
 
 def resolve_event_dag_params(params=None):
@@ -33,9 +49,19 @@ def resolve_event_dag_params(params=None):
         resolved['source_families'] = copy.deepcopy(
             DEFAULT_EVENT_DAG_PARAMS['source_families']
         )
-    resolved['cluster_window_periods'] = max(
-        int(resolved.get('cluster_window_periods', 1)), 0
+    window = resolved.get('cluster_window_periods', 1)
+    if isinstance(window, str) and window.strip().lower() == 'auto':
+        resolved['cluster_window_periods'] = 'auto'
+    else:
+        resolved['cluster_window_periods'] = max(int(window), 0)
+    normalization = str(resolved.get('magnitude_normalization', 'none')).lower()
+    if normalization not in ('none', 'series_scale'):
+        normalization = 'none'
+    resolved['magnitude_normalization'] = normalization
+    resolved['slope_horizon_periods'] = max(
+        int(resolved.get('slope_horizon_periods', 90)), 1
     )
+    resolved['tag_recurring_doy'] = bool(resolved.get('tag_recurring_doy', False))
     resolved['family_similarity_threshold'] = float(
         np.clip(resolved.get('family_similarity_threshold', 0.6), -1.0, 1.0)
     )
@@ -57,13 +83,17 @@ def empty_event_dag(
     """Return a valid empty Event DAG container."""
     resolved = resolve_event_dag_params(params)
     series_names = list(series_names or [])
-    return {
+    dag = {
         'meta': {
             'enabled': bool(resolved.get('enabled', True)),
             'detection_mode': detection_mode,
             'construction_mode': construction_mode,
             'source_families': list(resolved['source_families']),
-            'cluster_window_periods': int(resolved['cluster_window_periods']),
+            'cluster_window_periods': (
+                'auto'
+                if resolved['cluster_window_periods'] == 'auto'
+                else int(resolved['cluster_window_periods'])
+            ),
             'family_similarity_threshold': float(
                 resolved['family_similarity_threshold']
             ),
@@ -76,6 +106,96 @@ def empty_event_dag(
         'event_families': [],
         'edges': [],
     }
+    # Only emitted when opted in so default output stays identical.
+    if resolved['magnitude_normalization'] != 'none':
+        dag['meta']['magnitude_normalization'] = resolved['magnitude_normalization']
+        dag['meta']['slope_horizon_periods'] = int(resolved['slope_horizon_periods'])
+    if resolved['tag_recurring_doy']:
+        dag['meta']['tag_recurring_doy'] = True
+    return dag
+
+
+def get_new_event_dag_params(method='random'):
+    """Sample event DAG options; non-default choices are deliberately rare."""
+    if method not in ('random', 'default'):
+        method = 'random'
+    if method == 'default':
+        return {}
+    rng = np.random
+    window = rng.choice([1, 'auto', 7, 14], p=[0.7, 0.15, 0.1, 0.05])
+    if not isinstance(window, str):
+        window = int(window)
+    return {
+        'magnitude_normalization': (
+            'series_scale' if rng.random() < 0.25 else 'none'
+        ),
+        'cluster_window_periods': window,
+        'tag_recurring_doy': bool(rng.random() < 0.2),
+        'slope_horizon_periods': int(rng.choice([28, 90, 365], p=[0.2, 0.6, 0.2])),
+    }
+
+
+def _resolve_window_periods(window, step: pd.Timedelta) -> int:
+    """Turn 'auto' into ~14 days of periods (min 1); pass ints through."""
+    if isinstance(window, str):
+        periods = int(round(pd.Timedelta(days=_AUTO_WINDOW_DAYS) / step))
+        return max(periods, 1)
+    return int(window)
+
+
+def _resolve_series_scales(detector, series_names):
+    """Per-series scale in original units for magnitude normalization.
+
+    Prefers residual noise sigma (noise_level is relative to series std, so
+    sigma = noise_level * std) because events are then measured in noise units;
+    floored at a fraction of std for stability. Falls back to std, then 1.0.
+    """
+    noise_levels = getattr(detector, 'series_noise_levels', None) or {}
+    stds = getattr(detector, 'series_scales', None) or {}
+    scale_series = getattr(detector, 'scale_series', None)
+    scales = {}
+    for name in series_names:
+        std = _safe_float(stds.get(name, 0.0))
+        if std <= 0 and scale_series is not None:
+            try:
+                std = _safe_float(scale_series[name])
+            except (KeyError, IndexError, TypeError):
+                std = 0.0
+        sigma = _safe_float(noise_levels.get(name, 0.0)) * std
+        if std > 0:
+            sigma = max(sigma, _MIN_NOISE_FRACTION_OF_SCALE * std)
+            scale = sigma
+        else:
+            scale = 0.0
+        scales[name] = scale if scale > 0 else 1.0
+    return scales
+
+
+def _tag_recurring_day_of_year(members):
+    """Set member['recurring_doy'] for same-series, same-family events that
+    recur within +/-7 days of the same day-of-year in another year.
+
+    Circular distance on a 365-day cycle handles the Dec/Jan wrap.
+    """
+    groups = {}
+    for idx, member in enumerate(members):
+        member['recurring_doy'] = False
+        groups.setdefault((member['series_name'], member['source_family']), []).append(
+            idx
+        )
+    for indices in groups.values():
+        if len(indices) < 2:
+            continue
+        dates = pd.DatetimeIndex([pd.Timestamp(members[i]['date']) for i in indices])
+        doy = np.asarray(dates.dayofyear, dtype=float)
+        year = np.asarray(dates.year)
+        raw = np.abs(doy[:, None] - doy[None, :])
+        circular = np.minimum(raw, 365.0 - raw)
+        close = (circular <= _RECURRING_DOY_TOLERANCE_DAYS) & (
+            year[:, None] != year[None, :]
+        )
+        for i, flag in zip(indices, close.any(axis=1)):
+            members[i]['recurring_doy'] = bool(flag)
 
 
 def _infer_step_timedelta(date_index) -> pd.Timedelta:
@@ -227,6 +347,10 @@ def _extract_member_events(detector, params, step):
     date_index = getattr(detector, 'date_index', None)
     max_periods = max(len(date_index) if date_index is not None else 0, 1)
     members = []
+    normalize = params.get('magnitude_normalization', 'none') == 'series_scale'
+    if normalize:
+        series_scales = _resolve_series_scales(detector, columns)
+        horizon = float(params.get('slope_horizon_periods', 90))
 
     if mode == 'univariate':
         shared_series = columns[0] if columns else '__broadcast__'
@@ -253,6 +377,12 @@ def _extract_member_events(detector, params, step):
                     max_periods=max_periods,
                 )
                 member_series = series_name if mode != 'univariate' else '__broadcast__'
+                if normalize:
+                    # Slope deltas are units/period; horizon makes them a level effect.
+                    level_factor = horizon if family == 'trend_changepoints' else 1.0
+                    fields['normalized_magnitude'] = _safe_float(
+                        fields['magnitude'] * level_factor / series_scales[series_name]
+                    )
                 members.append(
                     {
                         'member_id': f"{family}:{member_series}:{idx}",
@@ -271,11 +401,13 @@ def _extract_member_events(detector, params, step):
             x['member_id'],
         )
     )
+    if params.get('tag_recurring_doy'):
+        _tag_recurring_day_of_year(members)
     return members, construction_mode
 
 
 def _serialize_member_event(event):
-    return {
+    serialized = {
         'member_id': event['member_id'],
         'series_name': event['series_name'],
         'source_family': event['source_family'],
@@ -287,6 +419,12 @@ def _serialize_member_event(event):
         'subtype': event['subtype'],
         'shared_flag': bool(event['shared_flag']),
     }
+    # 'magnitude' stays raw (original units); the normalized value is additive.
+    if 'normalized_magnitude' in event:
+        serialized['normalized_magnitude'] = _safe_float(event['normalized_magnitude'])
+    if 'recurring_doy' in event:
+        serialized['recurring_doy'] = bool(event['recurring_doy'])
+    return serialized
 
 
 def _finalize_cluster(cluster_events, cluster_id, step):
@@ -299,6 +437,9 @@ def _finalize_cluster(cluster_events, cluster_id, step):
     seen_series = set()
     net_magnitude = 0.0
     abs_magnitude = 0.0
+    raw_net_magnitude = 0.0
+    raw_abs_magnitude = 0.0
+    normalized = any('normalized_magnitude' in x for x in cluster_events)
 
     for event in cluster_events:
         source_counts[event['source_family']] = (
@@ -308,10 +449,13 @@ def _finalize_cluster(cluster_events, cluster_id, step):
         if series_name not in seen_series:
             affected_series.append(series_name)
             seen_series.add(series_name)
-        net_magnitude += _safe_float(event['magnitude'])
-        abs_magnitude += abs(_safe_float(event['magnitude']))
+        value = _safe_float(event.get('normalized_magnitude', event['magnitude']))
+        net_magnitude += value
+        abs_magnitude += abs(value)
+        raw_net_magnitude += _safe_float(event['magnitude'])
+        raw_abs_magnitude += abs(_safe_float(event['magnitude']))
 
-    return {
+    cluster = {
         'cluster_id': cluster_id,
         'start_date': _timestamp_to_iso(start_date),
         'end_date': _timestamp_to_iso(end_date),
@@ -325,6 +469,10 @@ def _finalize_cluster(cluster_events, cluster_id, step):
         'duration_periods': _periods_between(start_date, end_date, step),
         'is_shared_root_cause_candidate': len(affected_series) >= 2,
     }
+    if normalized:
+        cluster['raw_net_magnitude'] = _safe_float(raw_net_magnitude)
+        cluster['raw_abs_magnitude'] = _safe_float(raw_abs_magnitude)
+    return cluster
 
 
 def _build_clusters(member_events, params, step):
@@ -373,7 +521,13 @@ def _build_clusters(member_events, params, step):
     return clusters, edges
 
 
-def _cluster_signature(cluster, member_lookup, series_names, source_families):
+def _cluster_signature(
+    cluster,
+    member_lookup,
+    series_names,
+    source_families,
+    magnitude_normalization='none',
+):
     n_series = len(series_names)
     family_map = {name: idx for idx, name in enumerate(source_families)}
     incidence = np.zeros(n_series, dtype=float)
@@ -381,6 +535,7 @@ def _cluster_signature(cluster, member_lookup, series_names, source_families):
     source_mix = np.zeros(len(source_families), dtype=float)
     series_index = {name: idx for idx, name in enumerate(series_names)}
     total_abs = max(abs(cluster.get('abs_magnitude', 0.0)), 1e-9)
+    scale_invariant = magnitude_normalization == 'series_scale'
 
     for member_id in cluster.get('member_ids', []):
         member = member_lookup.get(member_id)
@@ -390,11 +545,18 @@ def _cluster_signature(cluster, member_lookup, series_names, source_families):
         if series_name in series_index:
             idx = series_index[series_name]
             incidence[idx] = 1.0
-            signed[idx] += _safe_float(member.get('magnitude', 0.0)) / total_abs
+            if scale_invariant:
+                signed[idx] += _safe_float(member.get('normalized_magnitude', 0.0))
+            else:
+                signed[idx] += _safe_float(member.get('magnitude', 0.0)) / total_abs
         family = member.get('source_family')
         if family in family_map:
             source_mix[family_map[family]] += 1.0
 
+    if scale_invariant:
+        # No source_mix (identical for same-type events, it forced spurious merges)
+        # and no division by cluster total (keeps relative strength across series).
+        return np.concatenate([incidence, signed])
     total_mix = source_mix.sum()
     if total_mix > 0:
         source_mix = source_mix / total_mix
@@ -417,7 +579,11 @@ def _build_families(clusters, member_lookup, params, series_names):
     groups = []
     for cluster in clusters:
         signature = _cluster_signature(
-            cluster, member_lookup, series_names, source_families
+            cluster,
+            member_lookup,
+            series_names,
+            source_families,
+            params.get('magnitude_normalization', 'none'),
         )
         best_idx = None
         best_score = -1.0
@@ -509,6 +675,10 @@ def build_event_dag_from_detector(detector):
         return dag
 
     step = _infer_step_timedelta(getattr(detector, 'date_index', None))
+    params['cluster_window_periods'] = _resolve_window_periods(
+        params['cluster_window_periods'], step
+    )
+    dag['meta']['cluster_window_periods'] = params['cluster_window_periods']
     member_events, construction_mode = _extract_member_events(detector, params, step)
     dag['meta']['construction_mode'] = construction_mode
     if not member_events:

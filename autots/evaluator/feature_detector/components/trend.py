@@ -47,12 +47,23 @@ class TrendMixin:
             residual_for_level_shifts = self.general_transformer.fit_transform(
                 residual_for_level_shifts
             )
+            # Row-dropping transformers (e.g. Slice) would misalign every trend
+            # design with date_index; refill dropped rows from the untransformed residual.
+            if not residual_for_level_shifts.index.equals(final_residual.index):
+                residual_for_level_shifts = residual_for_level_shifts.reindex(
+                    final_residual.index
+                ).combine_first(final_residual)
         if self.smoothing_window and self.smoothing_window > 1:
             residual_for_level_shifts = residual_for_level_shifts.rolling(
                 window=int(self.smoothing_window),
                 center=True,
                 min_periods=1,
             ).mean()
+
+        if self._uses_joint_trend():
+            return self._detect_joint_trend_and_shifts(
+                final_residual, residual_for_level_shifts
+            )
 
         # Level shift detection on: original - anomalies - seasonality - holidays
         (
@@ -102,6 +113,8 @@ class TrendMixin:
 
     def _validate_level_shifts(self, residual_df, lvlshft, candidates):
         params = self.level_shift_validation
+        if params.get('method') == 't_test':
+            return self._validate_level_shifts_t_test(residual_df, lvlshft, candidates)
         window = int(params.get('window', 14))
         pad = int(params.get('pad', 2))
         # None = adaptive (tightened to each series' noise); explicit values are honored.

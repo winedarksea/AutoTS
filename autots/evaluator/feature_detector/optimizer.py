@@ -10,6 +10,12 @@ import json
 import time
 import warnings
 
+from .components.joint_trend import (
+    JOINT_TREND_METHOD,
+    mutate_joint_trend_changepoint_params,
+    sample_joint_trend_changepoint_params,
+)
+
 
 def _get_detector_class():
     """Lazy import to avoid circular dependency."""
@@ -1674,6 +1680,8 @@ class FeatureDetectionOptimizer:
 
         if not params or rng.random() < 0.12:
             return ChangepointDetector.get_new_params(method='random')
+        if params.get('method') == JOINT_TREND_METHOD:
+            return mutate_joint_trend_changepoint_params(params, rng)
 
         mutated = copy.deepcopy(params)
         method_params = copy.deepcopy(mutated.get('method_params', {}))
@@ -2062,6 +2070,9 @@ class FeatureDetectionOptimizer:
                 'autoencoder',
                 'multiresolution',
             ]
+        # The detector-level joint method is not a ChangepointDetector method,
+        # so it is added here explicitly to be considered by the sweep.
+        all_cp_methods = all_cp_methods + [JOINT_TREND_METHOD]
         diversity_methods = [
             m
             for m in all_cp_methods
@@ -2070,7 +2081,10 @@ class FeatureDetectionOptimizer:
         for sweep_method in diversity_methods:
             sweep_candidate = copy.deepcopy(best_params)
             try:
-                sweep_cp = ChangepointDetector.get_new_params(method='random')
+                if sweep_method == JOINT_TREND_METHOD:
+                    sweep_cp = sample_joint_trend_changepoint_params(rng)
+                else:
+                    sweep_cp = ChangepointDetector.get_new_params(method='random')
                 # Force the method to the sweep target.
                 sweep_cp['method'] = sweep_method
                 sweep_cp['aggregate_method'] = 'individual'
@@ -2130,6 +2144,8 @@ class FeatureDetectionOptimizer:
                 fresh_cp = self._local_mutate_changepoint_params(
                     candidate.get('changepoint_params', {}), rng
                 )
+            elif rng.random() < 0.12:
+                fresh_cp = sample_joint_trend_changepoint_params(rng)
             else:
                 fresh_cp = ChangepointDetector.get_new_params(method='random')
             # If the sampled method is excluded, resample randomly.

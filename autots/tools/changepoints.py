@@ -626,6 +626,9 @@ def _detect_l1_trend_changepoints(
     adaptive=False,
     adaptive_gamma=1.0,
     irls_iterations=4,
+    threshold_mode='relative',
+    threshold_multiplier=1.0,
+    segment_length=5,
 ):
     """
     L1 trend filtering for changepoint detection.
@@ -639,6 +642,10 @@ def _detect_l1_trend_changepoints(
     adaptive (bool): Enable adaptive L1 reweighting (adaptive lasso style).
     adaptive_gamma (float): Exponent used in adaptive weights.
     irls_iterations (int): Iterations for IRLS solver.
+    threshold_mode (str): 'relative' (default, mean + 1.5 std of own kinks) or
+        'noise' (absolute, scaled to residual noise).
+    threshold_multiplier (float): Multiplier on the noise threshold ('noise' only).
+    segment_length (int): Segment length used in the noise threshold scale.
 
     Returns:
     tuple: (changepoints, fitted_trend)
@@ -682,7 +689,13 @@ def _detect_l1_trend_changepoints(
         return _simple_threshold_changepoints(data), data.copy()
 
     changepoints = _extract_changepoints_from_trend(
-        fitted_trend, method=method, difference_order=order
+        fitted_trend,
+        method=method,
+        difference_order=order,
+        data=data,
+        threshold_mode=threshold_mode,
+        threshold_multiplier=threshold_multiplier,
+        segment_length=segment_length,
     )
     return changepoints, fitted_trend
 
@@ -2284,7 +2297,9 @@ def _solve_weighted_trend_system_batch(chunk, D, identity, lambda_reg, weights):
     A = identity[None, :, :] + np.matmul(
         np.transpose(D_weighted, (0, 2, 1)), D_weighted
     )
-    return np.linalg.solve(A, chunk)
+    # Trailing axis makes b a stack of column vectors; NumPy>=2 treats a bare 2-D b
+    # as one matrix and raises on (k, n, n) vs (k, n).
+    return np.linalg.solve(A, chunk[..., None])[..., 0]
 
 
 def _approximate_l1_trend_filter_batch(
@@ -2412,12 +2427,78 @@ def _approximate_l0_trend_filter_batch(
     return results
 
 
+_THRESHOLD_MODES = ('relative', 'noise')
+
+
+def _validate_threshold_mode(threshold_mode):
+    if threshold_mode not in _THRESHOLD_MODES:
+        raise ValueError(
+            f"threshold_mode must be one of {_THRESHOLD_MODES}, got {threshold_mode!r}"
+        )
+    return threshold_mode
+
+
+def _noise_kink_threshold(
+    data_block, fitted_block, difference_order, multiplier, segment_length
+):
+    """Absolute kink-size threshold per series, tied to the residual noise level.
+
+    sigma comes from MAD of first differences of (data - fitted) / sqrt(2): robust
+    to the kinks themselves and to autocorrelated residuals. A kink of order k
+    estimated from a segment of length L has sd ~ sigma * sqrt(12 / L^(2k-1))
+    (k=2: slope-change sd of a line fit, 12 sigma^2 / L^3), so kinks smaller than
+    multiplier times that are indistinguishable from noise. L is the minimum
+    segment length, which is also the window of _windowed_kink_scores.
+    """
+    residual = np.atleast_2d(data_block) - np.atleast_2d(fitted_block)
+    if residual.shape[1] < 2:
+        return np.zeros(residual.shape[0], dtype=float)
+    residual_steps = np.diff(residual, axis=1)
+    centered = np.abs(residual_steps - np.median(residual_steps, axis=1, keepdims=True))
+    sigma = 1.4826 * np.median(centered, axis=1) / np.sqrt(2.0)
+    segment_length = max(2.0, float(segment_length))
+    order = max(1, int(difference_order))
+    scale = np.sqrt(12.0 / segment_length ** (2 * order - 1))
+    threshold = float(multiplier) * sigma * scale
+    # Floor so a numerically exact fit does not flag float round-off as kinks
+    data_scale = np.max(np.abs(np.atleast_2d(data_block)), axis=1)
+    return np.maximum(threshold, 1e-9 * data_scale + 1e-12)
+
+
+def _windowed_kink_scores(fitted_trends, order, window):
+    """|sum of signed order-k differences| over a centred window, per position.
+
+    Smooth L1/L2 fits spread one true kink over several adjacent differences
+    (the individual spikes shrink, the sum is preserved), so the windowed sum
+    recovers the full slope/level change that the noise threshold is sized for.
+    """
+    signed = np.diff(fitted_trends, n=order, axis=1)
+    window = max(1, int(window))
+    m = signed.shape[1]
+    cumulative = np.concatenate(
+        [np.zeros((signed.shape[0], 1)), np.cumsum(signed, axis=1)], axis=1
+    )
+    positions = np.arange(m)
+    lo = np.maximum(positions - (window - 1) // 2, 0)
+    hi = np.minimum(positions + window // 2 + 1, m)
+    return np.abs(cumulative[:, hi] - cumulative[:, lo])
+
+
 def _extract_changepoints_from_trend_batch(
     fitted_trends,
     difference_order,
     min_segment_length,
+    data_block=None,
+    threshold_mode='relative',
+    threshold_multiplier=1.0,
 ):
-    """Extract changepoints from fitted trends for multiple series."""
+    """Extract changepoints from fitted trends for multiple series.
+
+    threshold_mode 'relative' (default) flags |diff| > mean + 1.5 std of the
+    series' own diffs; 'noise' uses an absolute residual-noise threshold and
+    requires data_block (the raw data the trends were fitted to).
+    """
+    _validate_threshold_mode(threshold_mode)
     if fitted_trends.size == 0:
         return []
 
@@ -2428,16 +2509,30 @@ def _extract_changepoints_from_trend_batch(
 
     offset = _difference_changepoint_offset(order)
     differences = np.abs(np.diff(fitted_trends, n=order, axis=1))
-    mean_diff = differences.mean(axis=1)
+    if threshold_mode == 'noise':
+        differences = _windowed_kink_scores(fitted_trends, order, min_segment_length)
+        if data_block is None:
+            raise ValueError("threshold_mode='noise' requires data_block")
+        thresholds = _noise_kink_threshold(
+            data_block,
+            fitted_trends,
+            order,
+            threshold_multiplier,
+            min_segment_length,
+        )
+    else:
+        thresholds = differences.mean(axis=1) + 1.5 * differences.std(axis=1)
     std_diff = differences.std(axis=1)
 
     results = []
     for idx in range(n_series):
-        if differences.shape[1] == 0 or std_diff[idx] == 0:
+        if differences.shape[1] == 0 or (
+            threshold_mode == 'relative' and std_diff[idx] == 0
+        ):
             results.append(np.array([], dtype=int))
             continue
 
-        threshold = mean_diff[idx] + 1.5 * std_diff[idx]
+        threshold = thresholds[idx]
         above = np.flatnonzero(differences[idx] > threshold)
         candidates = _collapse_adjacent_runs(
             above + offset, differences[idx, above]
@@ -2485,6 +2580,10 @@ def _vectorized_l1_detection(
     adaptive = bool(method_params.get('adaptive', False))
     adaptive_gamma = float(method_params.get('adaptive_gamma', 1.0))
     irls_iterations = int(method_params.get('irls_iterations', 4))
+    threshold_mode = _validate_threshold_mode(
+        method_params.get('threshold_mode', 'relative')
+    )
+    threshold_multiplier = float(method_params.get('threshold_multiplier', 1.0))
     min_required = max(3, difference_order + 2)
 
     # Vectorized length calculation
@@ -2532,13 +2631,17 @@ def _vectorized_l1_detection(
                 adaptive_gamma=adaptive_gamma,
                 irls_iterations=irls_iterations,
             )
-        except Exception:
+        except np.linalg.LinAlgError:
+            # Singular system only; any other error is a bug and must surface
             fitted_block = data_block.copy()
 
         cp_lists = _extract_changepoints_from_trend_batch(
             fitted_block,
             difference_order=difference_order,
             min_segment_length=min_segment_length,
+            data_block=data_block,
+            threshold_mode=threshold_mode,
+            threshold_multiplier=threshold_multiplier,
         )
 
         for row, series_idx in enumerate(indices_in_group):
@@ -2630,7 +2733,7 @@ def _vectorized_l0_detection(names, series_list, method_params, min_segment_leng
                     htp_iterations=htp_iterations,
                     hard_weight=hard_weight,
                 )
-            except Exception:
+            except np.linalg.LinAlgError:
                 fitted_block[nonflat_idx] = data_block[nonflat_idx]
 
         diff_block = (
@@ -3088,6 +3191,8 @@ def create_changepoint_features(
             adaptive=params.get('adaptive', False),
             adaptive_gamma=params.get('adaptive_gamma', 1.0),
             irls_iterations=params.get('irls_iterations', 4),
+            threshold_mode=params.get('threshold_mode', 'relative'),
+            threshold_multiplier=params.get('threshold_multiplier', 1.0),
         )
 
     elif method == 'l0_trend_filter':
@@ -3209,6 +3314,8 @@ def _create_l1_changepoint_features(
     adaptive=False,
     adaptive_gamma=1.0,
     irls_iterations=4,
+    threshold_mode='relative',
+    threshold_multiplier=1.0,
 ):
     """Create changepoint features using L1 trend filtering."""
     changepoints, _ = _detect_l1_trend_changepoints(
@@ -3219,6 +3326,8 @@ def _create_l1_changepoint_features(
         adaptive=adaptive,
         adaptive_gamma=adaptive_gamma,
         irls_iterations=irls_iterations,
+        threshold_mode=threshold_mode,
+        threshold_multiplier=threshold_multiplier,
     )
 
     if len(changepoints) == 0:
@@ -3589,8 +3698,13 @@ def _extract_changepoints_from_trend(
     fitted_trend,
     method='fused_lasso',
     difference_order=None,
+    data=None,
+    threshold_mode='relative',
+    threshold_multiplier=1.0,
+    segment_length=5,
 ):
-    """Extract changepoints from fitted trend."""
+    """Extract changepoints from fitted trend (see batch variant for threshold modes)."""
+    _validate_threshold_mode(threshold_mode)
     n = len(fitted_trend)
     order = _resolve_difference_order(method, difference_order, max_order=4)
     if n <= order:
@@ -3604,11 +3718,24 @@ def _extract_changepoints_from_trend(
     mean_diff = np.mean(differences)
     std_diff = np.std(differences)
 
-    if std_diff == 0:
-        return np.array([], dtype=int)
-
-    # Use a more conservative threshold
-    threshold = mean_diff + 1.5 * std_diff
+    if threshold_mode == 'noise':
+        if data is None:
+            raise ValueError("threshold_mode='noise' requires data")
+        differences = _windowed_kink_scores(
+            np.asarray(fitted_trend, dtype=float)[None, :], order, segment_length
+        )[0]
+        threshold = _noise_kink_threshold(
+            np.asarray(data, dtype=float)[None, :],
+            np.asarray(fitted_trend, dtype=float)[None, :],
+            order,
+            threshold_multiplier,
+            segment_length,
+        )[0]
+    else:
+        if std_diff == 0:
+            return np.array([], dtype=int)
+        # Use a more conservative threshold
+        threshold = mean_diff + 1.5 * std_diff
     above = np.flatnonzero(differences > threshold)
     changepoints = _collapse_adjacent_runs(
         above + _difference_changepoint_offset(order), differences[above]
@@ -3721,6 +3848,9 @@ class ChangepointDetector(object):
                 adaptive=params.get('adaptive', False),
                 adaptive_gamma=params.get('adaptive_gamma', 1.0),
                 irls_iterations=params.get('irls_iterations', 4),
+                threshold_mode=params.get('threshold_mode', 'relative'),
+                threshold_multiplier=params.get('threshold_multiplier', 1.0),
+                segment_length=params.get('min_segment_length', self.min_segment_length),
             )
 
         elif method == 'l0_trend_filter':
@@ -4166,6 +4296,11 @@ class ChangepointDetector(object):
                     adaptive=self.method_params.get('adaptive', False),
                     adaptive_gamma=self.method_params.get('adaptive_gamma', 1.0),
                     irls_iterations=self.method_params.get('irls_iterations', 4),
+                    threshold_mode=self.method_params.get('threshold_mode', 'relative'),
+                    threshold_multiplier=self.method_params.get(
+                        'threshold_multiplier', 1.0
+                    ),
+                    segment_length=self.min_segment_length,
                 )
 
             elif self.method == 'l0_trend_filter':
@@ -5185,6 +5320,13 @@ class ChangepointDetector(object):
                 )[0],
                 'irls_iterations': random.choices(
                     [3, 4, 5], weights=[0.3, 0.5, 0.2], k=1
+                )[0],
+                # Opt-in absolute kink threshold; low weight keeps default behaviour
+                'threshold_mode': random.choices(
+                    ['relative', 'noise'], weights=[0.8, 0.2], k=1
+                )[0],
+                'threshold_multiplier': random.choices(
+                    [0.5, 1.0, 2.0, 4.0], weights=[0.2, 0.4, 0.3, 0.1], k=1
                 )[0],
             }
 

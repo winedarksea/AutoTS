@@ -39,6 +39,10 @@ except Exception:
 from .components.decomposition import DecompositionMixin
 from .components.seasonality import SeasonalityMixin
 from .components.trend import TrendMixin
+from .components.joint_trend import (
+    JointTrendMixin,
+    sample_joint_trend_changepoint_params,
+)
 from .components.holidays import HolidayMixin
 from .components.anomalies import AnomalyMixin
 from .extended_anomaly import ExtendedAnomalyDetector, ExtendedAnomalyMixin
@@ -62,6 +66,7 @@ class TimeSeriesFeatureDetector(
     DecompositionMixin,
     SeasonalityMixin,
     TrendMixin,
+    JointTrendMixin,
     HolidayMixin,
     AnomalyMixin,
     ExtendedAnomalyMixin,
@@ -93,13 +98,18 @@ class TimeSeriesFeatureDetector(
     anomaly_params : dict, optional
         Parameters for AnomalyRemoval
     changepoint_params : dict, optional
-        Parameters for ChangepointDetector
+        Parameters for ChangepointDetector. ``method='joint_hinge_step'`` (opt-in)
+        instead selects slope changes and level shifts jointly in one regression
+        with a BIC stop; see ``components.joint_trend.DEFAULT_JOINT_TREND_PARAMS``
+        for its ``method_params``.
     level_shift_params : dict, optional
         Parameters for LevelShiftMagic
     level_shift_validation : dict, optional
         Validation parameters for level shifts: 'window', 'pad',
         'absolute_threshold', 'relative_threshold'. Thresholds that are omitted
         adapt to each series' noise; thresholds that are given are used as-is.
+        ``{'method': 't_test', 'window_days': 90, 't_threshold': 4.0}`` (opt-in)
+        keeps a candidate only if its step is significant in a local line+step fit.
     general_transformer_params : dict, optional
         Parameters for GeneralTransformer applied before trend detection.
         None uses default filters; {} disables the transform.
@@ -122,6 +132,9 @@ class TimeSeriesFeatureDetector(
         Opt-in second anomaly pass detecting multi-day/sustained patterns
         (see ExtendedAnomalyDetector). Disabled unless a truthy dict is given;
         ``default_extended_anomaly_params()`` supplies a usable starting point.
+    trend_damping : float, optional
+        Per-period damping factor phi applied to the extrapolated slope in
+        ``forecast()`` (trend increment at step h is slope * phi**h). None = undamped.
         Off by default: sustained changes are already reported as level shifts
         and trend changepoints, and labelling them as anomalies as well makes
         the anomaly output span most of the timeline on typical data.
@@ -147,6 +160,7 @@ class TimeSeriesFeatureDetector(
         event_dag_params=None,
         holiday_country=None,
         holiday_countries=None,
+        trend_damping=None,
     ):
         # Set detection_mode first so it can be used in other initializations
         self.detection_mode = detection_mode
@@ -309,6 +323,7 @@ class TimeSeriesFeatureDetector(
             copy.deepcopy(extended_anomaly_params) if extended_anomaly_params else {}
         )
         self.event_dag_params = resolve_event_dag_params(event_dag_params)
+        self.trend_damping = None if trend_damping is None else float(trend_damping)
 
         # Model artifacts
         self.scaler = None
@@ -437,6 +452,39 @@ class TimeSeriesFeatureDetector(
             for col, entries in validated_level_shifts.items()
             if entries
         }
+        if self._uses_joint_trend():
+            # Joint mode backfits instead: each pass seeds the seasonality fit with
+            # the previous pass's trend + steps. Rough seasonality, holiday and
+            # anomaly stages don't depend on the trend so they are not rerun.
+            level_shift_dates = {}
+            try:
+                for _ in range(int(self._joint_trend_settings()['backfit_passes'])):
+                    self._trend_prior_override = (
+                        trend_component_scaled
+                        + level_shift_component_scaled
+                        + self._joint_transient_component
+                    )
+                    (
+                        final_residual,
+                        final_seasonality,
+                        seasonality_strength,
+                        holiday_component_scaled,
+                        holiday_coefficients,
+                        holiday_splash_impacts_scaled,
+                    ) = self._final_seasonality_fit(
+                        df_work, rough_residual, rough_seasonality
+                    )
+                    (
+                        trend_component_scaled,
+                        level_shift_component_scaled,
+                        validated_level_shifts,
+                        changepoints,
+                        slope_info,
+                    ) = self._detect_trend_and_shifts(
+                        final_residual, holiday_component_scaled
+                    )
+            finally:
+                self._trend_prior_override = None
         if level_shift_dates:
             (
                 final_residual,
@@ -521,6 +569,7 @@ class TimeSeriesFeatureDetector(
         trend_change_variance=True,
         slope_shrinkage=True,
         slope_recency_days=180.0,
+        trend_damping=None,
     ):
         """Generate a simple forward projection similar to BasicLinearModel.
         This detector is not optimized for forecasting; dedicated forecasting models may provide better results.
@@ -533,6 +582,8 @@ class TimeSeriesFeatureDetector(
                 the last segment is short.
             slope_recency_days (float): e-folding age, in calendar days, of the
                 earlier-segment weights used by slope_shrinkage.
+            trend_damping (float): per-period damping phi of the extrapolated
+                slope; None uses the detector's ``trend_damping`` (default undamped).
         """
         if self.df_original is None or self.date_index is None:
             raise ValueError(
@@ -626,6 +677,11 @@ class TimeSeriesFeatureDetector(
         # level shift by the logic of this detector might always be 0 for forecast, but for now it is here.
         level_shifts = pd.DataFrame(0.0, index=future_index, columns=columns)
         steps = np.arange(1, forecast_length + 1, dtype=float)
+        damping = trend_damping if trend_damping is not None else self.trend_damping
+        if damping is not None and 0.0 < float(damping) < 1.0:
+            # Cumulative damped steps: sum_{i<=h} phi^i. Precise slopes extrapolated
+            # undamped over long horizons overshoot more than slope noise does.
+            steps = np.cumsum(float(damping) ** steps)
         for col_idx, col in enumerate(columns):
             comp = self.components.get(col, {})
             trend_hist = np.asarray(comp.get('trend', []), dtype=float)
@@ -892,6 +948,9 @@ class TimeSeriesFeatureDetector(
         self._holiday_regressors_temp = None
         self._holiday_regressor_columns = None
         self._holiday_dates_temp = {}
+        self._trend_prior_override = None
+        self._joint_trend_details = {}
+        self.transient_events = {}
 
     def get_detected_features(
         self, series_name=None, include_components=False, include_metadata=True
@@ -937,6 +996,11 @@ class TimeSeriesFeatureDetector(
                     _default_seasonality_profile(series_name)
                 ),
             }
+            transient_events = getattr(self, 'transient_events', None) or {}
+            if transient_events:
+                features['transient_events'] = copy.deepcopy(
+                    transient_events.get(series_name, [])
+                )
             if include_metadata:
                 features.update(
                     {
@@ -1022,6 +1086,13 @@ class TimeSeriesFeatureDetector(
             'seasonality_strength': seasonality_strength,
             'series_seasonality_strengths': seasonality_profiles,
         }
+        # Only the joint trend mode reports transients; legacy output is unchanged.
+        transient_events = getattr(self, 'transient_events', None) or {}
+        if transient_events:
+            features['transient_events'] = {
+                name: copy.deepcopy(transient_events.get(name, []))
+                for name in series_names
+            }
 
         if include_metadata:
             features.update(
@@ -1727,6 +1798,17 @@ class TimeSeriesFeatureDetector(
         # Keep sampled params aligned with multivariate detector semantics:
         # each series gets its own changepoints by default.
         changepoint_params['aggregate_method'] = 'individual'
+        if random.random() < 0.15:
+            changepoint_params = sample_joint_trend_changepoint_params()
+        # Low probability: improves trend NRMSE but rejects most true level shifts.
+        if random.random() < 0.05:
+            level_shift_validation = {
+                'method': 't_test',
+                'window_days': random.choice([60, 90, 90, 180]),
+                't_threshold': random.choice([3.0, 3.0, 4.0]),
+            }
+        else:
+            level_shift_validation = None
 
         # Level shift params
         level_shift_params = LevelShiftMagic.get_new_params(method=method)
@@ -1760,6 +1842,10 @@ class TimeSeriesFeatureDetector(
                 [True, False], [0.8, 0.2]
             )[0],
             'extended_anomaly_params': extended_anomaly_params,
+            'level_shift_validation': level_shift_validation,
+            'trend_damping': random.choices(
+                [None, 0.98, 0.99, 0.995], [0.85, 0.05, 0.05, 0.05]
+            )[0],
         }
 
     def _apply_detector_params(self, params):
@@ -1826,6 +1912,13 @@ class TimeSeriesFeatureDetector(
             self.extended_anomaly_params = (
                 copy.deepcopy(params['extended_anomaly_params']) or {}
             )
+        if 'level_shift_validation' in params:
+            self.level_shift_validation = copy.deepcopy(
+                params['level_shift_validation']
+            ) or {'window': 14, 'pad': 2}
+        if 'trend_damping' in params:
+            damping = params['trend_damping']
+            self.trend_damping = None if damping is None else float(damping)
         if 'event_dag_params' in params:
             self.event_dag_params = resolve_event_dag_params(
                 copy.deepcopy(params['event_dag_params'])

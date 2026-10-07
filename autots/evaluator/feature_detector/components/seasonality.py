@@ -88,7 +88,18 @@ class SeasonalityMixin:
         # (whose Jan 1 step then shows up as a fake level shift). Remove a linear
         # trend estimated jointly with seasonal terms first; it is added back to
         # the residual below so trend detection still owns it.
-        trend_prior = self._estimate_seasonality_adjusted_trend(df, level_shift_dates)
+        trend_prior_override = getattr(self, '_trend_prior_override', None)
+        if trend_prior_override is not None:
+            # Backfit pass: seed with the previous pass's trend + level shifts.
+            trend_prior = trend_prior_override.reindex(
+                index=df.index, columns=df.columns
+            ).fillna(0.0)
+        elif self._uses_joint_trend() and self._joint_trend_settings()['seasonal_prior']:
+            trend_prior = self._joint_seasonal_trend_prior(df)
+        else:
+            trend_prior = self._estimate_seasonality_adjusted_trend(
+                df, level_shift_dates
+            )
         df_detrended = df - trend_prior
 
         # Adaptive Fourier mode: detect dominant periods with FFT, then augment
