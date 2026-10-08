@@ -4097,7 +4097,7 @@ class ChangepointDetector(object):
                 series_arrays,
                 lambda_reg,
                 self.method,
-                self.min_segment_length,
+                method_params.get('min_segment_length', self.min_segment_length),
                 method_params=method_params,
             )
             results.update(l1_results)
@@ -4107,7 +4107,9 @@ class ChangepointDetector(object):
                 series_names,
                 series_arrays,
                 method_params=method_params,
-                min_segment_length=self.min_segment_length,
+                min_segment_length=method_params.get(
+                    'min_segment_length', self.min_segment_length
+                ),
             )
             results.update(l0_results)
 

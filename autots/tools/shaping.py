@@ -22,7 +22,7 @@ def infer_frequency(df_wide, warn=True, **kwargs):
         )
     if len(DTindex) < 3:
         if len(DTindex) == 2:
-            return pd.tseries.frequencies.to_offset(DTindex[1] - DTindex[0]).freqstr
+            return _infer_two_point_frequency(DTindex[0], DTindex[1])
         return None
     # 'warn' arg removed in pandas 2.0.0
     frequency = pd.infer_freq(DTindex)
@@ -33,6 +33,29 @@ def infer_frequency(df_wide, warn=True, **kwargs):
         # hack to get around data which has a few oddities
         frequency = pd.infer_freq(DTindex[:10])
     return frequency
+
+
+def _infer_two_point_frequency(first_date, second_date):
+    """Frequency from exactly two timestamps (pd.infer_freq needs three).
+
+    A fixed delta like 31D drifts off calendar months (Jan 1 -> Feb 1 -> Mar 4),
+    so midnight month-start/month-end pairs a whole number of months apart are
+    read as calendar months. Offset objects supply freqstr so the alias matches
+    the installed pandas ('M' vs 'ME').
+    """
+    first_date, second_date = sorted([pd.Timestamp(first_date), pd.Timestamp(second_date)])
+    month_gap = (second_date.year - first_date.year) * 12 + (
+        second_date.month - first_date.month
+    )
+    both_midnight = first_date == first_date.normalize() and (
+        second_date == second_date.normalize()
+    )
+    if month_gap > 0 and both_midnight:
+        if first_date.is_month_start and second_date.is_month_start:
+            return pd.offsets.MonthBegin(month_gap).freqstr
+        if first_date.is_month_end and second_date.is_month_end:
+            return pd.offsets.MonthEnd(month_gap).freqstr
+    return pd.tseries.frequencies.to_offset(second_date - first_date).freqstr
 
 
 def split_digits_and_non_digits(s):
