@@ -1946,7 +1946,10 @@ class VAR(ModelObject):
 
             transformer = EmptyTransformer()
 
-        # statsmodels refuses to estimate when maxlags is too large for the panel
+        # statsmodels refuses to estimate when maxlags is too large for the panel.
+        # The cap is conservative (ic selection needs more room than a plain fit), and a
+        # k_ar=0 result cannot forecast at all (forecast_interval IndexErrors), so k_ar<1
+        # retries a plain lag-1 fit; panels too wide even for that fail as unestimable.
         maxlags = self.maxlags
         if maxlags is not None:
             nobs, neqs = self.df_train.shape

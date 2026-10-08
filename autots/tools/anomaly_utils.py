@@ -120,7 +120,7 @@ def sk_outliers(df, method, method_params={}):
         model = GaussianMixture(**gm_params)
         model.fit(df)
         scores = -model.score_samples(df)
-        simulated, _ = model.sample(_gmm_n_samples(len(df)))
+        simulated, _ = model.sample(_gmm_n_samples(df.shape[0], df.shape[1]))
         p_values = _tail_p_values(-model.score_samples(simulated), scores)
         res = np.where(p_values < alpha, -1, 1)
     return pd.DataFrame({"anomaly": res}, index=df.index), pd.DataFrame(
@@ -128,9 +128,17 @@ def sk_outliers(df, method, method_params={}):
     )
 
 
-def _gmm_n_samples(n_obs):
-    # enough draws to resolve small alpha p-values; capped as memory scales with n_samples * n_series
-    return min(max(20000, 20 * n_obs), 100000)
+def _gmm_n_samples(n_obs, n_features=1, max_elements=5_000_000, min_samples=2000):
+    """Calibration draws for GMM tail p-values.
+
+    Wants enough draws to resolve small alpha (smallest searched is 0.005), but the
+    univariate path passes the whole wide panel, so the sample matrix and scoring
+    intermediates scale with n_samples * n_features. An element budget (~40 MB float64)
+    shrinks the draw count for wide panels; min_samples keeps ~10 exceedances at alpha=0.005.
+    """
+    desired = min(max(20000, 20 * n_obs), 100000)
+    budget = max_elements // max(int(n_features), 1)
+    return int(max(min(desired, budget), min_samples))
 
 
 def _tail_p_values(reference_scores, scores):
