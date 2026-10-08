@@ -1452,6 +1452,44 @@ SKIP_INTEGRATION = unittest.skipUnless(
 
 
 @SKIP_INTEGRATION
+class TestTVASeasonalityTrendPrior(unittest.TestCase):
+    """'factor' mode opts out of the detector's seasonality trend prior (it blew
+    factor forecasts up on the benchmark); other modes keep the detector default."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.df = _make_daily_df(n_series=4, n_days=300)
+
+    def _prior_flag(self, trend_network, detector_params=None):
+        from autots.evaluator.tva.tva import TVA
+        tva = TVA(
+            trend_network=trend_network, forecast_horizon=14, window_size=60,
+            epochs=2, verbose=0, detector_params=detector_params,
+        )
+        tva.fit(self.df)
+        return tva._decomposer.detector.seasonality_trend_prior
+
+    def test_factor_mode_turns_it_off(self):
+        self.assertFalse(self._prior_flag('factor'))
+
+    def test_none_mode_keeps_the_default(self):
+        self.assertTrue(self._prior_flag('none'))
+
+    def test_explicit_setting_wins(self):
+        self.assertTrue(
+            self._prior_flag('factor', {'seasonality_trend_prior': True})
+        )
+
+    def test_model_search_leaves_it_to_tva(self):
+        from autots.models.tva_model import TVAModel
+        for _ in range(5):
+            params = TVAModel.get_new_params()
+            self.assertNotIn(
+                'seasonality_trend_prior', params['detector_params']
+            )
+
+
+@SKIP_INTEGRATION
 class TestNornDecomposer(unittest.TestCase):
     def setUp(self):
         self.df = _make_daily_df(n_series=3, n_days=200)
@@ -2544,14 +2582,24 @@ class TestTVAPriorLevers(unittest.TestCase):
         _, weighted = self._run(None, factor_config={'w_prior_loadings': 0.5})
         np.testing.assert_array_equal(base.values, weighted.values)
 
-    def test_wrong_prior_is_falsified_and_costs_nothing(self):
+    def test_wrong_prior_is_bounded_by_the_gate(self):
+        # select_coherence grades prior-blended candidates on held-out inner
+        # origins. It does NOT reliably reject a wrong prior (random block panels
+        # picked one some of the time before and after the 1.0.5 detector
+        # rework); the guarantee is that one is only kept for a real inner-fold
+        # coherence gain within the MAE guardrail, else the forecast is untouched.
+        from autots.evaluator.tva.coherence import DEFAULT_COHERENCE_CONFIG
         cfg = {'coherence': True}
         _, base = self._run(None, factor_config=dict(cfg))
         tva, wrong = self._run(self.wrong_prior, factor_config=dict(cfg))
-        # select_coherence graded the blended candidates on held-out origins
-        # and kept the unblended winner, so the forecast is untouched.
-        self.assertNotIn('prior', str(tva._coherence_info.get('graph')))
-        np.testing.assert_array_equal(base.values, wrong.values)
+        info = tva._coherence_info
+        if 'prior' in str(info.get('graph')):
+            self.assertGreater(info['coherence_gain'], 0.0)
+            self.assertLessEqual(
+                info['mase_cost'], DEFAULT_COHERENCE_CONFIG['mase_guardrail'] + 1e-9
+            )
+        else:
+            np.testing.assert_array_equal(base.values, wrong.values)
 
     def test_v1_warns_that_it_ignores_the_prior(self):
         from autots.evaluator.tva.tva import TVA

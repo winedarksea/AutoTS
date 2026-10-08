@@ -386,8 +386,14 @@ class TVA:
         # Step 1: Decompose
         if self.verbose:
             print("TVA: Decomposing time series...")
+        detector_params = dict(self.detector_params or {})
+        if self.trend_network_type == 'factor':
+            # The detector's seasonality trend prior blew factor-mode forecasts
+            # up (MASE to ~1e5) on the TVA benchmark; off it is within 3% of the
+            # pre-prior decomposition. An explicit user setting still wins.
+            detector_params.setdefault('seasonality_trend_prior', False)
         self._decomposer = NornDecomposer(
-            self.detector_params,
+            detector_params,
             holiday_country=self.holiday_country,
             holiday_countries=self.holiday_countries,
         )

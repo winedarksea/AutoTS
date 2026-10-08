@@ -3811,16 +3811,24 @@ class ChangepointDetector(object):
         fitted_trend = data
         probabilities = None
 
-        if len(data) < 2 * self.min_segment_length:
+        method = self.method
+        params = self.method_params
+
+        # Preflight must match the minimum the method actually enforces, else a
+        # method_params override smaller than the detector default skips series.
+        if method in ('pelt', 'l1_fused_lasso', 'l1_total_variation', 'l0_trend_filter'):
+            effective_min_segment_length = params.get(
+                'min_segment_length', self.min_segment_length
+            )
+        else:
+            effective_min_segment_length = self.min_segment_length
+        if len(data) < 2 * effective_min_segment_length:
             return {
                 'name': series_name,
                 'changepoints': changepoints,
                 'fitted': fitted_trend,
                 'probabilities': probabilities,
             }
-
-        method = self.method
-        params = self.method_params
 
         if method == 'pelt':
             penalty = params.get('penalty', 10)

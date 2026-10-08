@@ -2390,5 +2390,44 @@ class TestFeatureDetectorCalendarHolidayFusion(unittest.TestCase):
         self.assertFalse(detector.seasonality_params['holiday_countries_used'])
 
 
+
+class TestSeasonalityTrendPriorOption(unittest.TestCase):
+    """``seasonality_trend_prior`` switches the pre-seasonality trend removal."""
+
+    @staticmethod
+    def _df():
+        idx = pd.date_range('2021-01-01', periods=400, freq='D')
+        t = np.arange(len(idx), dtype=float)
+        rng = np.random.default_rng(0)
+        return pd.DataFrame(
+            {'a': 0.05 * t + np.sin(2 * np.pi * t / 7) + rng.normal(0, 0.2, len(t))},
+            index=idx,
+        )
+
+    def test_off_skips_the_prior_estimate(self):
+        from autots.evaluator.feature_detector.components.seasonality import (
+            SeasonalityMixin,
+        )
+
+        def fail(*args, **kwargs):
+            raise AssertionError("trend prior estimated while disabled")
+
+        with patch.object(
+            SeasonalityMixin, '_estimate_seasonality_adjusted_trend', staticmethod(fail)
+        ):
+            TimeSeriesFeatureDetector(seasonality_trend_prior=False).fit(self._df())
+            with self.assertRaises(AssertionError):
+                TimeSeriesFeatureDetector().fit(self._df())
+
+    def test_template_round_trip(self):
+        detector = TimeSeriesFeatureDetector()
+        self.assertTrue(detector.seasonality_trend_prior)
+        detector._apply_detector_params({'seasonality_trend_prior': False})
+        self.assertFalse(detector.seasonality_trend_prior)
+        self.assertIn(
+            'seasonality_trend_prior', TimeSeriesFeatureDetector.get_new_params()
+        )
+
+
 if __name__ == '__main__':
     unittest.main()

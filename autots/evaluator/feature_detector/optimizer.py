@@ -148,6 +148,7 @@ class FeatureDetectionOptimizer:
             'standardize': detector.standardize,
             'smoothing_window': detector.smoothing_window,
             'extended_anomaly_params': copy.deepcopy(detector.extended_anomaly_params),
+            'seasonality_trend_prior': detector.seasonality_trend_prior,
         }
 
     def _record_evaluation(
@@ -388,6 +389,7 @@ class FeatureDetectionOptimizer:
                 'standardize',
                 'smoothing_window',
                 'extended_anomaly_params',
+                'seasonality_trend_prior',
             ),
         )
 

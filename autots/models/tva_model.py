@@ -775,6 +775,9 @@ class TVAModel(ModelObject):
         from autots.evaluator.feature_detector import TimeSeriesFeatureDetector
 
         detector_params = TimeSeriesFeatureDetector.get_new_params(method=method)
+        # left to TVA, which turns it off for 'factor' (blow-ups) and keeps it on
+        # elsewhere; a sampled value would override that per-mode default
+        detector_params.pop("seasonality_trend_prior", None)
 
         return {
             "trend_network": trend_network,

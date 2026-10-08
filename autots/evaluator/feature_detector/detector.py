@@ -143,6 +143,13 @@ class TimeSeriesFeatureDetector(
         in ``forecast()`` (trend increment at step h is slope * phi**h).
         'auto' = 0.99 per day, compounded to the data's period length.
         None or 1.0 = undamped; values outside (0, 1] raise ValueError.
+    seasonality_trend_prior : bool, default=True
+        Remove a linear trend (plus steps at validated level shifts), fit jointly
+        with weekly/yearly Fourier terms, before the final seasonality fit, so
+        the seasonal regressors cannot absorb trend as a yearly sawtooth. Joint
+        trend mode uses its own prior and ignores this. TVA 'factor' mode turns
+        it off: there it caused forecast blow-ups (MASE up to ~1e5) on the TVA
+        benchmark while helping the detector's own forecast.
     """
 
     TEMPLATE_VERSION = "1.2"
@@ -166,6 +173,7 @@ class TimeSeriesFeatureDetector(
         holiday_country=None,
         holiday_countries=None,
         trend_damping='auto',
+        seasonality_trend_prior=True,
     ):
         # Set detection_mode first so it can be used in other initializations
         self.detection_mode = detection_mode
@@ -329,6 +337,7 @@ class TimeSeriesFeatureDetector(
         )
         self.event_dag_params = resolve_event_dag_params(event_dag_params)
         self.trend_damping = validate_trend_damping(trend_damping)
+        self.seasonality_trend_prior = bool(seasonality_trend_prior)
 
         # Model artifacts
         self.scaler = None
@@ -1861,6 +1870,7 @@ class TimeSeriesFeatureDetector(
             'trend_damping': random.choices(
                 ['auto', None, 0.98, 0.995], [0.7, 0.1, 0.1, 0.1]
             )[0],
+            'seasonality_trend_prior': random.choices([True, False], [0.8, 0.2])[0],
         }
 
     def _apply_detector_params(self, params):
@@ -1931,6 +1941,8 @@ class TimeSeriesFeatureDetector(
             self.level_shift_validation = copy.deepcopy(
                 params['level_shift_validation']
             ) or {'window': 14, 'pad': 2}
+        if 'seasonality_trend_prior' in params:
+            self.seasonality_trend_prior = bool(params['seasonality_trend_prior'])
         # None in a template means undamped (templates saved before 'auto')
         if 'trend_damping' in params:
             self.trend_damping = validate_trend_damping(params['trend_damping'])
