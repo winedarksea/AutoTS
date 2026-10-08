@@ -469,16 +469,6 @@ class TVA:
             self._setup_reconciliation()
             return self
 
-        # create sliding windows (window-local delta targets, per-series scaled)
-        windows, targets = self._create_windows(trend_data)
-        if len(windows) == 0:
-            raise ValueError(
-                f"Not enough data for window_size={self.window_size} + "
-                f"forecast_horizon={self.forecast_horizon}. "
-                f"Need at least {self.window_size + self.forecast_horizon} periods, "
-                f"have {T_total}."
-            )
-
         # Step 3.5: Structure discovery — factors first, conditional edges
         # second (Phase 2). Torch-free; the network only learns small deltas
         # on top of this data-anchored structure.
@@ -498,6 +488,17 @@ class TVA:
 
         # Torch-only from here: build the training tensors. Kept below the
         # torch-free early return so trend_network='none' never touches torch.
+        # Windows span the full forecast_horizon and only feed the network, so
+        # they are built here: 'none' trains at the capped fit_horizon and a
+        # long forecast must not fail it for lack of history.
+        windows, targets = self._create_windows(trend_data)
+        if len(windows) == 0:
+            raise ValueError(
+                f"Not enough data for window_size={self.window_size} + "
+                f"forecast_horizon={self.forecast_horizon}. "
+                f"Need at least {self.window_size + self.forecast_horizon} periods, "
+                f"have {T_total}."
+            )
         seasonal_targets = self._create_target_windows(
             self._components['seasonality'].values
         )

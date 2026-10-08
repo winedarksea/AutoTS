@@ -959,7 +959,10 @@ class TestStructureLadderKnobsThroughTVA(unittest.TestCase):
         rel = np.abs(fa.values - fb.values).mean() / max(
             np.abs(fa.values).mean(), 1e-9
         )
-        self.assertLess(rel, 0.05)
+        # Per-factor extrapolation is not rotation-invariant, so how far the
+        # forecast moves depends on K. Measured 0.026 at K=4 (over-fit) and
+        # 0.084 once the 1.0.5 detector recovered the true K=3.
+        self.assertLess(rel, 0.12)
 
     def test_structure_input_leaves_the_forecast_untouched(self):
         base = self._fit()
@@ -1402,6 +1405,23 @@ class TestSparseKnobsThroughTVA(unittest.TestCase):
             fa = base.predict(14)
             fb = vetoed.predict(14)
         # whatever the veto leaves in the trend must NOT be added back a second
-        # time at predict; asymmetry here showed up as a +59% MASE blowup
+        # time at predict; asymmetry here showed up as a +59% MASE blowup.
+        # Checked directly: dropping the record must move the forecast by
+        # exactly the returned standing level, i.e. the correction applies once.
+        returned = vetoed._shift_returned
+        vetoed._shift_returned = None
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                uncorrected = vetoed.predict(14)
+        finally:
+            vetoed._shift_returned = returned
+        np.testing.assert_allclose(
+            uncorrected.values - fb.values,
+            np.broadcast_to(returned[-1], fb.shape),
+            rtol=1e-6, atol=1e-8,
+        )
+        # coarse blowup guard; measured 0.145 before and 0.257 after the 1.0.5
+        # detector level-shift rework
         rel = np.abs(fa.values - fb.values).mean() / max(np.abs(fa.values).mean(), 1e-9)
-        self.assertLess(rel, 0.25)
+        self.assertLess(rel, 0.4)

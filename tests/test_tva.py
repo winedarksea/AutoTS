@@ -2319,6 +2319,30 @@ class TestTVATorchFreeMode(unittest.TestCase):
         self.assertIsNotNone(tva._last_sigma)
         self.assertEqual(tva._last_sigma.shape, (30, 4))
 
+    def test_none_mode_long_horizon_uses_capped_fit_horizon(self):
+        try:
+            from autots.evaluator.feature_detector import (  # noqa: F401
+                TimeSeriesFeatureDetector,
+            )
+        except Exception:
+            self.skipTest("feature detector unavailable")
+        from autots.evaluator.tva.tva import TVA
+
+        # window_size + forecast_horizon > history: only the network's training
+        # windows need that much, and 'none' has no network.
+        df = _make_daily_df(n_series=4, n_days=200)
+        tva = TVA(
+            trend_network='none',
+            window_size=91,
+            forecast_horizon=365,
+            verbose=0,
+        )
+        tva.fit(df)
+        self.assertLess(tva._fit_horizon, 365)
+        forecast = tva.predict()
+        self.assertEqual(forecast.shape, (365, 4))
+        self.assertTrue(np.isfinite(forecast.values).all())
+
 
 @SKIP_INTEGRATION
 class TestTVABenchmarkSmoke(unittest.TestCase):
@@ -2471,14 +2495,42 @@ class TestTVAPriorLevers(unittest.TestCase):
         _, primed = self._run(self.true_prior)
         np.testing.assert_array_equal(base.values, primed.values)
 
-    def test_coherence_lever_moves_the_forecast(self):
-        cfg = {'coherence': True}
-        _, base = self._run(None, factor_config=dict(cfg))
-        tva, primed = self._run(self.true_prior, factor_config=dict(cfg))
-        self.assertGreater(
-            float(np.nanmax(np.abs(base.values - primed.values))), 0.0
+    def _offered_coherence_graphs(self, prior):
+        """Candidate graphs TVA hands to the coherence selector."""
+        from unittest import mock
+        import autots.evaluator.tva.coherence as ch
+        offered = {}
+        real = ch.select_coherence
+
+        def spy(trend_folds, actual_folds, graphs, *args, **kwargs):
+            offered.update(graphs or {})
+            return real(trend_folds, actual_folds, graphs, *args, **kwargs)
+
+        with mock.patch.object(ch, 'select_coherence', spy):
+            self._run(prior, factor_config={'coherence': True})
+        return offered
+
+    def test_coherence_lever_reaches_the_selector(self):
+        # Whether the selector then *picks* a prior graph depends on the panel
+        # (it is graded on held-out origins, and was a coin flip across seeds
+        # both before and after the 1.0.5 detector rework), so this checks the
+        # wiring: the prior must arrive as candidates with the right structure.
+        base = self._offered_coherence_graphs(None)
+        primed = self._offered_coherence_graphs(self.true_prior)
+        self.assertFalse([k for k in base if 'prior' in k])
+        expected = np.zeros((8, 8), dtype=bool)
+        expected[:4, :4] = expected[4:, 4:] = True
+        np.fill_diagonal(expected, False)
+        np.testing.assert_array_equal(primed['prior_only'] != 0, expected)
+        blended = [k for k in primed if k.endswith('_prior')]
+        self.assertTrue(blended)
+        self.assertTrue(
+            any(
+                k[: -len('_prior')] not in primed
+                or not np.array_equal(primed[k], primed[k[: -len('_prior')]])
+                for k in blended
+            )
         )
-        self.assertIn('prior', str(tva._coherence_info.get('graph')))
 
     def test_loading_penalty_lever_moves_the_forecast(self):
         _, base = self._run(None)
