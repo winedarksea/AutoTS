@@ -7,6 +7,7 @@ with assistance from @crgillespie22
 """
 
 import json
+import re
 from operator import itemgetter
 from itertools import groupby
 import random
@@ -45,6 +46,18 @@ from autots.tools.window_functions import window_lin_reg_mean_no_nan, np_2d_aran
 from autots.evaluator.auto_model import ModelMonster, model_forecast
 from autots.models.model_list import model_list_to_dict
 from autots.tools.bayesian_regression import BayesianMultiOutputRegression
+from autots.models.cassandra_ar import (
+    build_lag_array,
+    lag_history_tail,
+    ar_season_matrix,
+    build_ar_design,
+    ar_gamma,
+    fit_ar_batched,
+    stabilize_ar,
+    ar_recursive_forecast,
+    interval_scale_from_psi,
+    prune_lag_columns,
+)
 
 # scipy is technically optional but most likely is present
 try:
@@ -127,6 +140,7 @@ class Cassandra(ModelObject):
         ],  # interactions added if fourier and order matches
         ar_lags: list = None,
         ar_interaction_seasonality: dict = None,  # equal or less than number of ar lags
+        ar_target: str = "level",  # 'level' lags of y in X, 'residual' AR errors on detrended residuals
         anomaly_detector_params: dict = None,  # apply before any preprocessing (as has own)
         anomaly_intervention: str = None,  # remove, create feature, model
         holiday_detector_params: dict = None,
@@ -172,6 +186,9 @@ class Cassandra(ModelObject):
             self.seasonalities = seasonalities
         self.ar_lags = ar_lags
         self.ar_interaction_seasonality = ar_interaction_seasonality
+        self.ar_target = ar_target if ar_target is not None else "level"
+        if self.ar_target not in ("level", "residual"):
+            raise ValueError(f"ar_target `{ar_target}` not recognized")
         self.anomaly_detector_params = anomaly_detector_params
         self.anomaly_intervention = anomaly_intervention
         self.holiday_detector_params = holiday_detector_params
@@ -221,6 +238,7 @@ class Cassandra(ModelObject):
         self.regr_per_series_tr = None
         self.trend_train = None
         self.components = None
+        self.predicted_ar = None
         self.anomaly_detector = None
         self.holiday_detector = None
         self.impacts = None
@@ -313,31 +331,26 @@ class Cassandra(ModelObject):
 
         # what features will require separate models to be fit as X will not be consistent for all
         # What triggers loop:
-        # AR Lags
+        # AR Lags in 'level' mode (lag columns of y differ per series)
         # Holiday countries as dict (not list)
         # regressor_per_series (only if regressor used)
-        # Multivariate Holiday Detector, only if create feature, not removal (plot in this case)
-        # Multivariate Anomaly Detector, only if create feature, not removal
-        if isinstance(self.anomaly_detector_params, dict):
-            self.anomaly_not_uni = (
-                self.anomaly_detector_params.get('output', None) != 'univariate'
-            )
-        self.anomaly_not_uni = False
+        # past impacts as regressor
+        # anomaly scores are shared columns so never need the loop
+        self.ar_level = self.ar_lags is not None and self.ar_target == "level"
+        self.ar_residual = self.ar_lags is not None and self.ar_target == "residual"
         self.loop_required = (
-            (self.ar_lags is not None)
-            or ()
+            self.ar_level
             or (
                 isinstance(self.holiday_countries, dict) and self.holiday_countries_used
             )
             or ((regressor_per_series is not None) and self.regressors_used)
-            or (isinstance(self.anomaly_intervention, dict) and self.anomaly_not_uni)
             or (
                 self.past_impacts_intervention == "regressor"
                 and past_impacts is not None
             )
         )
-        # check if rolling prediction is required
-        self.predict_loop_req = (self.ar_lags is not None) or (
+        # lag-1 multivariate features depend on the previous forecast step
+        self.multivariate_stepping_required = (
             self.multivariate_feature is not None and self.multivariate_feature != "fft"
         )
         # check if component processing must loop
@@ -680,6 +693,17 @@ class Cassandra(ModelObject):
             "changepoint_",
         ]  # "intercept" added after, so not included
 
+        if self.ar_lags is not None:
+            self._setup_ar_features(self.df.index)
+        if self.ar_level:
+            # lags of y (date-shifted), NaN where no observation exists that many periods back
+            level_lag_design = build_ar_design(
+                build_lag_array(self.df, self.ar_lags, self.frequency),
+                self.ar_season_train,
+            )
+            self.ar_level_columns = {}
+            ar_coef_flat = np.zeros((self.df.shape[1], level_lag_design.shape[2]))
+
         # RUN LINEAR MODEL
         # add x features that don't apply to all, and need to be looped
         if self.loop_required:
@@ -737,27 +761,7 @@ class Cassandra(ModelObject):
                         ],
                         axis=1,
                     )
-                # add AR features
-                if self.ar_lags is not None:
-                    for lag in self.ar_lags:
-                        lag_idx = np.concatenate(
-                            [np.repeat([0], lag), np.arange(len(self.df))]
-                        )[0 : len(self.df)]
-                        lag_s = self.df[col].iloc[lag_idx].rename(f"lag{lag}_")
-                        lag_s.index = self.df.index
-                        if self.ar_interaction_seasonality is not None:
-                            s_feat = create_seasonality_feature(
-                                self.df.index,
-                                self.t_train,
-                                self.ar_interaction_seasonality,
-                                history_days=self.history_days,
-                            )
-                            s_feat.index = lag_s.index
-                            lag_s = s_feat.mul(lag_s, axis=0).rename(
-                                columns=lambda x: f"lag{lag}_" + str(x)
-                            )
-                        c_x = pd.concat([c_x, lag_s], axis=1)
-                # NOTE THERE IS NO REMOVING OF COLINEAR FEATURES ADDED HERE
+                # lag columns are excluded from AR-free keep_cols, their effect is applied by the AR recursion
                 self.keep_cols[col] = c_x.columns[
                     ~c_x.columns.str.contains("|".join(remove_patterns))
                 ]
@@ -772,12 +776,34 @@ class Cassandra(ModelObject):
                     c_x = self.x_scaler_obj[col].fit_transform(c_x)
                 else:
                     self.x_scaler_obj[col] = EmptyTransformer()
+                fit_rows = slice(None)
+                if self.ar_level:
+                    # y is already scaled, so lags bypass x_scaler
+                    series_idx = self.df.columns.get_loc(col)
+                    lag_values = level_lag_design[:, series_idx, :]
+                    fit_rows = np.all(np.isfinite(lag_values), axis=1)
+                    keep_lag = prune_lag_columns(
+                        np.asarray(c_x, dtype=float)[fit_rows],
+                        lag_values[fit_rows],
+                        self.max_colinearity,
+                    )
+                    self.ar_level_columns[col] = keep_lag
+                    lag_df = pd.DataFrame(
+                        lag_values[:, keep_lag],
+                        index=c_x.index,
+                        columns=np.asarray(self.ar_design_names)[keep_lag],
+                    ).bfill()
+                    c_x = pd.concat([c_x, lag_df], axis=1)
                 c_x['intercept'] = 1
                 self.x_array[col] = c_x
                 # ADDING RECENCY WEIGHTING AND RIDGE PARAMS
                 self.params[col] = fit_linear_model(
-                    c_x, self.df[col].to_frame(), params=self.linear_model
+                    c_x[fit_rows], self.df[col].to_frame()[fit_rows], params=self.linear_model
                 )
+                if self.ar_level:
+                    ar_coef_flat[series_idx, keep_lag] = self.params[col][
+                        c_x.columns.get_indexer_for(lag_df.columns), 0
+                    ]
                 trend_residuals.append(
                     self.df[col]
                     - pd.Series(
@@ -790,6 +816,13 @@ class Cassandra(ModelObject):
                     )
                 )
             trend_residuals = pd.concat(trend_residuals, axis=1)
+            if self.ar_level:
+                self.ar_coefficients = ar_coef_flat.reshape(
+                    self.df.shape[1], len(self.ar_lags), -1
+                )
+                trend_residuals = trend_residuals - self._ar_in_sample(
+                    self.df, fill="bfill"
+                )
         else:
             # RUN LINEAR MODEL, WHEN NO LOOPED FEATURES
             self.keep_cols = x_array.columns[
@@ -802,8 +835,9 @@ class Cassandra(ModelObject):
                 x = self.x_scaler_obj.fit_transform(x_array)
             else:
                 self.x_scaler_obj = EmptyTransformer()
-                x = x_array
-            x_array['intercept'] = 1
+                x = x_array.copy()
+            # intercept added after scaling, last column, matching the per-series path
+            x['intercept'] = 1
             # run model
             self.params = fit_linear_model(x, self.df, params=self.linear_model)
             trend_residuals = self.df - np.dot(
@@ -812,6 +846,7 @@ class Cassandra(ModelObject):
             self.x_array = x
 
         # option to run trend model on full residuals or on rolling trend
+        trend_posterior = None
         if (
             self.trend_anomaly_detector_params is not None
             or self.trend_window is not None
@@ -842,6 +877,10 @@ class Cassandra(ModelObject):
             self.trend_train = pd.DataFrame(
                 trend_residuals, index=self.df.index, columns=self.df.columns
             )
+        if self.ar_residual:
+            residual_slope = self._fit_residual_ar(trend_residuals, smooth=trend_posterior)
+            if residual_slope is not None:
+                slope = residual_slope
 
         (
             self.zero_crossings,
@@ -869,6 +908,93 @@ class Cassandra(ModelObject):
 
         self.fit_runtime = self.time() - self.startTime
         return self
+
+    def _setup_ar_features(self, index):
+        """Fix the AR seasonal-interaction columns and design column names from training dates."""
+        self.ar_season_keep = None
+        season_feat = self._ar_season_features(index)
+        self.ar_season_train, self.ar_season_keep, season_names = ar_season_matrix(
+            season_feat
+        )
+        self.ar_design_names = [
+            f"lag{lag}_" + sname
+            for lag in self.ar_lags
+            for sname in [""] + season_names
+        ]
+
+    def _ar_season_features(self, dates):
+        if self.ar_interaction_seasonality is None:
+            return None
+        return create_seasonality_feature(
+            dates,
+            self.create_t(dates),
+            self.ar_interaction_seasonality,
+            history_days=self.history_days,
+        )
+
+    def _ar_season_matrix(self, dates):
+        if self.ar_interaction_seasonality is None:
+            return None
+        return ar_season_matrix(self._ar_season_features(dates), self.ar_season_keep)[0]
+
+    def _ar_in_sample(self, source_df, fill="bfill"):
+        """One-step AR contribution sum_l gamma_l(t) * source(t - l) over source dates."""
+        lag_array = build_lag_array(source_df, self.ar_lags, self.frequency, fill=fill)
+        gamma = ar_gamma(
+            self.ar_coefficients,
+            self._ar_season_matrix(source_df.index),
+            source_df.shape[0],
+        )
+        return pd.DataFrame(
+            np.nan_to_num((gamma * lag_array).sum(axis=2)),
+            index=source_df.index,
+            columns=source_df.columns,
+        )
+
+    def _residual_ar_split(self, trend_residuals, smooth=None):
+        """Split linear-model residuals into a smooth trend and a stationary part u."""
+        if smooth is None:
+            smooth, slope, _ = self.rolling_trend(
+                np.asarray(trend_residuals), np.array(self.create_t(trend_residuals.index))
+            )
+        else:
+            slope = None
+        smooth = pd.DataFrame(
+            np.asarray(smooth), index=trend_residuals.index, columns=self.df.columns
+        )
+        u = pd.DataFrame(
+            np.asarray(trend_residuals), index=trend_residuals.index, columns=self.df.columns
+        ) - smooth
+        return smooth, u, slope
+
+    def _fit_residual_ar(self, trend_residuals, smooth=None):
+        """Regression with AR errors: AR on u = residual - smooth trend, trend model gets the smooth part."""
+        smooth, u, slope = self._residual_ar_split(trend_residuals, smooth=smooth)
+        lag_array = build_lag_array(u, self.ar_lags, self.frequency)
+        design = build_ar_design(lag_array, self.ar_season_train)
+        lam = self.linear_model.get("lambda", None)
+        coef, _ = fit_ar_batched(
+            design,
+            u.to_numpy(),
+            lam=1.0 if lam is None else lam,
+            recency_weighting=self.linear_model.get("recency_weighting", None),
+        )
+        self.ar_coefficients = stabilize_ar(
+            coef.reshape(u.shape[1], len(self.ar_lags), -1),
+            self.ar_season_train,
+            u.shape[0],
+        )
+        self.ar_u_history = u
+        # one-step innovations set the interval width; predict widens them by sqrt(cumsum psi^2)
+        innovations = u - self._ar_in_sample(u, fill=0.0)
+        res_upper = innovations[innovations >= 0]
+        res_lower = innovations[innovations <= 0]
+        self.residual_uncertainty_upper = res_upper.mean().fillna(0)
+        self.residual_uncertainty_lower = res_lower.mean().abs().fillna(0)
+        self.residual_uncertainty_upper_std = res_upper.std().fillna(0)
+        self.residual_uncertainty_lower_std = res_lower.std().fillna(0)
+        self.trend_train = smooth
+        return slope
 
     def analyze_trend(self, slope, index):
         # desired behavior is staying >=0 or staying <= 0, only getting beyond 0 count as turning point
@@ -955,8 +1081,69 @@ class Cassandra(ModelObject):
         impacts,
         return_components=False,
     ):
+        """AR-free linear prediction X @ beta for dates (scaled space)."""
         # accepts any date in history (or lag beyond) as long as regressors include those dates in index as well
+        x_array = self._build_predict_x(
+            dates,
+            history_df=history_df,
+            future_regressor=future_regressor,
+            flag_regressors=flag_regressors,
+        )
+        return self._linear_from_x(
+            x_array,
+            regressor_per_series=regressor_per_series,
+            impacts=impacts,
+            return_components=return_components,
+        )
 
+    def _multivariate_summary(self, history_df):
+        """Multivariate summary of each history row (same index, not yet lagged)."""
+        if self.multivariate_transformation is not None:
+            trs_df = self.multivariate_transformer.transform(history_df)
+        else:
+            trs_df = history_df.copy()
+        if self.multivariate_feature == "feature_agglomeration":
+            return pd.DataFrame(
+                self.agglomerator.transform(trs_df),
+                index=history_df.index,
+                columns=["multivar_" + str(x) for x in range(self.agglom_n_clusters)],
+            )
+        elif self.multivariate_feature == "group_average":
+            multivar_df = (
+                trs_df.T.groupby(self.categorical_groups)  # axis=1
+                .mean()
+                .transpose()
+            )
+            multivar_df.index = history_df.index
+            return multivar_df.rename(columns=lambda x: "multivar_" + str(x))
+        raise ValueError(
+            f"multivariate_feature `{self.multivariate_feature}` not implemented"
+        )
+
+    def _multivariate_features(self, history_df):
+        """Lag-1 multivariate summary columns for history dates plus the next date."""
+        full_idx = history_df.index.union(
+            self.create_forecast_index(forecast_length=1, last_date=history_df.index[-1])
+        )
+        # includes backfill
+        lag_1_indx = np.concatenate([[0], np.arange(len(history_df))])
+        multivar_df = self._multivariate_summary(history_df).iloc[lag_1_indx]
+        multivar_df.index = full_idx
+        return multivar_df
+
+    def _build_predict_x(
+        self,
+        dates,
+        history_df,
+        future_regressor,
+        flag_regressors,
+        allow_multivariate_nan=False,
+    ):
+        """Shared (non per-series, non-lag) feature matrix for dates, built once per predict.
+
+        With allow_multivariate_nan, lag-1 multivariate columns beyond history_df + 1 step are
+        left NaN for the caller to fill step by step.
+        """
         self.t_predict = self.create_t(dates)
         x_list = []
         if isinstance(self.anomaly_intervention, dict):
@@ -1014,42 +1201,7 @@ class Cassandra(ModelObject):
             )
         # all of the following are 1 day past lagged
         elif self.multivariate_feature is not None:
-            # includes backfill
-            full_idx = history_df.index.union(
-                self.create_forecast_index(
-                    forecast_length=1, last_date=history_df.index[-1]
-                )
-            )
-            lag_1_indx = np.concatenate([[0], np.arange(len(history_df))])
-            if self.multivariate_transformation is not None:
-                trs_df = self.multivariate_transformer.transform(history_df)
-            else:
-                trs_df = history_df.copy()
-            if self.multivariate_feature == "feature_agglomeration":
-                x_list.append(
-                    pd.DataFrame(
-                        self.agglomerator.transform(trs_df)[lag_1_indx],
-                        index=full_idx,
-                        columns=[
-                            "multivar_" + str(x) for x in range(self.agglom_n_clusters)
-                        ],
-                    ).reindex(dates)
-                )
-            elif self.multivariate_feature == "group_average":
-                multivar_df = (
-                    trs_df.T.groupby(self.categorical_groups)  # axis=1
-                    .mean()
-                    .transpose()
-                    .iloc[lag_1_indx]
-                )
-                multivar_df.index = full_idx
-                x_list.append(
-                    multivar_df.reindex(dates).rename(
-                        columns=lambda x: "multivar_" + str(x)
-                    )
-                )
-            elif self.multivariate_feature == "oscillator":
-                return NotImplemented
+            x_list.append(self._multivariate_features(history_df).reindex(dates))
         if self.seasonalities is not None:
             s_list = []
             for seasonality in self.seasonalities:
@@ -1099,8 +1251,11 @@ class Cassandra(ModelObject):
         x_array = x_array.loc[:, ~x_array.columns.duplicated()]
         x_array = x_array.drop(columns=self.drop_colz, errors="ignore")
         self.predict_x_array = x_array  # can remove this later, it is for debugging
-        if np.any(np.isnan(x_array.astype(float))):  # remove later, for debugging
-            nulz = x_array.isnull().sum()
+        check_cols = x_array.columns
+        if allow_multivariate_nan:
+            check_cols = check_cols[~check_cols.str.startswith("multivar_")]
+        if np.any(np.isnan(x_array[check_cols].astype(float))):
+            nulz = x_array[check_cols].isnull().sum()
             if self.verbose > 2:
                 print(
                     f"the following columns contain nan values: {nulz[nulz > 0].index.tolist()}"
@@ -1108,7 +1263,13 @@ class Cassandra(ModelObject):
             raise ValueError(
                 f"nan values in predict_x_array in columns {nulz[nulz > 0].index.tolist()[0:5]}"
             )
+        return x_array
 
+    def _linear_from_x(
+        self, x_array, regressor_per_series, impacts, return_components=False
+    ):
+        """Apply fitted linear params (excluding AR lags) to a shared feature matrix."""
+        dates = x_array.index
         # RUN LINEAR MODEL
         # add x features that don't apply to all, and need to be looped
         if self.loop_required:
@@ -1159,34 +1320,6 @@ class Cassandra(ModelObject):
                         ],
                         axis=1,
                     )
-                # add AR features
-                if self.ar_lags is not None:
-                    # somewhat inefficient to create full df of dates, but simplest this way for 'any date'
-                    for lag in self.ar_lags:
-                        full_idx = history_df.index.union(
-                            self.create_forecast_index(
-                                forecast_length=lag, last_date=history_df.index[-1]
-                            )
-                        )
-                        lag_idx = np.concatenate(
-                            [np.repeat([0], lag), np.arange(len(history_df))]
-                        )  # [0:len(history_df)]
-                        lag_s = history_df[col].iloc[lag_idx].rename(f"lag{lag}_")
-                        lag_s.index = full_idx
-                        lag_s = lag_s.reindex(dates)
-                        if self.ar_interaction_seasonality is not None:
-                            s_feat = create_seasonality_feature(
-                                dates,
-                                self.t_predict,
-                                self.ar_interaction_seasonality,
-                                history_days=self.history_days,
-                            )
-                            s_feat.index = lag_s.index
-                            lag_s = s_feat.mul(lag_s, axis=0).rename(
-                                columns=lambda x: f"lag{lag}_" + str(x)
-                            )
-                        c_x = pd.concat([c_x, lag_s], axis=1)
-
                 # ADDING RECENCY WEIGHTING AND RIDGE PARAMS
                 if np.any(np.isnan(c_x.astype(float))):  # remove later, for debugging
                     raise ValueError(
@@ -1232,7 +1365,11 @@ class Cassandra(ModelObject):
                 x = x[self.keep_cols]
             else:
                 x = x_array[self.keep_cols]
-            res = np.dot(x, self.params[self.keep_cols_idx])
+            res = pd.DataFrame(
+                np.dot(x, self.params[self.keep_cols_idx]),
+                index=dates,
+                columns=self.df.columns,
+            )
             if return_components:
                 arr = x.to_numpy()
                 temp = (
@@ -1329,7 +1466,7 @@ class Cassandra(ModelObject):
         ordered.update(frames)
         return ordered
 
-    def _build_component_output(self, trend_component, dates):
+    def _build_component_output(self, trend_component, dates, ar_component=None):
         """Create standardized component DataFrame for forecast horizon."""
         component_frames = OrderedDict()
         trend_df = trend_component.forecast.reindex(dates)
@@ -1342,19 +1479,33 @@ class Cassandra(ModelObject):
                 lower = str(name).lower()
                 if 'trend' in lower:
                     return 'trend_linear'
-                if any(
-                    term in lower
-                    for term in ['fourier', 'season', 'sin', 'cos', 'datepart']
-                ):
-                    return 'seasonality'
+                # before seasonality, as holiday names contain 'day'
                 if 'holiday' in lower:
                     return 'holiday'
-                if 'regress' in lower:
+                if any(
+                    term in lower
+                    for term in [
+                        'fourier',
+                        'season',
+                        'sin',
+                        'cos',
+                        'datepart',
+                        'day',
+                        'week',
+                        'month',
+                        'year',
+                        'quarter',
+                        'hour',
+                    ]
+                ):
+                    return 'seasonality'
+                if 'regress' in lower or lower.startswith('regr'):
                     return 'regressors'
                 if 'impact' in lower:
                     return 'impacts_linear'
-                if any(
-                    term in lower for term in ['lag', 'randomwalk', 'ar', 'rolling']
+                # explicit prefixes, a bare 'ar' substring matched 'yearly' and the like
+                if re.match(r"^lag\d+", lower) or lower.startswith(
+                    ('randomwalk', 'rolling')
                 ):
                     return 'lags'
                 if any(term in lower for term in ['intercept', 'bias']):
@@ -1367,40 +1518,118 @@ class Cassandra(ModelObject):
             component_frames.update(linear_frames)
         except Exception:
             pass
+        if ar_component is not None:
+            ar_df = self.to_origin_space(
+                ar_component, components=True, bounds=True
+            ).reindex(dates)
+            if 'lags' in component_frames:
+                component_frames['lags'] = component_frames['lags'] + ar_df
+            else:
+                component_frames['lags'] = ar_df
         return stack_component_frames(component_frames)
 
-    def _predict_step(
-        self,
-        dates,
-        trend_component,
-        history_df,
-        future_regressor,
-        flag_regressors,
-        impacts,
-        regressor_per_series,
+    def _forecast_horizon(
+        self, x_array, future_index, trend_future, history_df, stepping, linear_kwargs
     ):
+        """Fill the horizon terms that depend on earlier forecast steps.
+
+        Runs the AR recursion (level: lags of y, residual: lags of u) and, when stepping,
+        fills the lag-1 multivariate rows of x_array in place from the forecast path.
+
+        Returns:
+            ar_future (H, N) or None, interval_scale (H, N) or None
+        """
+        H = len(future_index)
+        N = history_df.shape[1]
+        ar_future = None
+        interval_scale = None
+        if self.ar_lags is not None:
+            season_future = self._ar_season_matrix(future_index)
+            max_lag = int(max(self.ar_lags))
+        if self.ar_residual:
+            # u_hat decays from the last observed u, independent of X
+            u_tail = lag_history_tail(
+                self.ar_u_history, max_lag, self.frequency, fill_value=0.0
+            )
+            ar_future, _, psi = ar_recursive_forecast(
+                u_tail,
+                np.zeros((H, N)),
+                self.ar_coefficients,
+                season_future,
+                self.ar_lags,
+            )
+            interval_scale = interval_scale_from_psi(psi)
+        if not (stepping or self.ar_level):
+            return ar_future, interval_scale
+
+        dynamic_base_fn = None
+        if stepping:
+            multivar_cols = x_array.columns[x_array.columns.str.startswith("multivar_")]
+
+            def fill_multivariate_step(step, path_so_far):
+                date = future_index[step]
+                if step > 0:
+                    history_ext = pd.concat(
+                        [
+                            history_df,
+                            pd.DataFrame(
+                                path_so_far,
+                                index=future_index[:step],
+                                columns=history_df.columns,
+                            ),
+                        ]
+                    )
+                    next_row = self._multivariate_summary(history_ext).iloc[-1]
+                    x_array.loc[date, multivar_cols] = next_row[multivar_cols].to_numpy()
+                return np.asarray(
+                    self._linear_from_x(x_array.loc[[date]], **linear_kwargs)
+                )[0]
+
+            dynamic_base_fn = fill_multivariate_step
+            base = trend_future + (0.0 if ar_future is None else ar_future)
+        else:
+            base = trend_future + np.asarray(
+                self._linear_from_x(x_array.loc[future_index], **linear_kwargs)
+            )
+        if self.ar_level:
+            y_tail = lag_history_tail(history_df, max_lag, self.frequency)
+            _, ar_future, psi = ar_recursive_forecast(
+                y_tail,
+                base,
+                self.ar_coefficients,
+                season_future,
+                self.ar_lags,
+                dynamic_base_fn=dynamic_base_fn,
+            )
+            # level lags are not stabilized, so cap at random-walk growth
+            interval_scale = interval_scale_from_psi(psi, cap_random_walk=True)
+        else:
+            ar_recursive_forecast(
+                np.zeros((0, N)), base, None, None, [], dynamic_base_fn=dynamic_base_fn
+            )
+        return ar_future, interval_scale
+
+    def _assemble_prediction(
+        self, dates, trend_component, linear_pred, ar_component=None, interval_scale=None
+    ):
+        """Combine trend, linear and AR terms and intervals once for all dates (scaled space)."""
         # Note this is scaled and doesn't account for impacts
-        linear_pred = self._predict_linear(
-            dates,
-            history_df=history_df,
-            future_regressor=future_regressor,
-            flag_regressors=flag_regressors,
-            impacts=impacts,
-            regressor_per_series=regressor_per_series,
-            return_components=True,
+        columns = trend_component.forecast.columns
+        linear_pred = pd.DataFrame(
+            np.asarray(linear_pred), index=dates, columns=columns
         )
-        # ADD PREPROCESSING BEFORE TREND (FIT X, REVERSE on PREDICT, THEN TREND)
-        zeros_df = pd.DataFrame(
-            0.0,
-            index=trend_component.forecast.index,
-            columns=trend_component.forecast.columns,
-        )
+        if ar_component is not None:
+            linear_pred = linear_pred + ar_component
+        zeros_df = pd.DataFrame(0.0, index=dates, columns=columns)
         upper_adjust = (zeros_df + self.residual_uncertainty_upper) + (
             self.residual_uncertainty_upper_std * self.int_std_dev
         )
         lower_adjust = (zeros_df + self.residual_uncertainty_lower) + (
             self.residual_uncertainty_lower_std * self.int_std_dev
         )
+        if interval_scale is not None:
+            upper_adjust = upper_adjust * interval_scale
+            lower_adjust = lower_adjust * interval_scale
         # add a gradual increase to full uncertainty
         if linear_pred.shape[0] > 4:
             first_adjust = zeros_df + 1
@@ -1415,11 +1644,11 @@ class Cassandra(ModelObject):
             trend_component.lower_forecast.reindex(dates) + linear_pred - lower_adjust
         )
 
-        df_forecast = PredictionObject(
+        return PredictionObject(
             model_name=self.name,
             forecast_length=len(dates),
             forecast_index=dates,
-            forecast_columns=trend_component.forecast.columns,
+            forecast_columns=columns,
             lower_forecast=lower,
             forecast=trend_component.forecast.reindex(dates) + linear_pred,
             upper_forecast=upper,
@@ -1429,9 +1658,9 @@ class Cassandra(ModelObject):
             components=self._build_component_output(
                 trend_component=trend_component,
                 dates=dates,
+                ar_component=ar_component,
             ),
         )
-        return df_forecast
 
     def fit_data(
         self,
@@ -1482,7 +1711,16 @@ class Cassandra(ModelObject):
             impacts=self.use_impacts,
             regressor_per_series=self.regr_ps_fore,
         )
-        if self.trend_window is not None:
+        if self.ar_level:
+            self.trend_train = self.trend_train - self._ar_in_sample(
+                self.df, fill="bfill"
+            )
+        if self.ar_residual:
+            # refresh the u history the recursion starts from, trend model gets the smooth part
+            self.trend_train, self.ar_u_history, _ = self._residual_ar_split(
+                self.trend_train
+            )
+        elif self.trend_window is not None:
             self.trend_train, slope, intercept = self.rolling_trend(
                 self.trend_train, np.array(self.create_t(df.index))
             )
@@ -1808,55 +2046,66 @@ class Cassandra(ModelObject):
                 upper_forecast=self.trend_train,
             )
 
-        # ar_lags, multivariate features require 1 step loop
+        # static features are built once; only AR terms and lag-1 multivariate
+        # columns are filled step by step across the horizon
         if forecast_length is None:
-            df_forecast = self._predict_step(
-                dates=df.index,
-                trend_component=trend_forecast,
-                history_df=df,
-                future_regressor=self.full_regr,
-                flag_regressors=self.all_flags,
-                impacts=self.use_impacts,
-                regressor_per_series=self.regr_ps_fore,
-            )
-        elif self.predict_loop_req:
-            for step in range(forecast_length):
-                forecast_index = df.index.union(
-                    self.create_forecast_index(1, last_date=df.index[-1])
-                )
-                df_forecast = self._predict_step(
-                    dates=forecast_index,
-                    trend_component=trend_forecast,
-                    history_df=df,
-                    future_regressor=self.full_regr,
-                    flag_regressors=self.all_flags,
-                    impacts=self.use_impacts,
-                    regressor_per_series=self.regr_ps_fore,
-                )
-                df = pd.concat([df, df_forecast.forecast.iloc[-1:]])
-            if not include_history:
-                df_forecast.forecast = df_forecast.forecast.tail(forecast_length)
-                df_forecast.lower_forecast = df_forecast.lower_forecast.tail(
-                    forecast_length
-                )
-                df_forecast.upper_forecast = df_forecast.upper_forecast.tail(
-                    forecast_length
-                )
+            future_index = None
+            forecast_index = df.index
         else:
-            forecast_index = self.create_forecast_index(
+            future_index = self.create_forecast_index(
                 forecast_length, last_date=df.index[-1]
             )
-            if include_history:
-                forecast_index = df.index.union(forecast_index)
-            df_forecast = self._predict_step(
-                dates=forecast_index,
-                trend_component=trend_forecast,
-                history_df=df,
-                future_regressor=self.full_regr,
-                flag_regressors=self.all_flags,
-                impacts=self.use_impacts,
-                regressor_per_series=self.regr_ps_fore,
+            forecast_index = (
+                df.index.union(future_index) if include_history else future_index
             )
+        stepping = self.multivariate_stepping_required and future_index is not None
+        x_array = self._build_predict_x(
+            forecast_index,
+            history_df=df,
+            future_regressor=self.full_regr,
+            flag_regressors=self.all_flags,
+            allow_multivariate_nan=stepping,
+        )
+        linear_kwargs = {
+            "regressor_per_series": self.regr_ps_fore,
+            "impacts": self.use_impacts,
+        }
+        ar_future, future_scale = None, None
+        if future_index is not None and (stepping or self.ar_lags is not None):
+            ar_future, future_scale = self._forecast_horizon(
+                x_array,
+                future_index,
+                trend_forecast.forecast.reindex(future_index).to_numpy(),
+                df,
+                stepping,
+                linear_kwargs,
+            )
+        linear_pred = self._linear_from_x(
+            x_array, return_components=True, **linear_kwargs
+        )
+        ar_component, interval_scale = None, None
+        if self.ar_lags is not None:
+            ar_component = pd.DataFrame(0.0, index=forecast_index, columns=df.columns)
+            hist_dates = forecast_index[forecast_index.isin(df.index)]
+            if len(hist_dates) > 0:
+                if self.ar_level:
+                    in_sample = self._ar_in_sample(df, fill="bfill")
+                else:
+                    in_sample = self._ar_in_sample(self.ar_u_history, fill=0.0)
+                ar_component.loc[hist_dates] = in_sample.reindex(hist_dates).to_numpy()
+            if ar_future is not None:
+                ar_component.loc[future_index] = ar_future
+        self.predicted_ar = ar_component
+        if future_scale is not None:
+            interval_scale = pd.DataFrame(1.0, index=forecast_index, columns=df.columns)
+            interval_scale.loc[future_index] = future_scale
+        df_forecast = self._assemble_prediction(
+            forecast_index,
+            trend_component=trend_forecast,
+            linear_pred=linear_pred,
+            ar_component=ar_component,
+            interval_scale=interval_scale,
+        )
 
         # save future index before include_history is added
         if future_impacts is not None and forecast_length is not None:
@@ -2296,14 +2545,17 @@ class Cassandra(ModelObject):
         else:
             regressors_used = random.choices([True, False], [0.5, 0.5])[0]
         ar_lags = random.choices(
-            [None, [1], [1, 7], [7], [seasonal_int(small=True)]],
-            [0.95, 0.025, 0.025, 0.05, 0.025],
+            [None, [1], [1, 7], [7], [seasonal_int(small=True)], [1, 2], [2]],
+            # AR raised from 0.1 total after residual mode won 59% of cells vs off in a 30-draw benchmark
+            [0.85, 0.03, 0.03, 0.03, 0.03, 0.015, 0.015],
         )[0]
         ar_interaction_seasonality = None
+        ar_target = "level"
         if ar_lags is not None:
             ar_interaction_seasonality = random.choices(
                 [None, 7, 'dayofweek', 'common_fourier'], [0.4, 0.2, 0.2, 0.2]
             )[0]
+            ar_target = random.choices(["residual", "level"], [0.75, 0.25])[0]
         seasonalities = random.choices(
             [
                 [7, 365.25],
@@ -2339,6 +2591,7 @@ class Cassandra(ModelObject):
             "seasonalities": seasonalities,
             "ar_lags": ar_lags,
             "ar_interaction_seasonality": ar_interaction_seasonality,
+            "ar_target": ar_target,
             "anomaly_detector_params": anomaly_detector_params,
             "anomaly_intervention": anomaly_intervention,
             "holiday_detector_params": holiday_params,
@@ -2383,6 +2636,7 @@ class Cassandra(ModelObject):
             "ar_interaction_seasonality": (
                 self.ar_interaction_seasonality if self.ar_lags is not None else None
             ),
+            "ar_target": self.ar_target,
             "anomaly_detector_params": self.anomaly_detector_params,
             "anomaly_intervention": self.anomaly_intervention,
             "holiday_detector_params": self.holiday_detector_params,
@@ -2505,6 +2759,15 @@ class Cassandra(ModelObject):
             [trend.columns, ['trend'] * len(trend.columns)]
         )
         plot_list.append(trend)
+        if getattr(self, "predicted_ar", None) is not None:
+            ar_comp = self.predicted_ar
+            if to_origin_space:
+                ar_comp = self.to_origin_space(ar_comp, components=True, bounds=True)
+            ar_comp = ar_comp.copy()
+            ar_comp.columns = pd.MultiIndex.from_arrays(
+                [ar_comp.columns, ['lags'] * len(ar_comp.columns)]
+            )
+            plot_list.append(ar_comp)
         if self.impacts is not None and include_impacts:
             impacts = self.impacts.copy()
             impacts.columns = pd.MultiIndex.from_arrays(
@@ -2762,7 +3025,8 @@ def lstsq_solve(X, y, lamb=1, identity_matrix=None):
     if identity_matrix is None:
         identity_matrix = np.zeros((X.shape[1], X.shape[1]))
         np.fill_diagonal(identity_matrix, 1)
-        identity_matrix[0, 0] = 0
+        # Cassandra appends the intercept as the last column, leave it unpenalized
+        identity_matrix[-1, -1] = 0
     if lamb is None:
         lamb = 1.0
     XtX_lamb = X.T.dot(X) + lamb * identity_matrix
@@ -2895,7 +3159,8 @@ def fit_linear_model(x, y, params=None):
     if lambd is not None:
         id_mat = np.zeros((x.shape[1], x.shape[1]))
         np.fill_diagonal(id_mat, 1)
-        id_mat[0, 0] = 0
+        # intercept is the last column (appended after any x_scaler), not the first feature
+        id_mat[-1, -1] = 0
     else:
         id_mat = None
     if rec is not None:
