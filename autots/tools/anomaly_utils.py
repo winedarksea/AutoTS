@@ -120,25 +120,47 @@ def sk_outliers(df, method, method_params={}):
         model = GaussianMixture(**gm_params)
         model.fit(df)
         scores = -model.score_samples(df)
-        simulated, _ = model.sample(_gmm_n_samples(df.shape[0], df.shape[1]))
-        p_values = _tail_p_values(-model.score_samples(simulated), scores)
+        reference_scores = _gmm_reference_scores(
+            model, _gmm_n_samples(df.shape[0]), df.shape[1]
+        )
+        p_values = _tail_p_values(reference_scores, scores)
         res = np.where(p_values < alpha, -1, 1)
     return pd.DataFrame({"anomaly": res}, index=df.index), pd.DataFrame(
         {"anomaly_score": scores}, index=df.index
     )
 
 
-def _gmm_n_samples(n_obs, n_features=1, max_elements=5_000_000, min_samples=2000):
+def _gmm_n_samples(n_obs, min_samples=2000):
     """Calibration draws for GMM tail p-values.
 
-    Wants enough draws to resolve small alpha (smallest searched is 0.005), but the
-    univariate path passes the whole wide panel, so the sample matrix and scoring
-    intermediates scale with n_samples * n_features. An element budget (~40 MB float64)
-    shrinks the draw count for wide panels; min_samples keeps ~10 exceedances at alpha=0.005.
+    Wants enough draws to resolve small alpha (smallest searched is 0.005); min_samples
+    keeps ~10 exceedances at alpha=0.005. Memory is bounded by chunked drawing in
+    _gmm_reference_scores, not by shrinking this count, so wide panels keep full resolution.
     """
-    desired = min(max(20000, 20 * n_obs), 100000)
-    budget = max_elements // max(int(n_features), 1)
-    return int(max(min(desired, budget), min_samples))
+    return int(max(min(max(20000, 20 * n_obs), 100000), min_samples))
+
+
+def _gmm_reference_scores(model, n_samples, n_features, max_elements=5_000_000):
+    """Negative log-density of n_samples draws from a fitted GaussianMixture.
+
+    The univariate path passes the whole wide panel, so one sample matrix would be
+    n_samples * n_features; drawing in chunks caps it at ~max_elements (~40 MB float64)
+    plus scoring intermediates. sklearn's sample() rebuilds its RNG from an int
+    random_state on every call (identical chunks), so pin a stateful RandomState first.
+    """
+    chunk_size = max(1, min(n_samples, max_elements // max(int(n_features), 1)))
+    if not isinstance(model.random_state, np.random.RandomState):
+        model.random_state = (
+            np.random.mtrand._rand
+            if model.random_state is None
+            else np.random.RandomState(model.random_state)
+        )
+    reference_scores = np.empty(n_samples, dtype=float)
+    for start in range(0, n_samples, chunk_size):
+        stop = min(start + chunk_size, n_samples)
+        simulated, _ = model.sample(stop - start)
+        reference_scores[start:stop] = -model.score_samples(simulated)
+    return reference_scores
 
 
 def _tail_p_values(reference_scores, scores):
