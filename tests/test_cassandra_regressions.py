@@ -75,13 +75,48 @@ class CassandraRegressionTest(unittest.TestCase):
             },
             index=df.index,
         )
-        model = base_model(regressors_used=True, max_colinearity=None)
+        model = base_model(
+            regressors_used=True, max_colinearity=None, max_multicolinearity=0.001
+        )
         model.fit(df, future_regressor=regr)
         dropped_regressors = [c for c in model.drop_colz if c.startswith("regr_")]
         self.assertEqual(len(dropped_regressors), 2)
         features = model.x_array.drop(columns="intercept")
         min_eigenvalue = np.linalg.eigvalsh(np.corrcoef(features, rowvar=0)).min()
         self.assertGreaterEqual(min_eigenvalue, model.max_multicolinearity)
+
+    def test_holiday_absent_from_forecast_window_predicts(self):
+        # holidays detected in history but not falling in the forecast window have no
+        # predict-time flag column; this was a KeyError masked by the old filter's drops
+        rng = np.random.default_rng(3)
+        idx = pd.date_range("2020-01-01", "2022-10-20", freq="D")
+        values = 50 + rng.normal(size=(len(idx), 3)) * 0.5
+        for month_day in ["07-04", "12-25"]:
+            values[idx.strftime("%m-%d") == month_day] += 15
+        df = pd.DataFrame(values, index=idx, columns=["s0", "s1", "s2"])
+        holiday_detector_params = {
+            "threshold": 0.8,
+            "splash_threshold": None,
+            "use_dayofmonth_holidays": True,
+            "use_wkdom_holidays": False,
+            "use_wkdeom_holidays": False,
+            "use_lunar_holidays": False,
+            "use_lunar_weekday": False,
+            "use_islamic_holidays": False,
+            "use_hebrew_holidays": False,
+            "use_hindu_holidays": False,
+            "anomaly_detector_params": {**ZSCORE_DETECTOR, "fillna": "ffill"},
+            "remove_excess_anomalies": False,
+            "impact": None,
+            "regression_params": None,
+            "output": "multivariate",
+        }
+        model = base_model(holiday_detector_params=holiday_detector_params).fit(df)
+        self.assertIn("holiday_July4th", model.fit_feature_columns)
+        forecast = model.predict(FORECAST_LENGTH).forecast
+        self.assertEqual(forecast.shape, (FORECAST_LENGTH, 3))
+        self.assertFalse(forecast.isna().any().any())
+        self.assertTrue((model.predict_x_array["holiday_July4th"] == 0).all())
 
     def test_group_average_multivariate_predict(self):
         df = make_panel(n_series=4)

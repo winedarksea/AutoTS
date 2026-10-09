@@ -165,7 +165,9 @@ class Cassandra(ModelObject):
         constraint: dict = None,
         x_scaler: bool = False,
         max_colinearity: float = 0.998,
-        max_multicolinearity: float = 0.001,
+        # off by default: greedy eigen elimination drops features that are only near-dependent
+        # in history, which benchmarked worse out of sample (geo-mean MASE +4% at 0.001)
+        max_multicolinearity: float = None,
         # not modeling related:
         frequency: str = 'infer',
         prediction_interval: float = 0.9,
@@ -684,6 +686,7 @@ class Cassandra(ModelObject):
         if len(set(self.drop_colz)) == x_array.shape[1]:
             self.drop_colz = list(set(self.drop_colz))[1:]
         x_array = x_array.drop(columns=self.drop_colz)
+        self.fit_feature_columns = x_array.columns
 
         # things we want modeled but want to discard from evaluation (standins)
         remove_patterns = [
@@ -1250,6 +1253,22 @@ class Cassandra(ModelObject):
         # drop duplicates (holiday flag can create these for multiple countries)
         x_array = x_array.loc[:, ~x_array.columns.duplicated()]
         x_array = x_array.drop(columns=self.drop_colz, errors="ignore")
+        # holiday flags only exist for holidays inside the date range, so a holiday seen in
+        # history but not in the forecast window has no column; it is simply not occurring
+        missing_columns = self.fit_feature_columns.difference(x_array.columns)
+        missing_holiday_columns = missing_columns[
+            missing_columns.astype(str).str.startswith("holiday_")
+        ]
+        if len(missing_holiday_columns) > 0:
+            x_array = pd.concat(
+                [
+                    x_array,
+                    pd.DataFrame(
+                        0, index=x_array.index, columns=missing_holiday_columns
+                    ),
+                ],
+                axis=1,
+            )
         self.predict_x_array = x_array  # can remove this later, it is for debugging
         check_cols = x_array.columns
         if allow_multivariate_nan:

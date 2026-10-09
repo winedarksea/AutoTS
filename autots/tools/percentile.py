@@ -27,9 +27,9 @@ def nan_percentile(in_arr, q, method="linear", axis=0, errors="raise"):
     Beware this is only tested for the limited case required here, and will not match np fully.
     Args more limited. If errors="rollover" passes to np.nanpercentile where args are not supported.
     """
-    # always copy: NaNs are overwritten in place below, and inputs may be read-only
-    # views (pandas copy-on-write .values) or caller data that must not be mutated
-    arr = np.array(in_arr, copy=True)
+    # no copy here: NaN filling below allocates a new array, so caller data (or a read-only
+    # pandas copy-on-write view) is never written to
+    arr = np.asarray(in_arr)
     if not np.issubdtype(arr.dtype, np.floating):
         arr = arr.astype(float)
     flag_2d = False
@@ -49,9 +49,9 @@ def nan_percentile(in_arr, q, method="linear", axis=0, errors="raise"):
     valid_obs = np.sum(np.isfinite(arr), axis=0)
     # replace NaN with maximum
     max_val = np.nanmax(arr)
-    arr[np.isnan(arr)] = max_val
-    # sort - former NaNs will move to the end
-    arr = np.sort(arr, axis=0)
+    arr = np.where(np.isnan(arr), max_val, arr)
+    # sort in place on the new array - former NaNs will move to the end
+    arr.sort(axis=0)
 
     # loop over requested quantiles
     if type(q) is list:

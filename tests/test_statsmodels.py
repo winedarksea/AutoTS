@@ -8,7 +8,7 @@ import pandas as pd
 
 os.environ.setdefault("MPLCONFIGDIR", tempfile.gettempdir())
 
-from autots.models.statsmodels import ARDL  # noqa: E402
+from autots.models.statsmodels import ARDL, VAR  # noqa: E402
 
 
 class TestARDL(unittest.TestCase):
@@ -222,6 +222,37 @@ class TestARDL(unittest.TestCase):
         self.assertEqual(len(prediction.forecast.columns), 2)
         self.assertIn('series1', prediction.forecast.columns)
         self.assertIn('series2', prediction.forecast.columns)
+
+
+class TestVAR(unittest.TestCase):
+    """VAR lag clamping: a k_ar=0 result cannot forecast, so it must refit at lag 1."""
+
+    def make_panel(self, n_rows, n_series, random_walk):
+        rng = np.random.default_rng(0)
+        values = rng.normal(size=(n_rows, n_series))
+        if random_walk:
+            values = values.cumsum(axis=0)
+        dates = pd.date_range(start='2020-01-01', periods=n_rows, freq='D')
+        return pd.DataFrame(values + 50, index=dates)
+
+    def assert_forecasts_at_lag_one(self, model, n_series):
+        prediction = model.predict(forecast_length=7)
+        self.assertEqual(model.model.k_ar, 1)
+        self.assertEqual(prediction.forecast.shape, (7, n_series))
+        self.assertTrue(np.isfinite(prediction.forecast.to_numpy()).all())
+        self.assertTrue(np.isfinite(prediction.upper_forecast.to_numpy()).all())
+
+    def test_wide_panel_clamps_maxlags_to_zero_then_refits(self):
+        # 30 rows x 14 series: int(29 / 15) - 1 = 0 lags allowed for ic selection
+        model = VAR(maxlags=15, ic='aic')
+        model.fit(self.make_panel(30, 14, random_walk=True))
+        self.assert_forecasts_at_lag_one(model, 14)
+
+    def test_ic_selecting_zero_lags_refits(self):
+        # aic picks 0 lags on white noise
+        model = VAR(maxlags=5, ic='aic')
+        model.fit(self.make_panel(200, 3, random_walk=False))
+        self.assert_forecasts_at_lag_one(model, 3)
 
 
 if __name__ == '__main__':
