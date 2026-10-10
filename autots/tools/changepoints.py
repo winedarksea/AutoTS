@@ -4310,7 +4310,9 @@ class ChangepointDetector(object):
                     threshold_multiplier=self.method_params.get(
                         'threshold_multiplier', 1.0
                     ),
-                    segment_length=self.min_segment_length,
+                    segment_length=self.method_params.get(
+                        'min_segment_length', self.min_segment_length
+                    ),
                 )
 
             elif self.method == 'l0_trend_filter':
