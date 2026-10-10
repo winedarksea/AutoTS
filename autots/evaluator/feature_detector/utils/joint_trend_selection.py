@@ -120,6 +120,18 @@ class JointTrendModel:
             [np.asarray(nuisance, dtype=float)] if nuisance is not None else []
         )
         self.base = np.column_stack(trend_base + nuisance_columns)
+        self._base_basis = None
+
+    def _cached_base_basis(self):
+        # The base (intercept, t, Fourier nuisance) is fixed across the hundreds of
+        # forward/refine/merge steps, so its SVD is done once; re-SVDing the full
+        # n x (base + terms) design per step was ~70% of a joint detector fit.
+        if self._base_basis is None:
+            left, singular, _ = np.linalg.svd(self.base, full_matrices=False)
+            self._base_singular_max = float(singular.max()) if singular.size else 0.0
+            tolerance = self._base_singular_max * max(self.base.shape) * np.finfo(float).eps
+            self._base_basis = left[:, singular > tolerance]
+        return self._base_basis
 
     def design(self, terms):
         columns = [self.candidates.column(pos, kind) for kind, pos in terms]
@@ -128,7 +140,31 @@ class JointTrendModel:
         return np.column_stack([self.base] + columns)
 
     def basis_and_residual(self, terms):
-        basis = _orthonormal_basis(self.design(terms))
+        """Orthonormal basis of [base, terms] and the residual of values on it.
+
+        Same column space as _orthonormal_basis(self.design(terms)): term columns are
+        projected off the cached base basis and only that (n, len(terms)) remainder is
+        SVD'd, with the rank tolerance scaled as for the full design.
+        """
+        base_basis = self._cached_base_basis()
+        if terms:
+            term_columns = np.column_stack(
+                [self.candidates.column(pos, kind) for kind, pos in terms]
+            )
+            remainder = term_columns
+            # twice: one Gram-Schmidt pass leaves base components in near-collinear columns
+            for _ in range(2):
+                remainder = remainder - base_basis @ (base_basis.T @ remainder)
+            left, singular, _ = np.linalg.svd(remainder, full_matrices=False)
+            scale = max(
+                self._base_singular_max,
+                float(np.linalg.norm(term_columns, axis=0).max()),
+            )
+            n_columns = self.base.shape[1] + len(terms)
+            tolerance = scale * max(self.n, n_columns) * np.finfo(float).eps
+            basis = np.hstack([base_basis, left[:, singular > tolerance]])
+        else:
+            basis = base_basis
         residual = self.values - basis @ (basis.T @ self.values)
         return basis, residual
 

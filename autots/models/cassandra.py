@@ -52,7 +52,7 @@ from autots.models.cassandra_ar import (
     ar_season_matrix,
     build_ar_design,
     ar_gamma,
-    fit_ar_batched,
+    fit_ar_from_lags,
     stabilize_ar,
     ar_recursive_forecast,
     interval_scale_from_psi,
@@ -670,12 +670,15 @@ class Cassandra(ModelObject):
 
         if self.max_multicolinearity is not None:
             # greedily drop the highest-loading column of the smallest eigenvector
+            # correlation is pairwise, so each subset's matrix is a slice of one full
+            # matrix; recomputing corrcoef per dropped column was O(drops * T * p^2)
+            full_corr = np.nan_to_num(np.corrcoef(x_array, rowvar=0))
+            column_position = {c: i for i, c in enumerate(x_array.columns)}
             remaining = [c for c in x_array.columns if c not in self.drop_colz]
             colin = []
             while len(remaining) > 1:
-                w, vec = np.linalg.eigh(
-                    np.nan_to_num(np.corrcoef(x_array[remaining], rowvar=0))
-                )
+                positions = [column_position[c] for c in remaining]
+                w, vec = np.linalg.eigh(full_corr[np.ix_(positions, positions)])
                 if w[0] >= self.max_multicolinearity:
                     break
                 colin.append(remaining.pop(int(np.argmax(np.abs(vec[:, 0])))))
@@ -700,12 +703,11 @@ class Cassandra(ModelObject):
             self._setup_ar_features(self.df.index)
         if self.ar_level:
             # lags of y (date-shifted), NaN where no observation exists that many periods back
-            level_lag_design = build_ar_design(
-                build_lag_array(self.df, self.ar_lags, self.frequency),
-                self.ar_season_train,
-            )
+            # (T, N, L) only; the seasonal-interaction design is built per series in the
+            # loop, since the full (T, N, L * S) design reaches GB on wide panels
+            level_lag_array = build_lag_array(self.df, self.ar_lags, self.frequency)
             self.ar_level_columns = {}
-            ar_coef_flat = np.zeros((self.df.shape[1], level_lag_design.shape[2]))
+            ar_coef_flat = np.zeros((self.df.shape[1], len(self.ar_design_names)))
 
         # RUN LINEAR MODEL
         # add x features that don't apply to all, and need to be looped
@@ -783,7 +785,10 @@ class Cassandra(ModelObject):
                 if self.ar_level:
                     # y is already scaled, so lags bypass x_scaler
                     series_idx = self.df.columns.get_loc(col)
-                    lag_values = level_lag_design[:, series_idx, :]
+                    lag_values = build_ar_design(
+                        level_lag_array[:, series_idx : series_idx + 1],
+                        self.ar_season_train,
+                    )[:, 0, :]
                     fit_rows = np.all(np.isfinite(lag_values), axis=1)
                     keep_lag = prune_lag_columns(
                         np.asarray(c_x, dtype=float)[fit_rows],
@@ -974,10 +979,10 @@ class Cassandra(ModelObject):
         """Regression with AR errors: AR on u = residual - smooth trend, trend model gets the smooth part."""
         smooth, u, slope = self._residual_ar_split(trend_residuals, smooth=smooth)
         lag_array = build_lag_array(u, self.ar_lags, self.frequency)
-        design = build_ar_design(lag_array, self.ar_season_train)
         lam = self.linear_model.get("lambda", None)
-        coef, _ = fit_ar_batched(
-            design,
+        coef, _ = fit_ar_from_lags(
+            lag_array,
+            self.ar_season_train,
             u.to_numpy(),
             lam=1.0 if lam is None else lam,
             recency_weighting=self.linear_model.get("recency_weighting", None),

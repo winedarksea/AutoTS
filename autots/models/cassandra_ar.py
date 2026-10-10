@@ -154,15 +154,52 @@ def fit_ar_batched(design, target, lam=1.0, recency_weighting=None):
         weights = (np.arange(T) + 1.0) ** recency_weighting
         x = x * weights[:, None, None]
         y = y * weights[:, None]
-    xtx = np.einsum("tnk,tnj->nkj", x, x)
-    xty = np.einsum("tnk,tn->nk", x, y)
+    # series-major (N, T, K) so the Gram products run as batched BLAS matmuls; einsum
+    # with the shared n index does not dispatch to BLAS and was ~30x slower on wide panels
+    x = np.ascontiguousarray(x.transpose(1, 0, 2))
+    xtx = np.matmul(x.transpose(0, 2, 1), x)
+    xty = np.matmul(x.transpose(0, 2, 1), y.T[..., None])[..., 0]
     # tiny floor keeps series with no valid rows (or lam=0) solvable, giving zero coefficients
     lam = 1e-8 if lam is None or lam <= 0 else float(lam)
     xtx = xtx + lam * np.eye(K)[None, :, :]
     coef = np.linalg.solve(xtx, xty[..., None])[..., 0]
-    resid = np.where(valid, target - np.einsum("tnk,nk->tn", np.nan_to_num(design), coef), np.nan)
+    fitted = np.matmul(
+        np.nan_to_num(design).transpose(1, 0, 2), coef[..., None]
+    )[..., 0].T
+    resid = np.where(valid, target - fitted, np.nan)
     count = valid.sum(axis=0)
     innovation_std = np.sqrt(np.nansum(resid**2, axis=0) / np.maximum(count - K, 1))
+    return coef, innovation_std
+
+
+def fit_ar_from_lags(
+    lag_array,
+    season_matrix,
+    target,
+    lam=1.0,
+    recency_weighting=None,
+    max_chunk_elements=25_000_000,
+):
+    """fit_ar_batched over series chunks, building each chunk's design from the lags.
+
+    The full (T, N, L * S) design plus fit_ar_batched's same-size temporaries reach several
+    GB on wide daily panels with seasonal interactions (2,869 x 500 x 74 is ~850 MB each);
+    chunking caps peak memory near max_chunk_elements float64s (~200 MB) per temporary.
+    Series are independent ridge problems, so chunking does not change the result.
+    """
+    T, N, L = lag_array.shape
+    S = 1 if season_matrix is None else season_matrix.shape[1]
+    chunk = max(1, int(max_chunk_elements // max(T * L * S, 1)))
+    coef = np.empty((N, L * S))
+    innovation_std = np.empty(N)
+    for start in range(0, N, chunk):
+        stop = min(start + chunk, N)
+        coef[start:stop], innovation_std[start:stop] = fit_ar_batched(
+            build_ar_design(lag_array[:, start:stop], season_matrix),
+            target[:, start:stop],
+            lam=lam,
+            recency_weighting=recency_weighting,
+        )
     return coef, innovation_std
 
 

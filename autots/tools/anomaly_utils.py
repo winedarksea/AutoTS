@@ -128,7 +128,7 @@ def sk_outliers(df, method, method_params={}):
             p_values = _gmm_univariate_tail_p_values(model, scores)
         else:
             reference_scores = _gmm_reference_scores(
-                model, _gmm_n_samples(df.shape[0]), df.shape[1]
+                model, _gmm_n_samples(df.shape[0], df.shape[1]), df.shape[1]
             )
             p_values = _tail_p_values(reference_scores, scores)
         res = np.where(p_values < alpha, -1, 1)
@@ -137,14 +137,19 @@ def sk_outliers(df, method, method_params={}):
     )
 
 
-def _gmm_n_samples(n_obs, min_samples=2000):
+def _gmm_n_samples(n_obs, n_features=1, min_samples=2000, max_draw_elements=2_000_000):
     """Calibration draws for GMM tail p-values.
 
     Wants enough draws to resolve small alpha (smallest searched is 0.005); min_samples
     keeps ~10 exceedances at alpha=0.005. Memory is bounded by chunked drawing in
-    _gmm_reference_scores, not by shrinking this count, so wide panels keep full resolution.
+    _gmm_reference_scores, but compute is not: scoring a full-covariance draw costs
+    O(n_features^2), so on wide panels the uncapped count (20k+ draws, often 20-100x
+    n_obs) made calibration 5-15x the cost of the fit itself. max_draw_elements caps
+    draws * n_features, falling back toward min_samples as the panel widens.
     """
-    return int(max(min(max(20000, 20 * n_obs), 100000), min_samples))
+    n_samples = min(max(20000, 20 * n_obs), 100000)
+    n_samples = min(n_samples, max_draw_elements // max(int(n_features), 1))
+    return int(max(n_samples, min_samples))
 
 
 def _gmm_reference_scores(model, n_samples, n_features, max_elements=5_000_000):
@@ -1827,7 +1832,7 @@ def gaussian_mixture(
         return -np.log(np.maximum(np.atleast_1d(density), 1e-300))
 
     rng = np.random.default_rng(42)
-    n_sim = _gmm_n_samples(n)
+    n_sim = _gmm_n_samples(n, d)
     comp = rng.choice(n_components, size=n_sim, p=weights / weights.sum())
     simulated = np.empty((n_sim, d))
     for i in range(n_components):
