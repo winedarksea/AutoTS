@@ -226,6 +226,20 @@ class TestFactorModeReviewItems(unittest.TestCase):
         ):
             shifted, _info = model._apply_safety_layer(live_trend.copy(), 28)
         np.testing.assert_allclose(shifted[0], anchor_now, rtol=1e-6)
+    def test_deseasonalized_inner_folds_ignore_full_fit_periodic(self):
+        # the full-fit seasonality/holidays were estimated with post-origin
+        # data; an inner fold's anchor must not read them
+        model = _fit(self.df, factor_config={'origin_anchor': 'deseasonalized'})
+        horizon = model._fit_horizon
+        before = model._factor_inner_folds(horizon)
+        self.assertTrue(before)
+        for key in ('seasonality', 'holidays'):
+            if model._components.get(key) is not None:
+                model._components[key] = model._components[key] + 1e3
+        after = model._factor_inner_folds(horizon)
+        for fold_before, fold_after in zip(before['tva_folds'], after['tva_folds']):
+            np.testing.assert_array_equal(fold_before, fold_after)
+
 
 if __name__ == '__main__':
     unittest.main()

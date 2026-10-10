@@ -1826,7 +1826,7 @@ class TVA:
                 if self._components.get(key) is not None
                 else np.zeros_like(values)
             )
-            for key in ('seasonality', 'holidays', 'level_shifts', 'trend')
+            for key in ('level_shifts', 'trend')
         }
         from autots.evaluator.tva import seasonal as sn_mod
 
@@ -1851,11 +1851,18 @@ class TVA:
                 - comps['trend'][: origin + 1]
                 - shift_level[: origin + 1]
             )
-            periodic = sn_mod.tile_profile(
-                sn_mod.empirical_profile(residual, season, 2), H
-            )
+            profile = sn_mod.empirical_profile(residual, season, 2)
+            periodic = sn_mod.tile_profile(profile, H)
             if periodic is None:
                 periodic = np.zeros((H, values.shape[1]), dtype=float)
+                history_periodic = np.zeros((origin + 1, values.shape[1]))
+            else:
+                # the deseasonalized anchor's history side gets the same
+                # pre-origin profile: the full-fit seasonality/holidays were
+                # estimated with post-origin data and would leak into the fold
+                history_periodic = profile[
+                    np.arange(-(origin + 1), 0) % profile.shape[0]
+                ]
             # a level shift is a step: the only thing knowable at the origin is
             # that it persists
             add_back = periodic + shift_level[origin][np.newaxis, :]
@@ -1864,7 +1871,7 @@ class TVA:
                     trend + add_back,
                     periodic,
                     upto=origin,
-                    in_sample_periodic=comps['seasonality'] + comps['holidays'],
+                    in_sample_periodic=history_periodic,
                 )[0]
             )
             sn_folds.append(seasonal_naive_forecast(values[: origin + 1], H, season))
@@ -2415,7 +2422,10 @@ class TVA:
 
         Args:
             horizon: forecast horizon the covariance should describe. Defaults
-                to ``forecast_horizon``.
+                to ``forecast_horizon``. When history is too short to roll
+                origins at that horizon, falls back to the (capped) fit horizon
+                rather than returning None; ``info['horizon']`` is the horizon
+                actually estimated and ``info['requested_horizon']`` the ask.
 
         Returns:
             ``(sigma, info)`` with ``sigma`` an (N, N) covariance in the raw
@@ -2428,13 +2438,27 @@ class TVA:
         """
         if self._components is None or self._df_original is None:
             return None
-        H = int(horizon) if horizon else int(self._fit_horizon)
-        H = max(H, 1)
+        requested = max(int(horizon) if horizon else int(self.forecast_horizon), 1)
+        # factor/none cap _fit_horizon below forecast_horizon on long asks; a
+        # covariance of the shorter window is a better stand-in than none, but
+        # only when the requested one can't be estimated at all
+        candidates = [requested]
+        if int(self._fit_horizon) < requested:
+            candidates.append(max(int(self._fit_horizon), 1))
         try:
-            if self.trend_network_type == 'factor' and self._factor_network is not None:
-                return self._factor_forecast_covariance(H)
-            if self.trend_network_type == 'none':
-                return self._numpy_forecast_covariance(H)
+            for H in candidates:
+                if (
+                    self.trend_network_type == 'factor'
+                    and self._factor_network is not None
+                ):
+                    result = self._factor_forecast_covariance(H)
+                elif self.trend_network_type == 'none':
+                    result = self._numpy_forecast_covariance(H)
+                else:
+                    return None
+                if result is not None:
+                    result[1]['requested_horizon'] = int(requested)
+                    return result
         except Exception as exc:  # pragma: no cover - never fail a forecast
             warnings.warn(
                 f"TVA forecast covariance could not be assembled; callers will "
@@ -2642,7 +2666,7 @@ class TVA:
         return sigma, info
 
     def _structural_reconciliation_W(
-        self, S: np.ndarray, aggregate_sigma=None
+        self, S: np.ndarray, aggregate_sigma=None, horizon: int = None
     ) -> Optional[np.ndarray]:
         """(L, L) MinT weighting from the forecast covariance, or None.
 
@@ -2669,6 +2693,8 @@ class TVA:
                 independently-produced aggregate-level base forecasts. Without
                 it the returned W is the rank-deficient form plus a numerical
                 ridge, which reconciles identically to ``W = I``.
+            horizon: length of the forecast being reconciled; passed through
+                to :meth:`forecast_covariance`.
 
         Returns:
             (L, L) covariance, or None when the mode is off or no forecast
@@ -2679,7 +2705,7 @@ class TVA:
             mode = RECONCILIATION_COVARIANCE_AUTO
         if mode != 'structural':
             return None
-        cov = self.forecast_covariance()
+        cov = self.forecast_covariance(horizon=horizon)
         if cov is None:
             return None
         sigma = np.asarray(cov[0], dtype=np.float64)
@@ -2848,7 +2874,7 @@ class TVA:
                 # from the bottom level: that input is already coherent, so no
                 # W can move it and assembling one would be pure cost.
                 W = self._structural_reconciliation_W(
-                    S, aggregate_sigma=aggregate_sigma
+                    S, aggregate_sigma=aggregate_sigma, horizon=len(full_df)
                 )
         elif isinstance(residuals, pd.DataFrame):
             residuals = residuals.values
