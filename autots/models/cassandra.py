@@ -829,7 +829,7 @@ class Cassandra(ModelObject):
                     self.df.shape[1], len(self.ar_lags), -1
                 )
                 trend_residuals = trend_residuals - self._ar_in_sample(
-                    self.df, fill="bfill"
+                    self.df, fill="causal"
                 )
         else:
             # RUN LINEAR MODEL, WHEN NO LOOPED FEATURES
@@ -945,7 +945,7 @@ class Cassandra(ModelObject):
             return None
         return ar_season_matrix(self._ar_season_features(dates), self.ar_season_keep)[0]
 
-    def _ar_in_sample(self, source_df, fill="bfill"):
+    def _ar_in_sample(self, source_df, fill="causal"):
         """One-step AR contribution sum_l gamma_l(t) * source(t - l) over source dates."""
         lag_array = build_lag_array(source_df, self.ar_lags, self.frequency, fill=fill)
         gamma = ar_gamma(
@@ -1737,7 +1737,7 @@ class Cassandra(ModelObject):
         )
         if self.ar_level:
             self.trend_train = self.trend_train - self._ar_in_sample(
-                self.df, fill="bfill"
+                self.df, fill="causal"
             )
         if self.ar_residual:
             # refresh the u history the recursion starts from, trend model gets the smooth part
@@ -2113,7 +2113,7 @@ class Cassandra(ModelObject):
             hist_dates = forecast_index[forecast_index.isin(df.index)]
             if len(hist_dates) > 0:
                 if self.ar_level:
-                    in_sample = self._ar_in_sample(df, fill="bfill")
+                    in_sample = self._ar_in_sample(df, fill="causal")
                 else:
                     in_sample = self._ar_in_sample(self.ar_u_history, fill=0.0)
                 ar_component.loc[hist_dates] = in_sample.reindex(hist_dates).to_numpy()

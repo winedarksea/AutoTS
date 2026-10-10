@@ -30,16 +30,25 @@ def build_lag_array(df, lags, frequency=None, fill=None):
     only when no frequency can be determined.
 
     Args:
-        fill (None, 'bfill', or float): how to fill dates with no lagged value
+        fill (None, 'causal', or float): how to fill dates with no lagged value.
+            'causal' uses the most recent observation at or before t - lag, so gaps never
+            borrow a later (or the current) value; only the head, which has no history
+            that far back, takes the first observation. A plain bfill is deliberately not
+            offered: across a gap it fills lag 1 at t with y(t), leaking the current value.
     """
     freq = _usable_frequency(frequency, df.index)
+    causal = isinstance(fill, str) and fill == "causal"
+    if causal:
+        df = df.ffill()
     arrays = []
     for lag in lags:
         if freq is not None:
-            shifted = df.shift(int(lag), freq=freq).reindex(df.index)
+            shifted = df.shift(int(lag), freq=freq)
+            # method='ffill' takes the latest shifted label <= t, i.e. a source date <= t - lag
+            shifted = shifted.reindex(df.index, method="ffill" if causal else None)
         else:
             shifted = df.shift(int(lag))
-        if fill == "bfill":
+        if causal:
             shifted = shifted.bfill()
         elif fill is not None:
             shifted = shifted.fillna(fill)

@@ -65,6 +65,23 @@ class ARHelperTest(unittest.TestCase):
         self.assertTrue(np.isnan(lag2[idx[6]]) and np.isnan(lag2[idx[7]]))
         self.assertEqual(lag2[idx[8]], 6.0)
 
+    def test_causal_fill_never_uses_current_or_later_values(self):
+        idx = pd.date_range("2022-01-01", periods=10, freq="D")
+        df = pd.DataFrame({"a": np.arange(10.0)}, index=idx).drop(idx[[4, 5]])
+        lagged = build_lag_array(df, [1, 2], frequency="D", fill="causal")
+        lag1 = pd.Series(lagged[:, 0, 0], index=df.index)
+        lag2 = pd.Series(lagged[:, 0, 1], index=df.index)
+        # a bfill would give lag1 at idx[6] = y(idx[6]) = 6, the current observation
+        self.assertEqual(lag1[idx[6]], 3.0)
+        self.assertEqual(lag2[idx[6]], 3.0)
+        self.assertEqual(lag2[idx[7]], 3.0)
+        self.assertEqual(lag2[idx[8]], 6.0)
+        # head has no history: first observation, not a later one
+        self.assertEqual(lagged[0, 0, 1], 0.0)
+        self.assertEqual(lagged[1, 0, 1], 0.0)
+        valid = np.asarray(df.index) >= np.asarray(idx[2])
+        self.assertTrue(np.all(lag1.to_numpy()[valid] < df["a"].to_numpy()[valid]))
+
     def test_history_tail_on_date_grid(self):
         idx = pd.date_range("2022-01-01", periods=6, freq="D")
         df = pd.DataFrame({"a": np.arange(6.0)}, index=idx).drop(idx[4])
