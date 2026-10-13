@@ -47,7 +47,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="autots",
-    version="1.0.4",
+    version="1.0.5",
     author="Colin Catlin",
     author_email="colin.catlin@syllepsis.live",
     description="Automated Time Series Forecasting",

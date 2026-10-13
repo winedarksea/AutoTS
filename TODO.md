@@ -1,5 +1,10 @@
 # 1.0.5 🇺🇦 🇺🇦 🇺🇦
-
+* Feature detection and trend forecasting: Added joint detection of slope changes and level shifts; improved changepoint handling around missing data; added adaptive seasonality fitting, trend damping, slope shrinkage, and wider intervals for possible future trend changes.
+* TVA: Added forecast origin anchoring and a configurable internal fit_horizon for factor and torch-free modes. Expanded factor forecasting, covariance estimation, and reconciliation behavior.
+* Cassandra: Fixed autoregressive forecasting on either observed levels or detrended residuals. Changed the default multicollinearity filter to off.
+* Anomaly detection: Added calibrated Gaussian mixture anomaly scores and improved handling of univariate and multivariate anomaly outputs. (why do LLMs like calibration so much?)
+* Time-series utilities and models: Improved changepoint algorithms and probabilistic outputs, two-point frequency inference, short-history handling in transformations
+* PWA dependencies: Updated the Rust dependency lockfile.
 
 ### New Model Checklist:
 * Add to ModelMonster in auto_model.py
