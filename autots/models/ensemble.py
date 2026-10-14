@@ -1419,9 +1419,16 @@ def EnsembleTemplateGenerator(
             models_pos = []
             tr_df = pd.DataFrame()
             for _ in range(n_dep):
-                cr_df = pd.DataFrame(per_series_des.idxmin()).transpose()
-                tr_df = pd.concat([tr_df, cr_df], axis=0)
-                models_pos.extend(per_series_des.idxmin().tolist())
+                # ties (e.g. many models scoring 0 on a flat series) and failed-model
+                # NaN exhaust a column early; pandas >= 3 raises on all-NA idxmin
+                remaining = per_series_des.dropna(axis=1, how='all')
+                if remaining.shape[1] == 0:
+                    break
+                best_per_series = remaining.idxmin()
+                tr_df = pd.concat(
+                    [tr_df, pd.DataFrame(best_per_series).transpose()], axis=0
+                )
+                models_pos.extend(best_per_series.tolist())
                 per_series_des[per_series_des == per_series_des.min()] = np.nan
             cur_mods = pd.Series(models_pos).value_counts()
             cur_mods = cur_mods.sort_values(ascending=False).head(1)

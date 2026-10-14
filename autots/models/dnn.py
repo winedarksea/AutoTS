@@ -86,6 +86,8 @@ class KerasRNN(object):
             raise ImportError(
                 "Tensorflow not available, install with pip install tensorflow."
             )
+        # process-global by design: AutoTS fits models sequentially, so clearing
+        # stops Keras graph/memory growth across many fits; seed matches np.random.seed use elsewhere
         tf.keras.backend.clear_session()
         tf.random.set_seed(self.random_seed)
         train_X = pd.DataFrame(X).to_numpy()
@@ -376,6 +378,8 @@ class Transformer(object):
             raise ImportError(
                 "Tensorflow not available, install with pip install tensorflow."
             )
+        # process-global by design: AutoTS fits models sequentially, so clearing
+        # stops Keras graph/memory growth across many fits; seed matches np.random.seed use elsewhere
         tf.keras.backend.clear_session()
         tf.random.set_seed(self.random_seed)
         train_X = pd.DataFrame(X).to_numpy()
@@ -463,6 +467,8 @@ class ElasticNetwork(object):
         from tensorflow.keras.layers import Dense, Layer
         from tensorflow.keras.regularizers import L1L2
 
+        # process-global by design: AutoTS fits models sequentially, so clearing
+        # stops Keras graph/memory growth across many fits; seed matches np.random.seed use elsewhere
         tf.keras.backend.clear_session()
         tf.random.set_seed(self.random_seed)
 

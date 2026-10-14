@@ -1848,7 +1848,7 @@ horizontal_post_processors = [
         "fillna": "fake_date",
         "transformations": {
             "0": "AlignLastValue",
-            "2": "HistoricValues",
+            "1": "HistoricValues",
         },
         "transformation_params": {
             "0": {

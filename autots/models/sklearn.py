@@ -38,7 +38,12 @@ try:
         def fit(self, X, y, **kwargs):
             """Fit, lowering min_samples only when the sklearn default would fail."""
             if self.min_samples is None and X.shape[1] + 1 > X.shape[0]:
+                # restore after fit so get_params()/clone() still see the user value
                 self.min_samples = max(2, X.shape[0] // 2)
+                try:
+                    return super().fit(X, y, **kwargs)
+                finally:
+                    self.min_samples = None
             return super().fit(X, y, **kwargs)
 
 except Exception:

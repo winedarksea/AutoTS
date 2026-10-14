@@ -2,6 +2,7 @@
 """Event DAG utilities for TimeSeriesFeatureDetector."""
 
 import copy
+import random
 from typing import Optional
 
 import numpy as np
@@ -121,17 +122,14 @@ def get_new_event_dag_params(method='random'):
         method = 'random'
     if method == 'default':
         return {}
-    rng = np.random
-    window = rng.choice([1, 'auto', 7, 14], p=[0.7, 0.15, 0.1, 0.05])
-    if not isinstance(window, str):
-        window = int(window)
+    window = random.choices([1, 'auto', 7, 14], [0.7, 0.15, 0.1, 0.05])[0]
     return {
         'magnitude_normalization': (
-            'series_scale' if rng.random() < 0.25 else 'none'
+            'series_scale' if random.random() < 0.25 else 'none'
         ),
         'cluster_window_periods': window,
-        'tag_recurring_doy': bool(rng.random() < 0.2),
-        'slope_horizon_periods': int(rng.choice([28, 90, 365], p=[0.2, 0.6, 0.2])),
+        'tag_recurring_doy': random.random() < 0.2,
+        'slope_horizon_periods': random.choices([28, 90, 365], [0.2, 0.6, 0.2])[0],
     }
 
 
