@@ -101,6 +101,35 @@ class TrendMixin:
             slope_info,
         )
 
+    @staticmethod
+    def _validate_prelim_level_shift(value):
+        if value == 'auto':
+            return 'auto'
+        return bool(value)
+
+    def _use_prelim_level_shift(self):
+        setting = getattr(self, 'prelim_level_shift', False)
+        if setting == 'auto':
+            return self.level_shift_params.get('window_method') == 'linear_gap'
+        return bool(setting)
+
+    def _preliminary_level_shift_dates(self, df_work, rough_seasonality):
+        """Level shift dates from anomaly-removed data, before final seasonality.
+
+        Fed to the final seasonality fit as trend-prior steps so the seasonal
+        regression can't absorb part of each step first.
+        """
+        df_without_anomalies = self._remove_anomalies_in_residual_space(
+            df_work, rough_seasonality
+        )
+        detector = LevelShiftMagic(**self.level_shift_params).fit(df_without_anomalies)
+        candidates = detector.extract_level_shift_dates(df_without_anomalies)
+        return {
+            col: [entry['date'] for entry in entries]
+            for col, entries in candidates.items()
+            if entries
+        }
+
     def _detect_level_shifts(self, residual_df):
         self.level_shift_detector = LevelShiftMagic(**self.level_shift_params)
         self.level_shift_detector.fit(residual_df)

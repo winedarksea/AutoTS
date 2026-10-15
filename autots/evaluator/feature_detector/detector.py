@@ -150,6 +150,14 @@ class TimeSeriesFeatureDetector(
         trend mode uses its own prior and ignores this. TVA 'factor' mode turns
         it off: there it caused forecast blow-ups (MASE up to ~1e5) on the TVA
         benchmark while helping the detector's own forecast.
+    prelim_level_shift : bool or 'auto', default=False
+        Run LevelShiftMagic (with ``level_shift_params``) on the anomaly-removed
+        data before the final seasonality fit and pass its dates in as steps of
+        the seasonality trend prior. Without it the day-of-year seasonality fit
+        can absorb a step (notably near a year boundary) before level shifts are
+        detected. Opt-in; 'auto' enables it only for ``window_method='linear_gap'``
+        params, whose strict thresholds need it (with loose legacy params it
+        mainly adds false positives).
     """
 
     TEMPLATE_VERSION = "1.2"
@@ -174,6 +182,7 @@ class TimeSeriesFeatureDetector(
         holiday_countries=None,
         trend_damping='auto',
         seasonality_trend_prior=True,
+        prelim_level_shift=False,
     ):
         # Set detection_mode first so it can be used in other initializations
         self.detection_mode = detection_mode
@@ -283,6 +292,11 @@ class TimeSeriesFeatureDetector(
 
         # Ensure level_shift_params uses the correct output mode
         if level_shift_params is None:
+            # With LevelShiftMagic's edge/selection bugs fixed this legacy default
+            # yields ~2.1 validated false shifts per 2-year noise series (was ~0.6).
+            # Opt-in alternative measured recall 1.00 at ~0.1: window_method=
+            # 'linear_gap', alpha=3.5, scales=[14, 30, 60], alignment=
+            # 'linear_robust', tail_scan=True with prelim_level_shift=True.
             self.level_shift_params = {
                 'window_size': 364,
                 'alpha': 1.8,
@@ -338,6 +352,7 @@ class TimeSeriesFeatureDetector(
         self.event_dag_params = resolve_event_dag_params(event_dag_params)
         self.trend_damping = validate_trend_damping(trend_damping)
         self.seasonality_trend_prior = bool(seasonality_trend_prior)
+        self.prelim_level_shift = self._validate_prelim_level_shift(prelim_level_shift)
 
         # Model artifacts
         self.scaler = None
@@ -439,6 +454,11 @@ class TimeSeriesFeatureDetector(
         rough_residual, rough_seasonality = self._initial_decomposition(df_work)
 
         # Step 5: Final seasonality fit with holiday effects
+        prelim_dates = (
+            self._preliminary_level_shift_dates(df_work, rough_seasonality)
+            if self._use_prelim_level_shift()
+            else None
+        )
         (
             final_residual,
             final_seasonality,
@@ -446,7 +466,12 @@ class TimeSeriesFeatureDetector(
             holiday_component_scaled,
             holiday_coefficients,
             holiday_splash_impacts_scaled,
-        ) = self._final_seasonality_fit(df_work, rough_residual, rough_seasonality)
+        ) = self._final_seasonality_fit(
+            df_work,
+            rough_residual,
+            rough_seasonality,
+            level_shift_dates=prelim_dates or None,
+        )
 
         # Step 6-7: Trend and level shift detection
         # Pass holiday component so we know holidays are already removed in final_residual
@@ -1871,6 +1896,9 @@ class TimeSeriesFeatureDetector(
                 ['auto', None, 0.98, 0.995], [0.7, 0.1, 0.1, 0.1]
             )[0],
             'seasonality_trend_prior': random.choices([True, False], [0.8, 0.2])[0],
+            'prelim_level_shift': random.choices(
+                [False, 'auto', True], [0.6, 0.3, 0.1]
+            )[0],
         }
 
     def _apply_detector_params(self, params):
@@ -1943,6 +1971,10 @@ class TimeSeriesFeatureDetector(
             ) or {'window': 14, 'pad': 2}
         if 'seasonality_trend_prior' in params:
             self.seasonality_trend_prior = bool(params['seasonality_trend_prior'])
+        if 'prelim_level_shift' in params:
+            self.prelim_level_shift = self._validate_prelim_level_shift(
+                params['prelim_level_shift']
+            )
         # None in a template means undamped (templates saved before 'auto')
         if 'trend_damping' in params:
             self.trend_damping = validate_trend_damping(params['trend_damping'])

@@ -149,6 +149,7 @@ class FeatureDetectionOptimizer:
             'smoothing_window': detector.smoothing_window,
             'extended_anomaly_params': copy.deepcopy(detector.extended_anomaly_params),
             'seasonality_trend_prior': detector.seasonality_trend_prior,
+            'prelim_level_shift': getattr(detector, 'prelim_level_shift', False),
         }
 
     def _record_evaluation(
@@ -390,6 +391,7 @@ class FeatureDetectionOptimizer:
                 'smoothing_window',
                 'extended_anomaly_params',
                 'seasonality_trend_prior',
+                'prelim_level_shift',
             ),
         )
 
@@ -1820,12 +1822,29 @@ class FeatureDetectionOptimizer:
 
         if 'alignment' in mutated and rng.random() < 0.2:
             mutated['alignment'] = rng.choice(
-                ['average', 'last_value', 'rolling_diff', 'rolling_diff_3nn']
+                [
+                    'average',
+                    'last_value',
+                    'rolling_diff',
+                    'rolling_diff_3nn',
+                    'median',
+                    'linear_robust',
+                ]
             )
         if 'window_method' in mutated and rng.random() < 0.2:
             mutated['window_method'] = rng.choice(
-                ['overlap', 'exclusive', 'diff_overlap']
+                ['overlap', 'exclusive', 'diff_overlap', 'linear_gap']
             )
+        # linear_gap alpha is a robust z (3-6), legacy alpha a std multiplier
+        if mutated.get('window_method') == 'linear_gap':
+            mutated['alpha'] = min(max(float(mutated.get('alpha', 4.0)), 3.0), 6.0)
+            if rng.random() < 0.2:
+                mutated['scales'] = rng.choice(
+                    [None, [30], [60], [7, 14, 30, 60], [14, 30, 60]]
+                )
+            for flag in ('deseasonalize', 'tail_scan'):
+                if rng.random() < 0.15:
+                    mutated[flag] = not bool(mutated.get(flag, False))
 
         mutated['output'] = 'multivariate'
         return mutated

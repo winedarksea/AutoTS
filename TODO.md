@@ -5,6 +5,10 @@
 * Anomaly detection: Added calibrated Gaussian mixture anomaly scores and improved handling of univariate and multivariate anomaly outputs. (why do LLMs like calibration so much?)
 * Time-series utilities and models: Improved changepoint algorithms and probabilistic outputs, two-point frequency inference, short-history handling in transformations
 * PWA dependencies: Updated the Rust dependency lockfile.
+* LevelShiftMagic bug fixes that **change outputs at the defaults**: per-column selection (shift ids were shared across columns, a row-0 group stalled selection, one extra shift was kept), one flag per step (exact ties on integer data flagged both sides), detection windows need max(3, window_size // 3) points so series edges are no longer flagged and the last row can't leak an offset into forecasts, univariate mode combines per-series squared scores so opposite shifts no longer cancel and only individually significant series are corrected. Also: diff_overlap sizing (was ~0), remove_at_shift now sizes from raw data and fills only the removed points.
+* LevelShiftMagic: opt-in window_method="linear_gap" (detrended multiscale MOSUM with robust z, bump test spike rejection), plus scales, deseasonalize, anomaly_window, tail_scan, alignment "median"/"linear_robust" and correction_mode="auto" (safe ratio for non-negative series). No slower than "overlap" at the defaults; benchmark in examples/level_shift_benchmark.py.
+  * The feature detector's default level shift params (window 364, alpha 1.8) relied on those bugs: on noise-only series its validated level shifts rose from ~0.6 to ~2.1 per 2-year series at unchanged recall. Defaults are left as-is; the opt-in linear_gap config (alpha 3.5, scales [14, 30, 60], linear_robust, tail_scan) with prelim_level_shift=True measured recall 1.00 (T=730) / 0.98 (T=1095) at 0.04-0.15.
+* TimeSeriesFeatureDetector: opt-in prelim_level_shift (False default; 'auto' = on for linear_gap params) runs level shift detection before the final seasonality fit, which otherwise absorbs steps near year boundaries.
 
 ### New Model Checklist:
 * Add to ModelMonster in auto_model.py
