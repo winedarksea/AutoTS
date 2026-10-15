@@ -15,7 +15,6 @@ stored slopes are both in steps.
 import numpy as np
 import pandas as pd
 
-
 # Calendar damping used by trend_damping='auto'. Undamped extrapolation of a
 # precise last-segment slope overshoots at long horizons: on the LRP review panel
 # 0.99/day cut 366-730 d MASE to 0.23-0.82x of undamped, and on load_daily /
@@ -37,10 +36,14 @@ def validate_trend_damping(trend_damping):
     if isinstance(trend_damping, str):
         if trend_damping == 'auto':
             return 'auto'
-        raise ValueError(f"trend_damping must be 'auto', a float in (0, 1] or None, got {trend_damping!r}")
+        raise ValueError(
+            f"trend_damping must be 'auto', a float in (0, 1] or None, got {trend_damping!r}"
+        )
     phi = float(trend_damping)
     if not 0.0 < phi <= 1.0:
-        raise ValueError(f"trend_damping must be 'auto', a float in (0, 1] or None, got {trend_damping!r}")
+        raise ValueError(
+            f"trend_damping must be 'auto', a float in (0, 1] or None, got {trend_damping!r}"
+        )
     return phi
 
 

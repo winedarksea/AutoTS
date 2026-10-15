@@ -5011,6 +5011,14 @@ class LevelShiftMagic(EmptyTransformer):
                 max_post=max(20, anomaly_window),
                 last_break_rows=last_break,
             )
+            # max_level_shifts is per series: tail breaks only fill free slots
+            shifts_per_column = np.bincount(cols, minlength=values.shape[1])
+            has_slot = shifts_per_column[tail_cols] < self.max_level_shifts
+            tail_rows, tail_cols, tail_gaps = (
+                tail_rows[has_slot],
+                tail_cols[has_slot],
+                tail_gaps[has_slot],
+            )
             rows_f = np.concatenate([rows_f, tail_rows])
             cols = np.concatenate([cols, tail_cols])
             sizes = np.concatenate([sizes, tail_gaps])

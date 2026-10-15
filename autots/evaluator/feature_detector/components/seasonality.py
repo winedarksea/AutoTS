@@ -94,7 +94,9 @@ class SeasonalityMixin:
             trend_prior = trend_prior_override.reindex(
                 index=df.index, columns=df.columns
             ).fillna(0.0)
-        elif self._uses_joint_trend() and self._joint_trend_settings()['seasonal_prior']:
+        elif (
+            self._uses_joint_trend() and self._joint_trend_settings()['seasonal_prior']
+        ):
             trend_prior = self._joint_seasonal_trend_prior(df)
         elif getattr(self, 'seasonality_trend_prior', True):
             trend_prior = self._estimate_seasonality_adjusted_trend(

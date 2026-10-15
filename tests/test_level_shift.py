@@ -126,6 +126,14 @@ class TestLinearGapDetection(unittest.TestCase):
         self.assertEqual(len(shifts), 1)
         self.assertLessEqual(abs(shifts[0][0] - (T - 10)), 2)
 
+    def test_tail_scan_respects_max_level_shifts(self):
+        y = 100 + self.noise() + 10 * (TIME >= 400) + 8 * (TIME >= T - 10)
+        df = _frame(y)
+        model = LevelShiftMagic(tail_scan=True, **dict(LINEAR_GAP, max_level_shifts=1))
+        self.assertEqual(len(_shift_rows(model.fit(df), df)[0]), 1)
+        model = LevelShiftMagic(tail_scan=True, **dict(LINEAR_GAP, max_level_shifts=2))
+        self.assertEqual(len(_shift_rows(model.fit(df), df)[0]), 2)
+
     def test_deseasonalize_with_weekly_pattern(self):
         weekly = 3 * np.sin(2 * np.pi * TIME / 7)
         y = 100 + weekly + self.noise() + 6 * (TIME >= 350)
@@ -147,6 +155,15 @@ class TestLinearGapDetection(unittest.TestCase):
         self.assertGreater(np.abs(lvlshft[:, 0]).max(), 5)
         self.assertGreater(np.abs(lvlshft[:, 1]).max(), 5)
         self.assertEqual(np.abs(lvlshft[:, 2]).max(), 0)
+
+    def test_univariate_shared_shift_not_diluted_by_missing_series(self):
+        shifted = [100 + self.noise() + 3 * (TIME >= 400) for _ in range(3)]
+        missing = [np.full(T, np.nan) for _ in range(30)]
+        df = _frame(*shifted, *missing)
+        model = LevelShiftMagic(output="univariate", **LINEAR_GAP).fit(df)
+        for i in range(3):
+            rows = [row for row, _ in _shift_rows(model, df)[i]]
+            self.assertTrue(any(abs(row - 400) <= 2 for row in rows), rows)
 
 
 class TestLegacyBugFixes(unittest.TestCase):
@@ -287,6 +304,26 @@ class TestFeatureDetectorPrelimPass(unittest.TestCase):
         found = 0
         for col, position in zip(df.columns, positions):
             # entries are (date, magnitude, status, shared) tuples
+            rows = [df.index.get_loc(e[0]) for e in detector.level_shifts.get(col, [])]
+            found += any(abs(r - position) <= 3 for r in rows)
+        self.assertGreaterEqual(found, 3)
+
+    def test_default_detector_recovers_year_boundary_step(self):
+        import warnings
+
+        from autots.evaluator.feature_detector import TimeSeriesFeatureDetector
+
+        rng = np.random.default_rng(1)
+        t = TIME[:, None]
+        base = 10 + np.sin(2 * np.pi * t / 7) + 2 * np.sin(2 * np.pi * t / 365.25)
+        positions = np.array([354, 362, 372, 374])
+        values = base + rng.normal(0, 1, (T, 4)) + (t >= positions) * -5.0
+        df = pd.DataFrame(values, index=INDEX, columns=[f"s{i}" for i in range(4)])
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            detector = TimeSeriesFeatureDetector().fit(df)
+        found = 0
+        for col, position in zip(df.columns, positions):
             rows = [df.index.get_loc(e[0]) for e in detector.level_shifts.get(col, [])]
             found += any(abs(r - position) <= 3 for r in rows)
         self.assertGreaterEqual(found, 3)

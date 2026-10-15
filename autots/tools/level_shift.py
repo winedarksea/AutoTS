@@ -378,8 +378,13 @@ def detect_multiscale_shared(values, scales, alpha, max_shifts, anomaly_window=1
         if T < 2 * min_window_points(N) + 1:
             continue
         gap, z = _block_scale_scores(prefix_sums, values, N)
-        abs_z = np.abs(np.nan_to_num(z))
-        combined = np.sqrt(np.mean(abs_z**2, axis=1, keepdims=True))
+        # average only over series with a valid score at each date, so missing
+        # series don't dilute a shared shift
+        valid_count = np.isfinite(z).sum(axis=1, keepdims=True)
+        abs_z = np.abs(np.nan_to_num(z, nan=0.0, posinf=0.0, neginf=0.0))
+        combined = np.sqrt(
+            np.sum(abs_z**2, axis=1, keepdims=True) / np.maximum(valid_count, 1)
+        )
         penalty = scale_penalty(T, N)
         dates, _ = thresholded_peaks(combined, alpha + penalty, N)
         dates = dates[~dilate(taken_dates, max(3, N // 2))[dates, 0]]

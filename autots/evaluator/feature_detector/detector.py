@@ -150,14 +150,14 @@ class TimeSeriesFeatureDetector(
         trend mode uses its own prior and ignores this. TVA 'factor' mode turns
         it off: there it caused forecast blow-ups (MASE up to ~1e5) on the TVA
         benchmark while helping the detector's own forecast.
-    prelim_level_shift : bool or 'auto', default=False
+    prelim_level_shift : bool or 'auto', default='auto'
         Run LevelShiftMagic (with ``level_shift_params``) on the anomaly-removed
         data before the final seasonality fit and pass its dates in as steps of
         the seasonality trend prior. Without it the day-of-year seasonality fit
         can absorb a step (notably near a year boundary) before level shifts are
-        detected. Opt-in; 'auto' enables it only for ``window_method='linear_gap'``
-        params, whose strict thresholds need it (with loose legacy params it
-        mainly adds false positives).
+        detected. 'auto' enables it only for ``window_method='linear_gap'``
+        params (the default), whose strict thresholds need it; with loose legacy
+        params it mainly adds false positives.
     """
 
     TEMPLATE_VERSION = "1.2"
@@ -182,7 +182,7 @@ class TimeSeriesFeatureDetector(
         holiday_countries=None,
         trend_damping='auto',
         seasonality_trend_prior=True,
-        prelim_level_shift=False,
+        prelim_level_shift='auto',
     ):
         # Set detection_mode first so it can be used in other initializations
         self.detection_mode = detection_mode
@@ -292,17 +292,17 @@ class TimeSeriesFeatureDetector(
 
         # Ensure level_shift_params uses the correct output mode
         if level_shift_params is None:
-            # With LevelShiftMagic's edge/selection bugs fixed this legacy default
-            # yields ~2.1 validated false shifts per 2-year noise series (was ~0.6).
-            # Opt-in alternative measured recall 1.00 at ~0.1: window_method=
-            # 'linear_gap', alpha=3.5, scales=[14, 30, 60], alignment=
-            # 'linear_robust', tail_scan=True with prelim_level_shift=True.
+            # The old default (window 364, alpha 1.8, rolling_diff) relied on
+            # LevelShiftMagic edge/selection bugs; with those fixed it gave ~2.1
+            # validated false shifts per 2-year noise series. This config, with
+            # the prelim pass, measured recall 1.00 (T=730) at 0.04-0.15.
             self.level_shift_params = {
-                'window_size': 364,
-                'alpha': 1.8,
-                'grouping_forward_limit': 3,
+                'window_method': 'linear_gap',
+                'alpha': 3.5,
+                'scales': [14, 30, 60],
+                'alignment': 'linear_robust',
                 'max_level_shifts': 10,
-                'alignment': 'rolling_diff',
+                'tail_scan': True,
                 'output': self.detection_mode,
             }
         else:
@@ -1897,7 +1897,7 @@ class TimeSeriesFeatureDetector(
             )[0],
             'seasonality_trend_prior': random.choices([True, False], [0.8, 0.2])[0],
             'prelim_level_shift': random.choices(
-                [False, 'auto', True], [0.6, 0.3, 0.1]
+                ['auto', False, True], [0.7, 0.2, 0.1]
             )[0],
         }
 

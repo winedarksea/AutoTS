@@ -129,7 +129,9 @@ class JointTrendModel:
         if self._base_basis is None:
             left, singular, _ = np.linalg.svd(self.base, full_matrices=False)
             self._base_singular_max = float(singular.max()) if singular.size else 0.0
-            tolerance = self._base_singular_max * max(self.base.shape) * np.finfo(float).eps
+            tolerance = (
+                self._base_singular_max * max(self.base.shape) * np.finfo(float).eps
+            )
             self._base_basis = left[:, singular > tolerance]
         return self._base_basis
 

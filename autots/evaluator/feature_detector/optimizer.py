@@ -149,7 +149,7 @@ class FeatureDetectionOptimizer:
             'smoothing_window': detector.smoothing_window,
             'extended_anomaly_params': copy.deepcopy(detector.extended_anomaly_params),
             'seasonality_trend_prior': detector.seasonality_trend_prior,
-            'prelim_level_shift': getattr(detector, 'prelim_level_shift', False),
+            'prelim_level_shift': getattr(detector, 'prelim_level_shift', 'auto'),
         }
 
     def _record_evaluation(
