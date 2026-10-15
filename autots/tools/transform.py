@@ -2,6 +2,7 @@
 
 import random
 import warnings
+from collections.abc import Mapping
 import numpy as np
 import pandas as pd
 from autots.tools.impute import FillNA, df_interpolate
@@ -49,6 +50,7 @@ from autots.tools.fast_kalman import KalmanFilter
 from autots.tools.fast_kalman_params import new_kalman_params
 from autots.tools.shaping import infer_frequency
 from autots.tools.holiday import holiday_flag
+from autots.tools.holiday_anomaly import named_holiday_suppression_mask
 from autots.tools.fft import FFT as fft_class
 from autots.tools.percentile import nan_quantile
 from autots.tools.fir_filter import (
@@ -3580,12 +3582,16 @@ class AnomalyRemoval(EmptyTransformer):
             method_params (dict): parameters specific to the method, use `.get_new_params()` to see potential models
             fillna (str): how to fill anomaly values removed
             isolated_only (bool): if True, only removal standalone anomalies
-            holiday_dates (set or None): Optional set/list of known holiday dates.
-                Anomalies near these dates can be un-flagged.
+            holiday_dates (set, dict or None): Known holiday dates, or
+                {series: {holiday_name: dates}} for per-series annual comparisons.
+                Named holidays retain anomalies with fewer than two other peer years.
             holiday_proximity_days (int): +/- day window around holiday dates.
             holiday_override_strength (float or None): anomalies this many times
                 stronger than the other flagged points in the holiday windows
                 survive suppression. None restores unconditional suppression.
+                Named input compares the same holiday and day offset in other years;
+                exceptional residual magnitudes also survive because rolling scores
+                can hide amplitude differences. Flat dates retain pooled comparisons.
             two_pass (bool): if True, run liberal candidate detection then local validation.
             liberal_alpha_multiplier (float): alpha multiplier for first-pass detection.
             n_jobs (int): multiprocessing jobs, used by some methods
@@ -3639,11 +3645,13 @@ class AnomalyRemoval(EmptyTransformer):
             self.anomalies[mask_replace] = 1
 
         if self.holiday_dates is not None:
-            self._filter_holiday_proximate_anomalies()
+            self._filter_holiday_proximate_anomalies(
+                observed=df.notna() if isinstance(self.holiday_dates, Mapping) else None
+            )
 
         return self
 
-    def _filter_holiday_proximate_anomalies(self):
+    def _filter_holiday_proximate_anomalies(self, observed=None):
         """Clear anomaly flags that occur near known holiday dates.
 
         Holiday-driven spikes are expected behaviour, not anomalies, so flags in
@@ -3653,6 +3661,17 @@ class AnomalyRemoval(EmptyTransformer):
         ``holiday_override_strength`` times stronger than the other flagged
         points in the holiday windows are therefore kept.
         """
+        if isinstance(self.holiday_dates, Mapping):
+            if observed is None:
+                observed = self.df_anomaly.notna()
+            suppress = named_holiday_suppression_mask(
+                self.anomalies, self._normalized_strengths(), observed,
+                self.holiday_dates, self.holiday_proximity_days,
+                self.holiday_override_strength, shared=self.output == 'univariate',
+                residuals=self.df_anomaly,
+            )
+            self.anomalies = self.anomalies.mask(suppress & self.anomalies.eq(-1), 1)
+            return
         holiday_set = {pd.Timestamp(d) for d in self.holiday_dates}
         if not holiday_set:
             return

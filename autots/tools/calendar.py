@@ -9,6 +9,14 @@ import pandas as pd
 from autots.tools.lunar import moon_phase_df
 
 
+def _calendar_moon_phases(dates, epoch):
+    """Keep synthetic endpoint moons outside the calendar's requested range."""
+    padded_dates = dates.append(
+        pd.date_range(dates[-1] + pd.Timedelta(days=1), periods=60, freq='D')
+    )
+    return moon_phase_df(padded_dates, epoch=epoch).loc[dates]
+
+
 def lunar_from_lunar(new_moon):
     """Assumes continuous daily data and pre-needed start."""
     new_moon_dates = new_moon[new_moon == 1]
@@ -52,10 +60,11 @@ def gregorian_to_christian_lunar(datetime_index):
     else:
         datetime_input = datetime_index.sort_values()
     expanded_dates = pd.date_range(
-        datetime_input[0] - pd.Timedelta(days=365), datetime_input[-1], freq='D'
+        datetime_input[0].replace(month=1, day=1) - pd.DateOffset(years=1),
+        datetime_input[-1], freq='D'
     )
     min_year = np.min(expanded_dates.year)
-    moon_df = moon_phase_df(expanded_dates, epoch=2444238.5)
+    moon_df = _calendar_moon_phases(expanded_dates, epoch=2444238.5)
     lunar_months = lunar_from_lunar_full(moon_df['full_moon'])
     expanded_dates = pd.concat(
         [pd.Series(0, index=expanded_dates, name="date"), lunar_months], axis=1
@@ -81,10 +90,11 @@ def gregorian_to_chinese(datetime_index, epoch=2444238.5):
     else:
         datetime_input = datetime_index.sort_values()
     expanded_dates = pd.date_range(
-        datetime_input[0] - pd.Timedelta(days=365), datetime_input[-1], freq='D'
+        datetime_input[0].replace(month=1, day=1) - pd.DateOffset(years=1),
+        datetime_input[-1], freq='D'
     )
     min_year = np.min(expanded_dates.year)
-    moon_df = moon_phase_df(expanded_dates, epoch=epoch)
+    moon_df = _calendar_moon_phases(expanded_dates, epoch=epoch)
     lunar_months = lunar_from_lunar(moon_df['new_moon'])
     expanded_dates = pd.concat(
         [pd.Series(0, index=expanded_dates, name="date"), lunar_months], axis=1
@@ -266,15 +276,16 @@ def gregorian_to_hindu(datetime_index, method: str = "lunar"):
         datetime_input = pd.to_datetime(datetime_index).sort_values()
     else:
         datetime_input = datetime_index.sort_values()
-    # Expand date range to cover previous year for new moons
+    # Include the full prior year so scalar and ranged calls share year anchors.
     expanded_dates = pd.date_range(
-        datetime_input[0] - pd.Timedelta(days=400), datetime_input[-1], freq='D'
+        datetime_input[0].replace(month=1, day=1) - pd.DateOffset(years=1),
+        datetime_input[-1], freq='D'
     )
 
     # Calculate the Hindu year offset from the minimum Gregorian year
     min_year = np.min(expanded_dates.year)
     # Get moon phases
-    moon_df = moon_phase_df(expanded_dates, epoch=2444238.5)
+    moon_df = _calendar_moon_phases(expanded_dates, epoch=2444238.5)
 
     # Use the original lunar function but adjust the month numbering for Hindu calendar
     lunar_months = lunar_from_lunar(moon_df['new_moon'])
@@ -327,12 +338,13 @@ def gregorian_to_hindu(datetime_index, method: str = "lunar"):
 
         # Start with the original date range index
         date_range_index = pd.date_range(
-            datetime_input[0] - pd.Timedelta(days=400), datetime_input[-1], freq='D'
+            datetime_input[0].replace(month=1, day=1) - pd.DateOffset(years=1),
+            datetime_input[-1], freq='D'
         )
         full_moon_combined = pd.Series(0, index=date_range_index)
 
         for epoch in epochs:
-            moon_df_epoch = moon_phase_df(date_range_index, epoch=epoch)
+            moon_df_epoch = _calendar_moon_phases(date_range_index, epoch=epoch)
             full_moon_combined = full_moon_combined | moon_df_epoch['full_moon']
 
         expanded_dates = pd.concat(

@@ -128,9 +128,10 @@ class TimeSeriesFeatureDetector(
         - 'univariate': All series share common anomalies, holidays, changepoints, and level shifts
           (level shifts are detected on aggregated signal and scaled appropriately per series)
 
-    global_holiday_anomaly_suppression : bool, default=True
-        If True, anomaly detection suppresses holiday-proximate flags using a merged holiday
-        date set from all series. Set False to disable this suppression.
+    global_holiday_anomaly_suppression : bool or None, default=True
+        None scopes suppression per series and compares the same holiday in other
+        years, retaining flags with fewer than two peer years. True uses the legacy
+        merged dates and pooled strengths across holiday windows. False disables it.
     extended_anomaly_params : dict, default=None
         Opt-in second anomaly pass detecting multi-day/sustained patterns
         (see ExtendedAnomalyDetector). Disabled unless a truthy dict is given;
@@ -338,8 +339,9 @@ class TimeSeriesFeatureDetector(
         )
         self.smoothing_window = smoothing_window
         self.standardize = standardize
-        self.global_holiday_anomaly_suppression = bool(
-            global_holiday_anomaly_suppression
+        self.global_holiday_anomaly_suppression = (
+            None if global_holiday_anomaly_suppression is None
+            else bool(global_holiday_anomaly_suppression)
         )
         # Extended anomaly detection is opt-in: pass a truthy dict to enable it.
         # It is off by default because it labels sustained structure as anomalies,
@@ -391,6 +393,7 @@ class TimeSeriesFeatureDetector(
         self._holiday_regressors_temp = None
         self._holiday_regressor_columns = None
         self._holiday_dates_temp = {}
+        self._named_holiday_dates_temp = {}
         self.noise_changepoints = {}
         self.noise_to_signal_ratios = {}
         self.series_noise_levels = {}
@@ -995,6 +998,7 @@ class TimeSeriesFeatureDetector(
         self._holiday_regressors_temp = None
         self._holiday_regressor_columns = None
         self._holiday_dates_temp = {}
+        self._named_holiday_dates_temp = {}
         self._trend_prior_override = None
         self._joint_trend_details = {}
         self.transient_events = {}
@@ -1818,6 +1822,9 @@ class TimeSeriesFeatureDetector(
         # Holiday params
         holiday_params = HolidayDetector.get_new_params(method=method)
         holiday_params['output'] = 'multivariate'  # Ensure correct output mode
+        holiday_params['use_easter_holidays'] = random.choices(
+            [True, False], [0.1, 0.9]
+        )[0]
 
         # Anomaly params
         method_choice, method_params, _ = anomaly_new_params(method=method)
@@ -1886,7 +1893,7 @@ class TimeSeriesFeatureDetector(
             'standardize': random.choice([True, False]),
             'smoothing_window': random.choice([None, 3, 5, 7]),
             'global_holiday_anomaly_suppression': random.choices(
-                [True, False], [0.8, 0.2]
+                [None, True, False], [0.1, 0.7, 0.2]
             )[0],
             'extended_anomaly_params': extended_anomaly_params,
             'level_shift_validation': level_shift_validation,
@@ -1958,8 +1965,9 @@ class TimeSeriesFeatureDetector(
         if 'smoothing_window' in params:
             self.smoothing_window = params['smoothing_window']
         if 'global_holiday_anomaly_suppression' in params:
-            self.global_holiday_anomaly_suppression = bool(
-                params['global_holiday_anomaly_suppression']
+            suppression = params['global_holiday_anomaly_suppression']
+            self.global_holiday_anomaly_suppression = (
+                None if suppression is None else bool(suppression)
             )
         if 'extended_anomaly_params' in params:
             self.extended_anomaly_params = (

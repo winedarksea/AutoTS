@@ -21,6 +21,7 @@ from autots.tools.anomaly_utils import (
 )
 from autots.tools.transform import RandomTransform, GeneralTransformer
 from autots.tools.impute import FillNA
+from autots.tools.easter import easter_offsets, extract_easter_holidays
 from autots.evaluator.auto_model import random_model
 from autots.evaluator.auto_model import back_forecast
 
@@ -298,6 +299,7 @@ class HolidayDetector(object):
         min_holidays_per_series: int = 1,
         max_holidays_per_series: int = None,
         holiday_selection_strategy: str = "score",
+        use_easter_holidays: bool = False,
     ):
         """Detect anomalies, then mark as holidays (events, festivals, etc) any that reoccur to a calendar.
 
@@ -311,6 +313,7 @@ class HolidayDetector(object):
             threshold (float): percent of date occurrences that must be anomalous (0 - 1)
             splash_threshold (float): None, or % required, avg of nearest 2 neighbors to point
             use* (bool): whether to use these calendars for holiday detection
+            use_easter_holidays (bool): detect recurring Good Friday through Easter Monday effects.
             output (str): "multivariate" or "univariate", for univariate not all dates_to_holidays styles will work
             auto_relax (bool): if True, progressively relax threshold rules when very few holidays are detected.
             relax_threshold_floor (float): minimum threshold used during relaxed fallback rounds.
@@ -341,6 +344,7 @@ class HolidayDetector(object):
         self.use_islamic_holidays = use_islamic_holidays
         self.use_hebrew_holidays = use_hebrew_holidays
         self.use_hindu_holidays = use_hindu_holidays
+        self.use_easter_holidays = use_easter_holidays
         self.n_jobs = n_jobs
         self.output = output
         self.auto_relax = bool(auto_relax)
@@ -371,6 +375,7 @@ class HolidayDetector(object):
             "islamic_holidays",
             "hebrew_holidays",
             "hindu_holidays",
+            "easter_holidays",
         ]
 
     def _extract_holidays(
@@ -381,7 +386,7 @@ class HolidayDetector(object):
         threshold,
         splash_threshold,
     ):
-        return anomaly_df_to_holidays(
+        tables = anomaly_df_to_holidays(
             anomalies,
             splash_threshold=splash_threshold,
             threshold=threshold,
@@ -397,6 +402,13 @@ class HolidayDetector(object):
             use_hebrew_holidays=self.use_hebrew_holidays,
             use_hindu_holidays=self.use_hindu_holidays,
         )
+        easter_table = None
+        if getattr(self, 'use_easter_holidays', False):
+            easter_table = extract_easter_holidays(
+                anomalies, threshold, self.min_occurrences,
+                actuals=actuals, anomaly_scores=anomaly_scores,
+            )
+        return tables + (easter_table,)
 
     @staticmethod
     def _build_priority_scores(combined):
@@ -429,6 +441,8 @@ class HolidayDetector(object):
     @staticmethod
     def _calendar_rule_mask(calendar_name, row, dates_df):
         try:
+            if calendar_name == "easter_holidays":
+                return easter_offsets(dates_df.index).eq(row['easter_offset']).to_numpy()
             if calendar_name == "day_holidays":
                 if pd.isna(row.get("month")) or pd.isna(row.get("day")):
                     return None
@@ -641,6 +655,7 @@ class HolidayDetector(object):
             islamic_holidays=holidays["islamic_holidays"],
             hebrew_holidays=holidays["hebrew_holidays"],
             hindu_holidays=holidays["hindu_holidays"],
+            easter_holidays=holidays["easter_holidays"],
         )
         if flags is None or flags.empty:
             return pd.Series(0, index=df_cols, dtype=int)
@@ -728,6 +743,7 @@ class HolidayDetector(object):
             self.islamic_holidays,
             self.hebrew_holidays,
             self.hindu_holidays,
+            self.easter_holidays,
         ) = tables
 
     def detect(self, df):
@@ -975,6 +991,7 @@ class HolidayDetector(object):
             islamic_holidays=self.islamic_holidays,
             hebrew_holidays=self.hebrew_holidays,
             hindu_holidays=self.hindu_holidays,
+            easter_holidays=getattr(self, 'easter_holidays', None),
             max_features=max_features,
         )
 

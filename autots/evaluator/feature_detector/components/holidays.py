@@ -205,6 +205,7 @@ class HolidayMixin:
             'use_wkdom_holidays': True,
             'use_wkdeom_holidays': False,
             'use_lunar_holidays': False,
+            'use_easter_holidays': False,
             'use_lunar_weekday': False,
             'use_islamic_holidays': True,
             'use_hebrew_holidays': False,
@@ -253,6 +254,7 @@ class HolidayMixin:
         """
         self.holiday_detector = HolidayDetector(**self.holiday_params)
         holiday_regressors = pd.DataFrame(index=residual_df.index)
+        named_dates = {column: {} for column in residual_df.columns}
         try:
             self.holiday_detector.detect(residual_df)
             holiday_flags = self.holiday_detector.dates_to_holidays(
@@ -272,6 +274,30 @@ class HolidayMixin:
                 holiday_regressors = holiday_regressors.loc[
                     :, ~holiday_regressors.columns.duplicated()
                 ]
+            if self.global_holiday_anomaly_suppression is None:
+                holiday_occurrences = self.holiday_detector.dates_to_holidays(
+                    residual_df.index, style='long'
+                ).dropna(subset=['holiday_name', 'series'])
+                for (series_name, name), occurrences in holiday_occurrences.groupby(
+                    ['series', 'holiday_name']
+                ):
+                    targets = (
+                        residual_df.columns if self.detection_mode == 'univariate'
+                        else [series_name]
+                    )
+                    for column in targets:
+                        if column in named_dates:
+                            named_dates[column][name] = list(
+                                pd.DatetimeIndex(occurrences['date']).unique()
+                            )
+                if self.detection_mode == 'univariate':
+                    # Shared rules use the anomaly detector's synthetic column
+                    # name; broadcast their dates back to the input columns.
+                    shared = residual_df.index.isin(holiday_occurrences['date'])
+                    holiday_flags = pd.DataFrame(
+                        np.repeat(shared[:, None], residual_df.shape[1], axis=1),
+                        index=residual_df.index, columns=residual_df.columns,
+                    )
         except Exception:
             holiday_flags = pd.DataFrame(
                 0, index=residual_df.index, columns=residual_df.columns
@@ -281,6 +307,20 @@ class HolidayMixin:
         calendar_flags, calendar_regressors = self._build_calendar_holiday_features(
             residual_df.index, residual_df.columns
         )
+        if self.global_holiday_anomaly_suppression is None:
+            for column in residual_df.columns:
+                label = self._holiday_country_label(
+                    self._resolved_holiday_countries.get(column)
+                )
+                if label is None:
+                    continue
+                prefix = f'calendar_{label}__'
+                for name in calendar_regressors.columns:
+                    if name.startswith(prefix):
+                        named_dates[column][name] = calendar_regressors.index[
+                            calendar_regressors[name] > 0
+                        ].tolist()
+        self._named_holiday_dates_temp = named_dates
         holiday_regressors = self._merge_holiday_regressors(
             holiday_regressors, calendar_regressors
         )

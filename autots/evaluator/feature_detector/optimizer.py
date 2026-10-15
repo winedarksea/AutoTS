@@ -146,6 +146,7 @@ class FeatureDetectionOptimizer:
                 detector.general_transformer_params
             ),
             'standardize': detector.standardize,
+            'global_holiday_anomaly_suppression': detector.global_holiday_anomaly_suppression,
             'smoothing_window': detector.smoothing_window,
             'extended_anomaly_params': copy.deepcopy(detector.extended_anomaly_params),
             'seasonality_trend_prior': detector.seasonality_trend_prior,

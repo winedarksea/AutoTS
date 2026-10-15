@@ -16,6 +16,7 @@ import random
 import numpy as np
 import pandas as pd
 from autots.tools.percentile import nan_quantile
+from autots.tools.easter import easter_offsets
 from autots.tools.thresholding import (
     NonparametricThreshold,
     nonparametric,
@@ -1438,12 +1439,14 @@ def dates_to_holidays(
     hebrew_holidays=None,
     hindu_holidays=None,
     max_features: int = None,
+    easter_holidays=None,
 ):
     """Populate date information for a given pd.DatetimeIndex.
 
     Args:
         dates (pd.DatetimeIndex): list of dates
         day_holidays (pd.DataFrame): list of month/day holidays. Pass None if not available
+        easter_holidays (pd.DataFrame): learned rules keyed by easter_offset.
         style (str): option for how to return information
             "long" - return date, name, series for all holidays in a long style dataframe
             "impact" - returns dates, series with values of sum of impacts (if given) or joined string of holiday names
@@ -1470,6 +1473,7 @@ def dates_to_holidays(
         islamic_holidays,
         hebrew_holidays,
         hindu_holidays,
+        easter_holidays,
     ]:
         if holiday_df is not None:
             if not holiday_df.empty:
@@ -1496,7 +1500,15 @@ def dates_to_holidays(
                 else:
                     drop_colz = ['count', 'occurrence_rate']
                 # handle the different holiday calendars
-                if "lunar_month" in holiday_df.columns:
+                if "easter_offset" in holiday_df.columns:
+                    populated_holidays = (
+                        easter_offsets(dates).rename_axis('date').reset_index()
+                        .merge(
+                            holiday_df.drop(columns=drop_colz, errors='ignore'),
+                            on='easter_offset', how='left',
+                        )
+                    )
+                elif "lunar_month" in holiday_df.columns:
                     lunar_dates = gregorian_to_chinese(dates)
                     if "weekofmonth" in holiday_df.columns:
                         on = ["lunar_month", "weekofmonth", 'dayofweek']

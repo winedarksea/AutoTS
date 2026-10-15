@@ -10,6 +10,7 @@
   * Also: tail_scan only fills free max_level_shifts slots; univariate shared scores average over series with a valid score at each date (missing series no longer dilute a shared shift).
 * TimeSeriesFeatureDetector (and so TVA): **default level shift params changed** to linear_gap (alpha 3.5, scales [14, 30, 60], linear_robust, tail_scan). The old default (window 364, alpha 1.8, rolling_diff) relied on the LevelShiftMagic bugs and gave ~2.1 validated false shifts per 2-year noise series once they were fixed; the new default measured recall 1.00 at 0.10-0.15.
 * TimeSeriesFeatureDetector: new prelim_level_shift (default 'auto' = on for linear_gap params) runs level shift detection before the final seasonality fit, which otherwise absorbs steps near year boundaries.
+* Holiday attribution: corrected lunar calendar horizon/start-range dependence; added opt-in Easter rules (`holiday_params={'use_easter_holidays': True}`) and per-series suppression (`global_holiday_anomaly_suppression=None`) with annual holiday peers and an exceptional-outage escape hatch. True retains batch suppression; False disables it. Detector defaults (including those used by TVA) are unchanged: attribution improved, but forecast error and synthetic precision regressed in validation. See examples/holiday_attribution_report.md.
 
 ### New Model Checklist:
 * Add to ModelMonster in auto_model.py

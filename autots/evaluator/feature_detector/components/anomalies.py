@@ -5,6 +5,7 @@ import copy
 import numpy as np
 import pandas as pd
 import warnings
+from collections.abc import Mapping
 from autots.tools.transform import AnomalyRemoval
 from autots.tools.anomaly_utils import anomaly_scores_to_strength
 
@@ -18,7 +19,10 @@ class AnomalyMixin:
         params['output'] = self.detection_mode
         params.pop('holiday_dates', None)
         if holiday_dates:
-            params['holiday_dates'] = list(holiday_dates)
+            params['holiday_dates'] = (
+                copy.deepcopy(holiday_dates) if isinstance(holiday_dates, Mapping)
+                else list(holiday_dates)
+            )
             params.setdefault('holiday_proximity_days', 2)
         return params
 
