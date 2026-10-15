@@ -1809,7 +1809,7 @@ class FeatureDetectionOptimizer:
             ('alpha', 0.8, 5.0, False),
             ('grouping_forward_limit', 1, 10, True),
             ('max_level_shifts', 1, 40, True),
-            ('shift_remove_window', 0, 5, True),
+            ('shift_remove_window', 0, 2, True),
         ]:
             if key in mutated and rng.random() < 0.55:
                 mutated[key] = type(self)._mutate_numeric_value(
@@ -1820,31 +1820,26 @@ class FeatureDetectionOptimizer:
                     maximum=maximum,
                 )
 
-        if 'alignment' in mutated and rng.random() < 0.2:
-            mutated['alignment'] = rng.choice(
-                [
-                    'average',
-                    'last_value',
-                    'rolling_diff',
-                    'rolling_diff_3nn',
-                    'median',
-                    'linear_robust',
-                ]
-            )
         if 'window_method' in mutated and rng.random() < 0.2:
             mutated['window_method'] = rng.choice(
                 ['overlap', 'exclusive', 'diff_overlap', 'linear_gap']
             )
+        window_method = mutated.get('window_method', 'overlap')
+        valid_alignments = LevelShiftMagic.valid_alignments(window_method)
+        if rng.random() < 0.2 or mutated.get('alignment') not in (
+            None,
+            *valid_alignments,
+        ):
+            mutated['alignment'] = rng.choice(valid_alignments)
         # linear_gap alpha is a robust z (3-6), legacy alpha a std multiplier
-        if mutated.get('window_method') == 'linear_gap':
+        if window_method == 'linear_gap':
             mutated['alpha'] = min(max(float(mutated.get('alpha', 4.0)), 3.0), 6.0)
             if rng.random() < 0.2:
-                mutated['scales'] = rng.choice(
-                    [None, [30], [60], [7, 14, 30, 60], [14, 30, 60]]
-                )
-            for flag in ('deseasonalize', 'tail_scan'):
-                if rng.random() < 0.15:
-                    mutated[flag] = not bool(mutated.get(flag, False))
+                mutated['scales'] = rng.choices(
+                    [None, [7, 14, 30, 60], [30], [60]], [0.45, 0.35, 0.1, 0.1]
+                )[0]
+            if rng.random() < 0.15:
+                mutated['tail_scan'] = not bool(mutated.get('tail_scan', True))
 
         mutated['output'] = 'multivariate'
         return mutated

@@ -4622,15 +4622,23 @@ class LevelShiftMagic(EmptyTransformer):
     forward window, threshold, and take one peak per group.
 
     Args:
-        window_size (int): size of rolling window for detection
-        alpha (float): threshold multiplier for standard deviation
-            (on the robust z scale, typically 3-6, for window_method="linear_gap")
+        window_size (int): size of rolling window for detection (legacy methods;
+            "linear_gap" uses ``scales``)
+        alpha (float): detection threshold. Its scale depends on window_method:
+            legacy methods multiply the standard deviation of the window score
+            (typically 1-4); "linear_gap" thresholds a robust z score before its
+            multiscale penalty (typically 3-6, 3.5-4 a good start). Values are not
+            interchangeable between the two.
         grouping_forward_limit (int): number of periods to group nearby shifts
+            (legacy methods only)
         max_level_shifts (int): maximum number of level shifts to detect per series
-        alignment (str): method for sizing level shift magnitudes
-            "average", "last_value", "rolling_diff", "rolling_diff_3nn", "rolling_diff_5nn",
-            "median" (difference of window medians), or
-            "linear_robust" (Huber-detrended window levels, robust to trend)
+        alignment (str): method for sizing level shift magnitudes, None for the
+            method default ("average" legacy, "linear_robust" for "linear_gap").
+            Legacy methods: "average", "last_value", "rolling_diff",
+            "rolling_diff_3nn", "rolling_diff_5nn", "median", "linear_robust".
+            "linear_gap": "linear_robust" (Huber-detrended window levels),
+            "median" (difference of window medians) or "gap" (the detector's own
+            detrended gap); anything else raises.
         output (str): 'multivariate' (default, each series independent) or 'univariate'
             (detect shared level shift dates across series, sized and applied per series)
         remove_at_shift (bool): if True, remove data points at detected level shifts and fill gaps
@@ -4648,13 +4656,14 @@ class LevelShiftMagic(EmptyTransformer):
             - "linear_gap": detrended pooled-slope gap between [i-N, i) and [i, i+N),
               robust z-scored, multiscale, with a bump test rejecting spikes. Unlike the
               others it neither fires on steady trends nor misses steps against the trend.
-        scales (list): window sizes for "linear_gap", None uses [window_size]
+        scales (list): window sizes for "linear_gap", None uses [14, 30, 60].
+            Several scales catch both close opposite steps and long subtle ones.
         deseasonalize (bool or int): "linear_gap" only, remove a median seasonal profile
             before detection; True infers the season length, an int fixes it
         anomaly_window (int): longest bump treated as an anomaly rather than a shift by
             "linear_gap", and the minimum post-shift length for tail_scan
-        tail_scan (bool): "linear_gap" only, also look for shifts in the last
-            anomaly_window to 20 points, which window detection cannot see
+        tail_scan (bool): "linear_gap" only (default on), also look for shifts in
+            the last anomaly_window to 20 points, which window detection cannot see
         correction_mode (str): "additive" or "auto" (ratio correction for non-negative
             series that the additive correction would push below zero)
     """
@@ -4663,6 +4672,14 @@ class LevelShiftMagic(EmptyTransformer):
     window_methods = legacy_window_methods + ['linear_gap']
     rolling_diff_alignments = ['rolling_diff', 'rolling_diff_3nn', 'rolling_diff_5nn']
     robust_alignments = ['median', 'linear_robust']
+    legacy_alignments = [
+        'average',
+        'last_value',
+        *rolling_diff_alignments,
+        *robust_alignments,
+    ]
+    linear_gap_alignments = ['linear_robust', 'median', 'gap']
+    default_linear_gap_scales = [14, 30, 60]
 
     def __init__(
         self,
@@ -4670,7 +4687,7 @@ class LevelShiftMagic(EmptyTransformer):
         alpha: float = 2.5,
         grouping_forward_limit: int = 3,
         max_level_shifts: int = 20,
-        alignment: str = "average",
+        alignment: str = None,
         output: str = "multivariate",
         remove_at_shift: bool = False,
         shift_remove_window: int = 0,
@@ -4679,7 +4696,7 @@ class LevelShiftMagic(EmptyTransformer):
         scales: list = None,
         deseasonalize=False,
         anomaly_window: int = 10,
-        tail_scan: bool = False,
+        tail_scan: bool = True,
         correction_mode: str = "additive",
         **kwargs,
     ):
@@ -4712,10 +4729,25 @@ class LevelShiftMagic(EmptyTransformer):
             raise ValueError(
                 f"window_method must be one of {self.window_methods}, got '{window_method}'"
             )
+        if alignment is None:
+            alignment = "linear_robust" if window_method == "linear_gap" else "average"
+        valid_alignments = self.valid_alignments(window_method)
+        if alignment not in valid_alignments:
+            raise ValueError(
+                f"alignment for window_method '{window_method}' must be one of "
+                f"{valid_alignments}, got '{alignment}'"
+            )
+        self.alignment = alignment
         if correction_mode not in ['additive', 'auto']:
             raise ValueError(
                 f"correction_mode must be 'additive' or 'auto', got '{correction_mode}'"
             )
+
+    @classmethod
+    def valid_alignments(cls, window_method):
+        if window_method == "linear_gap":
+            return cls.linear_gap_alignments
+        return cls.legacy_alignments
 
     @staticmethod
     def get_new_params(method: str = "random"):
@@ -4761,23 +4793,21 @@ class LevelShiftMagic(EmptyTransformer):
             "correction_mode": random.choices(["additive", "auto"], [0.8, 0.2])[0],
         }
         if window_method == "linear_gap":
+            # window_size/grouping_forward_limit are unused by linear_gap
+            del params["window_size"], params["grouping_forward_limit"]
             # robust-z scale: thresholds well above the legacy std multipliers
             params["alpha"] = random.choices(
-                [3.0, 3.5, 4.0, 5.0, 6.0], [0.1, 0.2, 0.35, 0.25, 0.1]
+                [3.0, 3.5, 4.0, 5.0, 6.0], [0.1, 0.25, 0.35, 0.2, 0.1]
             )[0]
+            # single scales miss close opposite steps (benchmark recall ~0.7 vs ~0.95)
             params["scales"] = random.choices(
-                [None, [30], [60], [7, 14, 30, 60], [14, 30, 60]],
-                [0.1, 0.2, 0.25, 0.25, 0.2],
+                [None, [7, 14, 30, 60], [30], [60]], [0.45, 0.35, 0.1, 0.1]
             )[0]
             params["alignment"] = random.choices(
-                ["linear_robust", "median", "rolling_diff"], [0.6, 0.25, 0.15]
+                ["linear_robust", "median", "gap"], [0.6, 0.25, 0.15]
             )[0]
-            params["deseasonalize"] = random.choices([False, True], [0.5, 0.5])[0]
-            params["tail_scan"] = random.choices([False, True], [0.5, 0.5])[0]
+            params["tail_scan"] = random.choices([True, False], [0.8, 0.2])[0]
             params["anomaly_window"] = random.choices([7, 10, 14], [0.2, 0.6, 0.2])[0]
-            params["correction_mode"] = random.choices(
-                ["additive", "auto"], [0.5, 0.5]
-            )[0]
         return params
 
     def fit(self, df):
@@ -4958,18 +4988,12 @@ class LevelShiftMagic(EmptyTransformer):
             pre_levels = None
         self._store_shifts(df, values, rows_f, cols, sizes, pre_levels)
 
-    def _effective_alignment(self):
-        """Map legacy alignments onto linear_gap sizing.
-
-        ``rolling_diff*`` use the detector's own gap; ``average``/``last_value``
-        depend on the legacy window means (and the tie at the step) so they map
-        to ``linear_robust``.
-        """
-        if self.alignment in self.robust_alignments:
-            return self.alignment
-        if self.alignment in self.rolling_diff_alignments:
-            return "gap"
-        return "linear_robust"
+    def _linear_gap_scales(self):
+        if self.scales is None:
+            return list(self.default_linear_gap_scales)
+        if np.isscalar(self.scales):
+            return [int(self.scales)]
+        return [int(scale) for scale in self.scales]
 
     def _fit_linear_gap(self, df):
         values = df.to_numpy(dtype=float)
@@ -4978,7 +5002,7 @@ class LevelShiftMagic(EmptyTransformer):
             detect_values, self.season_length_ = level_shift_deseasonalize(
                 values, self.deseasonalize
             )
-        scales = list(self.scales) if self.scales else [int(self.window_size)]
+        scales = self._linear_gap_scales()
         anomaly_window = int(self.anomaly_window)
         if self.output == 'univariate':
             self.series_mean_ = df.mean(axis=0)
@@ -4993,7 +5017,7 @@ class LevelShiftMagic(EmptyTransformer):
             self.max_level_shifts,
             anomaly_window=anomaly_window,
         )
-        alignment = self._effective_alignment()
+        alignment = self.alignment
         if alignment == "gap":
             sizes = gaps
             pre_levels = None
@@ -5042,8 +5066,13 @@ class LevelShiftMagic(EmptyTransformer):
         self.lvlshft_ratio_ = None
         if self.correction_mode == "auto" and rows_f.size:
             if pre_levels is None:
+                sizing_window = (
+                    max(self._linear_gap_scales())
+                    if self.window_method == "linear_gap"
+                    else int(self.window_size)
+                )
                 _, pre_levels = size_breaks(
-                    values, rows_f, cols, int(self.window_size), method="median"
+                    values, rows_f, cols, sizing_window, method="median"
                 )
             ratio_frame, ratio_columns = ratio_shift(
                 values, rows_f, cols, sizes, pre_levels, shift

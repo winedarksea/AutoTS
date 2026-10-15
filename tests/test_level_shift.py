@@ -119,9 +119,9 @@ class TestLinearGapDetection(unittest.TestCase):
         # 10 post points: too few for the bump test, exactly the tail minimum
         y = 100 + self.noise() + 8 * (TIME >= T - 10)
         df = _frame(y)
-        without = LevelShiftMagic(**LINEAR_GAP).fit(df)
+        without = LevelShiftMagic(tail_scan=False, **LINEAR_GAP).fit(df)
         self.assertEqual(len(_shift_rows(without, df)[0]), 0)
-        with_tail = LevelShiftMagic(tail_scan=True, **LINEAR_GAP).fit(df)
+        with_tail = LevelShiftMagic(**LINEAR_GAP).fit(df)
         shifts = _shift_rows(with_tail, df)[0]
         self.assertEqual(len(shifts), 1)
         self.assertLessEqual(abs(shifts[0][0] - (T - 10)), 2)
@@ -129,9 +129,9 @@ class TestLinearGapDetection(unittest.TestCase):
     def test_tail_scan_respects_max_level_shifts(self):
         y = 100 + self.noise() + 10 * (TIME >= 400) + 8 * (TIME >= T - 10)
         df = _frame(y)
-        model = LevelShiftMagic(tail_scan=True, **dict(LINEAR_GAP, max_level_shifts=1))
+        model = LevelShiftMagic(**dict(LINEAR_GAP, max_level_shifts=1))
         self.assertEqual(len(_shift_rows(model.fit(df), df)[0]), 1)
-        model = LevelShiftMagic(tail_scan=True, **dict(LINEAR_GAP, max_level_shifts=2))
+        model = LevelShiftMagic(**dict(LINEAR_GAP, max_level_shifts=2))
         self.assertEqual(len(_shift_rows(model.fit(df), df)[0]), 2)
 
     def test_deseasonalize_with_weekly_pattern(self):
@@ -351,6 +351,28 @@ class TestLevelShiftParams(unittest.TestCase):
             LevelShiftMagic(window_method="nope")
         with self.assertRaises(ValueError):
             LevelShiftMagic(correction_mode="nope")
+        with self.assertRaises(ValueError):
+            LevelShiftMagic(window_method="linear_gap", alignment="average")
+        with self.assertRaises(ValueError):
+            LevelShiftMagic(window_method="overlap", alignment="gap")
+
+    def test_alignment_defaults_per_method(self):
+        self.assertEqual(LevelShiftMagic().alignment, "average")
+        model = LevelShiftMagic(window_method="linear_gap")
+        self.assertEqual(model.alignment, "linear_robust")
+        self.assertEqual(model._linear_gap_scales(), [14, 30, 60])
+
+    def test_detector_mutation_keeps_alignment_valid(self):
+        import random
+
+        from autots.evaluator.feature_detector import FeatureDetectionOptimizer
+
+        optimizer = FeatureDetectionOptimizer.__new__(FeatureDetectionOptimizer)
+        rng = random.Random(0)
+        params = LevelShiftMagic.get_new_params()
+        for _ in range(300):
+            params = optimizer._local_mutate_level_shift_params(params, rng)
+            LevelShiftMagic(**params)
 
 
 if __name__ == "__main__":

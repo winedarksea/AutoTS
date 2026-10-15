@@ -305,10 +305,12 @@ class TestParamsAndNaN(unittest.TestCase):
         self.assertIn('joint_hinge_step', methods)
         self.assertTrue(any(s['level_shift_validation'] for s in samples))
         self.assertTrue(any(s['trend_damping'] for s in samples))
+        # ElasticNetwork seasonality needs tensorflow, which is optional
         joint = next(
             s
             for s in samples
             if s['changepoint_params'].get('method') == 'joint_hinge_step'
+            and 'ElasticNetwork' not in str(s.get('seasonality_params'))
         )
         df = _scenario_frame(n=500)
         detector = TimeSeriesFeatureDetector(**joint).fit(df)
