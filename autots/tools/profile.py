@@ -171,7 +171,8 @@ def profile_time_series(
         drift_trend_threshold (float): minimum proportion of trend/changepoint contribution required to flag a smooth series as smooth_drift
         drift_autocorr_threshold (float): minimum lag-1 autocorrelation required to flag a smooth series as smooth_drift
     Returns:
-        pd.DataFrame: DataFrame with 'SERIES' and 'PROFILE' columns.
+        pd.DataFrame: DataFrame with 'SERIES' and 'PROFILE' columns. For
+            MultiIndex series labels, identifier levels remain separate columns.
 
     Precedence, highest first: highly_seasonal, new_product, flat, binary,
     erratic, intermittent, smooth_drift, then smooth. Use summarize_series for
@@ -239,7 +240,10 @@ def profile_time_series(
     )
     metrics_df.loc[drift_mask, 'PROFILE'] = 'smooth_drift'
 
-    # Reset index to get 'SERIES' column
-    intermittence_df = metrics_df[['PROFILE']].rename_axis('SERIES').reset_index()
+    # Preserve the existing identifier columns for hierarchical series labels.
+    profile_columns = metrics_df[['PROFILE']]
+    if not isinstance(profile_columns.index, pd.MultiIndex):
+        profile_columns = profile_columns.rename_axis('SERIES')
+    intermittence_df = profile_columns.reset_index().rename(columns={'index': 'SERIES'})
 
     return intermittence_df

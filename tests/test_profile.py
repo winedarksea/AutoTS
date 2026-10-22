@@ -87,6 +87,25 @@ class TestProfile(unittest.TestCase):
         self.assertEqual(set(model.series_profiles), set(df.columns))
         pd.testing.assert_frame_equal(df, original)
 
+    def test_multiindex_identifiers_keep_their_existing_output_format(self):
+        df = self.df.iloc[:, :2].copy()
+        expected_profiles = profile_time_series(df)['PROFILE'].to_numpy()
+        labels = [('group_a', 'x'), ('group_b', 'y')]
+        for names in (('group', 'id'), (None, None), ('index', 'id')):
+            with self.subTest(names=names):
+                df.columns = pd.MultiIndex.from_tuples(labels, names=names)
+                original = df.copy(deep=True)
+                identifier_names = [
+                    name if name is not None else f'level_{level}'
+                    for level, name in enumerate(names)
+                ]
+                expected = pd.DataFrame(labels, columns=identifier_names).rename(
+                    columns={'index': 'SERIES'}
+                )
+                expected['PROFILE'] = expected_profiles
+                pd.testing.assert_frame_equal(profile_time_series(df), expected)
+                pd.testing.assert_frame_equal(df, original)
+
     def test_autocorrelation_failure_warns_and_omits_metric(self):
         with patch(
             'autots.tools.profile._lag_one_autocorrelation',
