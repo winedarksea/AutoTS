@@ -7,7 +7,12 @@ import numpy as np
 import pandas as pd
 
 from autots import AutoTS
-from autots.tools.profile import ProfileWarning, profile_time_series, summarize_series
+from autots.tools.profile import (
+    ProfileWarning,
+    profile_time_series,
+    profile_time_series_mapping,
+    summarize_series,
+)
 
 
 def legacy_autocorrelation(df):
@@ -105,6 +110,43 @@ class TestProfile(unittest.TestCase):
                 expected['PROFILE'] = expected_profiles
                 pd.testing.assert_frame_equal(profile_time_series(df), expected)
                 pd.testing.assert_frame_equal(df, original)
+
+    def test_profile_mapping_preserves_original_labels(self):
+        expected = profile_time_series(self.df)['PROFILE'].tolist()
+        for columns in (
+            self.df.columns,
+            self.df.columns.rename('series_id'),
+            pd.MultiIndex.from_product([['b', 'a'], range(4)], names=['group', 'id']),
+            pd.MultiIndex.from_product([['b', 'a'], range(4)]),
+            pd.MultiIndex.from_product([['b', 'a'], range(4)], names=['SERIES', 'id']),
+            pd.MultiIndex.from_product([['b', 'a'], range(4)], names=['index', 'id']),
+            pd.MultiIndex.from_product([['b', 'a'], [1, 0], ['y', 'x']]),
+        ):
+            with self.subTest(columns=columns):
+                df = self.df.copy()
+                df.columns = columns
+                self.assertEqual(
+                    profile_time_series_mapping(df), dict(zip(columns, expected))
+                )
+
+    def test_fit_data_retains_multiindex_profiles(self):
+        df = self.df.copy()
+        df.columns = pd.MultiIndex.from_product(
+            [['b', 'a'], range(4)], names=['group', 'id']
+        )
+        original = df.copy(deep=True)
+        expected = dict(zip(df.columns, profile_time_series(self.df)['PROFILE']))
+        model = AutoTS(
+            forecast_length=7,
+            model_list=['LastValueNaive'],
+            ensemble=None,
+            max_generations=0,
+            num_validations=0,
+            verbose=-1,
+        )
+        model.fit_data(df)
+        self.assertEqual(model.series_profiles, expected)
+        pd.testing.assert_frame_equal(df, original)
 
     def test_autocorrelation_failure_warns_and_omits_metric(self):
         with patch(

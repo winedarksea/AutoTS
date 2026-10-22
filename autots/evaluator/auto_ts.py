@@ -61,7 +61,7 @@ from autots.evaluator.validation import (
     generate_validation_indices,
 )
 from autots.tools.constraint import constraint_new_params
-from autots.tools.profile import profile_time_series
+from autots.tools.profile import profile_time_series_mapping
 from autots.tools.plotting import (
     plot_forecast_with_intervals,
     colors_list,
@@ -1174,10 +1174,7 @@ class AutoTS(object):
         self.df_wide_numeric = df_wide_numeric
         self.startTimeStamps = df_wide_numeric.notna().idxmax()
         try:
-            profile_df = profile_time_series(self.df_wide_numeric)
-            self.series_profiles = (
-                profile_df.set_index("SERIES").to_dict().get("PROFILE", {})
-            )
+            self.series_profiles = profile_time_series_mapping(self.df_wide_numeric)
         except Exception as e:
             if self.verbose >= 0:
                 print(f"profile_time_series failed during fit_data: {repr(e)}")
@@ -3104,11 +3101,7 @@ class AutoTS(object):
                     modz = None
                 id_to_group_mapping = None
                 if mosaic_config.get("profiled", False):
-                    id_to_group_mapping = (
-                        profile_time_series(df_wide)
-                        .set_index("SERIES")
-                        .to_dict()["PROFILE"]
-                    )
+                    id_to_group_mapping = profile_time_series_mapping(df_wide)
                 # and actually generate the template
                 ens_templates = generate_mosaic_template(
                     initial_results=initial_results.model_results,

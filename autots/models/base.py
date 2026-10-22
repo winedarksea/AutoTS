@@ -908,17 +908,10 @@ class PredictionObject(object):
         if model_name == "Ensemble":
             if 'series' in self.model_parameters.keys():
                 if "profile" in self.model_parameters["model_metric"]:
-                    from autots.tools.profile import profile_time_series
+                    from autots.tools.profile import profile_time_series_mapping
 
                     df = df_wide if df_wide is not None else self.forecast
-                    profile = profile_time_series(df)
-                    # I'm not sure why I made it sometimes coming as ID and sometimes SERIES...
-                    if "ID" in profile.columns:
-                        key_col = "ID"
-                    else:
-                        key_col = "SERIES"
-                    profiled = profile[profile[key_col] == series]["PROFILE"]
-                    prof_val = profiled.iloc[0] if not profiled.empty else None
+                    prof_val = profile_time_series_mapping(df).get(series)
                     series_map = self.model_parameters.get('series', {})
                     if prof_val in series_map:
                         h_params = series_map[prof_val]

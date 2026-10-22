@@ -247,3 +247,13 @@ def profile_time_series(
     intermittence_df = profile_columns.reset_index().rename(columns={'index': 'SERIES'})
 
     return intermittence_df
+
+
+def profile_time_series_mapping(df, **profile_kwargs):
+    """Map original series labels (including tuples) to their profiles.
+
+    Profile rows retain input column order, so use the original labels rather
+    than inferring identifiers from reset_index's potentially renamed levels.
+    """
+    profiles = profile_time_series(df, **profile_kwargs)
+    return dict(zip(df.columns, profiles['PROFILE']))

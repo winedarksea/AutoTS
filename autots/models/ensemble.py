@@ -9,7 +9,7 @@ from autots.models.base import PredictionObject
 from autots.models.model_list import no_shared
 from autots.tools.impute import fill_median
 from autots.models.sklearn import retrieve_classifier
-from autots.tools.profile import profile_time_series, summarize_series
+from autots.tools.profile import profile_time_series_mapping, summarize_series
 from autots.tools.kalman import kalman_fusion_forecasts
 
 horizontal_aliases = [
@@ -828,9 +828,7 @@ def HorizontalEnsemble(
     # handle profiled horizontal
     profiled = "profile" in ensemble_params.get("model_metric", "")
     if profiled and prematched_series is None:
-        profiled_mapping = (
-            profile_time_series(df_train).set_index("SERIES").to_dict()["PROFILE"]
-        )
+        profiled_mapping = profile_time_series_mapping(df_train)
         known_matches = ensemble_params['series']
         valid_values = list(known_matches.keys())
         profiled_mapping = {
@@ -2299,9 +2297,7 @@ def MosaicEnsemble(
     profiled = "profile" in ensemble_params.get("model_metric")
     medianed = "median" in ensemble_params.get("model_metric")
     if profiled:
-        profiled = (
-            profile_time_series(df_train).set_index("SERIES").to_dict()["PROFILE"]
-        )
+        profiled = profile_time_series_mapping(df_train)
         known_matches = ensemble_params['series']
         valid_values = list(known_matches.keys())
         profiled = {
@@ -2444,6 +2440,10 @@ def _buildup_mosaics(
     available_models,
     org_idx,
 ):
+    if isinstance(final.columns, pd.MultiIndex):
+        # melt otherwise keeps only one level, losing the full series identifier.
+        final = final.copy()
+        final.columns = final.columns.to_flat_index()
     melted = pd.melt(
         final,
         var_name="series_id",

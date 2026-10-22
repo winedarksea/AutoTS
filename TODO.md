@@ -1,4 +1,5 @@
 # 1.0.5 🇺🇦 🇺🇦 🇺🇦
+* Linear models: replaced inverse/Gram least-squares coefficient fits with direct solves and objective-preserving augmented least-squares fallback. BasicLinearModel now fits finite observations per series and computes normal observation intervals from the training fit, including short histories and trend damping. Cassandra skips redundant condition-number checks while preserving its existing recency weighting and automatic regularization.
 * Feature detection and trend forecasting: Added joint detection of slope changes and level shifts; improved changepoint handling around missing data; added adaptive seasonality fitting, trend damping, slope shrinkage, and wider intervals for possible future trend changes.
 * TVA: Added forecast origin anchoring and a configurable internal fit_horizon for factor and torch-free modes. Expanded factor forecasting, covariance estimation, and reconciliation behavior.
 * Cassandra: Fixed autoregressive forecasting on either observed levels or detrended residuals. Changed the default multicollinearity filter to off.

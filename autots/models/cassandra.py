@@ -46,6 +46,7 @@ from autots.tools.window_functions import window_lin_reg_mean_no_nan, np_2d_aran
 from autots.evaluator.auto_model import ModelMonster, model_forecast
 from autots.models.model_list import model_list_to_dict
 from autots.tools.bayesian_regression import BayesianMultiOutputRegression
+from autots.tools.linear import solve_linear_coefficients
 from autots.models.cassandra_ar import (
     build_lag_array,
     lag_history_tail,
@@ -3053,9 +3054,12 @@ def lstsq_solve(X, y, lamb=1, identity_matrix=None):
         identity_matrix[-1, -1] = 0
     if lamb is None:
         lamb = 1.0
-    XtX_lamb = X.T.dot(X) + lamb * identity_matrix
-    XtY = X.T.dot(y)
-    return np.linalg.solve(XtX_lamb, XtY)
+    identity_matrix = np.asarray(identity_matrix)
+    diagonal = np.diag(identity_matrix)
+    if np.array_equal(identity_matrix, np.diag(diagonal)):
+        return solve_linear_coefficients(X, y, lamb * diagonal)
+    # Preserve the existing interface for callers supplying a non-diagonal matrix.
+    return np.linalg.solve(X.T.dot(X) + lamb * identity_matrix, X.T.dot(y))
 
 
 def cost_function_l1(params, X, y):
@@ -3166,19 +3170,14 @@ def fit_linear_model(x, y, params=None):
     lambd = params.get("lambda", None)
     rec = params.get("recency_weighting", None)
 
-    # Check condition number to detect ill-conditioned matrices
-    # and automatically add regularization if needed
-    try:
-        cond_num = np.linalg.cond(x)
-        # If condition number is very high (>1e10), force regularization
-        if (
-            cond_num > 1e10
-            and lambd is None
-            and model_type in ['lstsq', 'linalg_solve']
-        ):
-            lambd = 1.0  # Add modest regularization
-    except Exception:
-        pass  # If condition number check fails, proceed normally
+    # This SVD can only change the fit when the legacy automatic-ridge guard
+    # applies. Explicit penalties and other losses never use its result.
+    if lambd is None and model_type in ['lstsq', 'linalg_solve']:
+        try:
+            if np.linalg.cond(x) > 1e10:
+                lambd = 1.0
+        except Exception:
+            pass
 
     if lambd is not None:
         id_mat = np.zeros((x.shape[1], x.shape[1]))
@@ -3188,16 +3187,14 @@ def fit_linear_model(x, y, params=None):
     else:
         id_mat = None
     if rec is not None:
+        # Preserve the legacy residual multiplier, shared with Cassandra AR:
+        # squared-loss observation weights are weights**2.
         weights = (np.arange(len(x)) + 1) ** rec  # 0.05 - 0.25
         x = x * weights[..., None]
         y = np.asarray(y) * weights[..., None]
     if model_type == "lstsq":
-        if lambd is not None:
-            return np.linalg.lstsq(x.T.dot(x) + lambd * id_mat, x.T.dot(y), rcond=None)[
-                0
-            ]
-        else:
-            return np.linalg.lstsq(x, y, rcond=None)[0]
+        penalty = None if lambd is None else lambd * np.diag(id_mat)
+        return solve_linear_coefficients(x, y, penalty)
     elif model_type == "linalg_solve":
         return lstsq_solve(x, y, lamb=lambd, identity_matrix=id_mat)
     elif model_type == "l1_norm":

@@ -49,6 +49,11 @@ from autots.tools.impute import FillNA
 from autots.evaluator.metrics import wasserstein
 from autots.models.sklearn import rolling_x_regressor_regressor
 from autots.tools.kalman import kalman_fusion_forecasts
+from autots.tools.linear import (
+    solve_linear_coefficients,
+    linear_fit_covariance,
+    observation_mask_groups,
+)
 
 # these are all optional packages
 try:
@@ -3797,34 +3802,38 @@ class BasicLinearModel(ModelObject):
         )
 
         # Convert X and df (Y) to NumPy arrays for linear regression
-        X_values = X.to_numpy().astype(float)
-        Y_values = df.to_numpy().astype(float)
+        X_values = X.to_numpy(dtype=float, na_value=np.nan)
+        Y_values = df.to_numpy(dtype=float, na_value=np.nan)
 
-        if self.lambda_ is not None:
-            I = np.eye(X_values.shape[1])
-            # Perform Ridge regression using the modified normal equation
-            self.beta = (
-                np.linalg.inv(X_values.T @ X_values + self.lambda_ * I)
-                @ X_values.T
-                @ Y_values
+        usable = np.isfinite(Y_values) & np.isfinite(X_values).all(axis=1)[:, None]
+        empty_columns = self.column_names[~usable.any(axis=0)].tolist()
+        if empty_columns:
+            raise ValueError(
+                f"BasicLinearModel has no usable observations for series {empty_columns}"
             )
-        else:
-            # Perform linear regression using the normal equation: (X.T @ X)^(-1) @ X.T @ Y
-            self.beta = np.linalg.pinv(X_values.T @ X_values) @ X_values.T @ Y_values
-
-        # Calculate predicted values for Y
-        Y_pred = X_values @ self.beta
-
-        # Calculate residuals for each column of Y
-        residuals = Y_values - Y_pred
-
-        # Calculate the sum of squared errors (SSE) and standard error (sigma) for each column of Y
-        sse = np.sum(
-            residuals**2, axis=0
-        )  # Sum of squared errors for each column (shape (21,))
-        n = Y_values.shape[0]
-        p = X_values.shape[1]  # Number of predictors
-        self.sigma = np.sqrt(sse / (n - p))
+        self.beta = np.empty((X_values.shape[1], Y_values.shape[1]))
+        self.sigma = np.empty(Y_values.shape[1])
+        self._linear_training_design = X_values
+        self._linear_feature_columns = X.columns.copy()
+        self._linear_observation_groups = []
+        for rows, columns in observation_mask_groups(X_values, Y_values):
+            design = X_values[rows]
+            targets = Y_values[np.ix_(rows, columns)]
+            coefficients = solve_linear_coefficients(design, targets, self.lambda_)
+            covariance, residual_dof = linear_fit_covariance(design, self.lambda_)
+            self.beta[:, columns] = coefficients
+            self.sigma[columns] = np.sqrt(
+                np.sum((targets - design @ coefficients) ** 2, axis=0) / residual_dof
+            )
+            # Cache the shared case. Distinct missing-data patterns are recomputed
+            # at prediction to avoid retaining a K x K matrix for every series.
+            self._linear_observation_groups.append(
+                (
+                    rows,
+                    columns,
+                    covariance if len(columns) == Y_values.shape[1] else None,
+                )
+            )
 
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
@@ -3857,6 +3866,10 @@ class BasicLinearModel(ModelObject):
         x_t.index = test_index
         X = pd.concat([x_s, x_t], axis=1)
         if str(self.regression_type).lower() == "user":
+            if future_regressor is None:
+                raise ValueError(
+                    "regression_type=='User' but no future_regressor supplied"
+                )
             X = pd.concat(
                 [
                     X,
@@ -3867,7 +3880,12 @@ class BasicLinearModel(ModelObject):
                 axis=1,
             )
         X["constant"] = 1
-        X_values = X.to_numpy().astype(float)
+        X = X.reindex(columns=self._linear_feature_columns)
+        X_values = X.to_numpy(dtype=float, na_value=np.nan)
+        if not np.isfinite(X_values).all():
+            raise ValueError(
+                "BasicLinearModel forecast design contains non-finite values"
+            )
         self.X = X
 
         # ORIGINAL FORECAST CALCULATION (not reconstructed from components)
@@ -3980,17 +3998,33 @@ class BasicLinearModel(ModelObject):
             return forecast
         else:
             z_value = norm.ppf(1 - (1 - self.prediction_interval) / 2)
-            # Vectorized calculation of leverage for all points: diag(X @ (X^T X)^(-1) @ X^T)
-            hat_matrix_diag = np.einsum(
-                'ij,jk,ik->i',
-                X_values,
-                np.linalg.pinv(X_values.T @ X_values, rcond=5e-16),
-                X_values,
-            )
+            interval_design = X_values.copy()
+            if (
+                self.trend_phi is not None
+                and self.trend_phi != 1
+                and len(test_index) >= 2
+            ):
+                trend_positions = X.columns.get_indexer(self.trend_columns)
+                trend_design = interval_design[:, trend_positions]
+                increments = np.diff(trend_design, axis=0)
+                increments *= self.trend_phi ** np.arange(len(test_index) - 1)[:, None]
+                interval_design[:, trend_positions] = np.cumsum(
+                    np.vstack((trend_design[:1], increments)), axis=0
+                )
+            hat_matrix_diag = np.empty((len(test_index), len(self.column_names)))
+            for rows, columns, covariance in self._linear_observation_groups:
+                if covariance is None:
+                    covariance, _ = linear_fit_covariance(
+                        self._linear_training_design[rows], self.lambda_
+                    )
+                variance = np.einsum(
+                    'ij,jk,ik->i', interval_design, covariance, interval_design
+                )
+                hat_matrix_diag[:, columns] = np.maximum(variance[:, None], 0)
             sigma_expanded = self.sigma[np.newaxis, :]
             # Calculate the margin of error for each prediction in each column
             margin_of_error = pd.DataFrame(
-                z_value * sigma_expanded * np.sqrt(1 + hat_matrix_diag[:, np.newaxis]),
+                z_value * sigma_expanded * np.sqrt(1 + hat_matrix_diag),
                 columns=self.column_names,
                 index=test_index,
             )
@@ -4356,17 +4390,7 @@ class TVVAR(BasicLinearModel):
 
         self.phi_history = []
         if self.phi is None:
-            if self.lambda_ is not None:
-                I = np.eye(X_values.shape[1])
-                self.beta = (
-                    np.linalg.inv(X_values.T @ X_values + self.lambda_ * I)
-                    @ X_values.T
-                    @ Y_values
-                )
-            else:
-                self.beta = (
-                    np.linalg.pinv(X_values.T @ X_values) @ X_values.T @ Y_values
-                )
+            self.beta = solve_linear_coefficients(X_values, Y_values, self.lambda_)
             # Post-process coefficients to set small values to zero
             self.beta = self.apply_beta_threshold()
             # Calculate residuals
