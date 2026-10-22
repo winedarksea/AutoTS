@@ -214,14 +214,14 @@ def _create_basic_changepoints(DTindex, changepoint_spacing, changepoint_distanc
     """
     n = len(DTindex)
 
-    # Calculate the number of data points available for changepoints
-    changepoint_range_end = n - changepoint_distance_end
+    # Short histories still need a ramp anchored at their first observation.
+    changepoint_range_end = min(max(n - changepoint_distance_end, 0), n - 1)
 
     # Calculate the number of changepoints based on changepoint_spacing
     # Only place changepoints within the range [0, changepoint_range_end)
     changepoints = np.arange(0, changepoint_range_end, changepoint_spacing)
 
-    # Ensure the last changepoint is exactly at changepoint_distance_end from the end
+    # Keep the terminal changepoint within the observed history.
     changepoints = np.append(changepoints, changepoint_range_end)
 
     # Efficient concatenation approach to generate changepoint features
