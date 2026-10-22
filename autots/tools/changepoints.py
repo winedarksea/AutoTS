@@ -3275,9 +3275,12 @@ def changepoint_fcst_from_last_row(x_t_last_row, n_forecast=10):
 
 def half_yr_spacing(df):
     """Return rows per half-year, using at least one elapsed year of history."""
-    elapsed_years = max(
-        (df.index.max() - df.index.min()) / pd.Timedelta(days=365.25), 1.0
+    index = df.index.tz_convert(None) if df.index.tz is not None else df.index
+    # Python timedeltas also support histories longer than pandas' ns limit.
+    elapsed = index.max().to_pydatetime(warn=False) - index.min().to_pydatetime(
+        warn=False
     )
+    elapsed_years = max(elapsed.total_seconds() / (365.25 * 86400), 1.0)
     return max(1, int(df.shape[0] / (elapsed_years * 2)))
 
 

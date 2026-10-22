@@ -1,6 +1,7 @@
 """Automatic spacing depends on elapsed duration, not calendar years touched."""
 
 import unittest
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
@@ -32,6 +33,23 @@ class TestHalfYearSpacing(unittest.TestCase):
         elapsed_days = (index[-1] - index[0]).total_seconds() / 86400
         expected = int(1000 / (2 * elapsed_days / 365.25))
         self.assertEqual(half_yr_spacing(pd.DataFrame(index=index)), expected)
+
+    def test_centuries_of_monthly_history_do_not_overflow(self):
+        index = pd.date_range('1800-01-01', '2200-01-01', freq='MS')
+        index = pd.DatetimeIndex(index.to_numpy(dtype='datetime64[ns]'))
+        self.assertEqual(half_yr_spacing(pd.DataFrame(index=index)), 6)
+
+    def test_timezone_spacing_uses_elapsed_utc_time_across_dst(self):
+        index = pd.date_range(
+            '2022-01-01', '2023-07-01', periods=287,
+            tz=ZoneInfo('America/Chicago'),
+        )
+        utc_index = index.tz_convert(None)
+        self.assertEqual(half_yr_spacing(pd.DataFrame(index=index)), 96)
+        self.assertEqual(
+            half_yr_spacing(pd.DataFrame(index=index)),
+            half_yr_spacing(pd.DataFrame(index=utc_index)),
+        )
 
     def test_automatic_new_product_threshold_is_calendar_independent(self):
         for start in ('2023-01-01', '2022-12-31', '2023-07-01'):
