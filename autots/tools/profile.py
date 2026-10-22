@@ -2,6 +2,8 @@
 Profiling
 """
 
+import warnings
+
 import numpy as np
 import pandas as pd
 from autots.tools.seasonal import date_part
@@ -10,6 +12,26 @@ from autots.tools.changepoints import (
     half_yr_spacing,
 )
 from autots.models.basics import BasicLinearModel
+
+
+class ProfileWarning(UserWarning):
+    """A profiling operation failed and its existing fallback was used."""
+
+
+def _lag_one_autocorrelation(df):
+    """Match the legacy back-filled Pearson correlations without a pairwise matrix."""
+    values = df.bfill().to_numpy(dtype=np.float64, copy=True)
+    lagged_values = df.shift(1).bfill().to_numpy(dtype=np.float64, copy=True)
+    # Ordinary means preserve NaN propagation from unfilled trailing observations.
+    values -= values.mean(axis=0)
+    lagged_values -= lagged_values.mean(axis=0)
+    cross_products = np.einsum('ij,ij->j', values, lagged_values)
+    squared_values = np.einsum('ij,ij->j', values, values)
+    squared_lagged_values = np.einsum('ij,ij->j', lagged_values, lagged_values)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        correlations = cross_products / np.sqrt(squared_values)
+        correlations /= np.sqrt(squared_lagged_values)
+    return np.clip(correlations, -1, 1)
 
 
 def data_profile(df):
@@ -43,7 +65,10 @@ def data_profile(df):
 
 
 def summarize_series(df):
-    """Summarize time series data.
+    """Return statistics as rows and input time series as columns.
+
+    Failed autocorrelation or decomposition operations emit ProfileWarning and
+    retain their existing batch-wide fallbacks.
 
     Args:
         df (pd.DataFrame): wide style data with datetimeindex
@@ -75,14 +100,13 @@ def summarize_series(df):
 
     first_non_nan_index = df.replace(0, np.nan).reset_index(drop=True).notna().idxmax()
     try:
-        df_sum.loc["autocorr_1"] = np.diag(
-            np.corrcoef(df.bfill().T, df.shift(1).bfill().T)[
-                : df.shape[1], df.shape[1] :
-            ]
-        )
-        # df_sum.loc["autocorr_1"] = df.corrwith(df.shift(1))
+        df_sum.loc["autocorr_1"] = _lag_one_autocorrelation(df)
     except Exception as e:
-        print(f"summarize_series autocorr_1 failed with {repr(e)}")
+        warnings.warn(
+            f"summarize_series autocorr_1 failed with {repr(e)}",
+            ProfileWarning,
+            stacklevel=2,
+        )
     df_sum.loc["null_percentage"] = (first_non_nan_index / df.shape[0]).fillna(1)
     diffs = df.diff().iloc[1:]
     valid_pairs = (df.notna() & df.shift(1).notna()).iloc[1:]
@@ -111,7 +135,11 @@ def summarize_series(df):
         df_sum = pd.concat([df_sum, summary.transpose()])
     except Exception as e:
         df_sum.loc["season_trend_percent"] = 0
-        print(f"summarize_series BasicLinearModel decomposition failed with {repr(e)}")
+        warnings.warn(
+            f"summarize_series BasicLinearModel decomposition failed with {repr(e)}",
+            ProfileWarning,
+            stacklevel=2,
+        )
     return df_sum
 
 
@@ -130,9 +158,7 @@ def profile_time_series(
         smooth: series driven mostly by trend, generally series that don't fit other categories
         intermittent: occasional demand, one-sided spikes around median, usually many zeroes
         binary: only two values, often 0 and 1 (also includes trinary, three states)
-        stationary: limited trend, drift, or seasonality, two-sided around mean
         smooth_drift: smooth series whose dynamics are predominantly changepoint/trend driven with strong first-order autocorrelation
-        smooth_trend
         erratic: high volatility series
         flat: generally constant with only occasional movements
         new_product: limited data, series just started receiving data
@@ -140,12 +166,16 @@ def profile_time_series(
 
     Args:
         df (pd.DataFrame): Wide format DataFrame with datetime index and each column as a time series.
-        new_product_threshold (float): one of the more finiky thresholds, percent of null or zero data from beginning to declare new product
+        new_product_threshold (float or str): leading null-or-zero fraction required
+            for new_product. 'auto' resolves from the index length and elapsed span.
         drift_trend_threshold (float): minimum proportion of trend/changepoint contribution required to flag a smooth series as smooth_drift
         drift_autocorr_threshold (float): minimum lag-1 autocorrelation required to flag a smooth series as smooth_drift
-        new_product_correct (bool): use dt index to correct
     Returns:
-        pd.DataFrame: DataFrame with 'SERIES' and 'DEMAND_PROFILE' columns.
+        pd.DataFrame: DataFrame with 'SERIES' and 'PROFILE' columns.
+
+    Precedence, highest first: highly_seasonal, new_product, flat, binary,
+    erratic, intermittent, smooth_drift, then smooth. Use summarize_series for
+    the underlying metrics. ProfileWarning reports batch-wide fallback use.
     """
 
     metrics_df = summarize_series(df).transpose()
@@ -210,8 +240,6 @@ def profile_time_series(
     metrics_df.loc[drift_mask, 'PROFILE'] = 'smooth_drift'
 
     # Reset index to get 'SERIES' column
-    intermittence_df = (
-        metrics_df[['PROFILE']].reset_index().rename(columns={'index': 'SERIES'})
-    )
+    intermittence_df = metrics_df[['PROFILE']].rename_axis('SERIES').reset_index()
 
     return intermittence_df
