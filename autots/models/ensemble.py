@@ -810,6 +810,8 @@ def HorizontalEnsemble(
     prematched_series: dict = None,
 ):
     """Generate forecast for per_series ensembling."""
+    # The resolved mapping belongs to this forecast, not the reusable template.
+    ensemble_params = ensemble_params.copy()
     startTime = datetime.datetime.now()
     # this is meant to fill in any failures
     available_models = [mod for mod, fcs in forecasts.items() if fcs.shape[0] > 0]
@@ -2289,6 +2291,8 @@ def MosaicEnsemble(
     Args:
         prematched_series (dict): from outer horizontal generalization, possibly different than params
     """
+    # Preserve the caller's mapping when resolving the current series subset.
+    ensemble_params = ensemble_params.copy()
     # work with forecast_lengths longer or shorter than provided by template
 
     # handle profiled mosaic
