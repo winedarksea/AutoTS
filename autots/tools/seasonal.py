@@ -340,8 +340,7 @@ def date_part(
         # hourly
         # if seasonal_ratio < 0.001:  # 0.00011 to 0.00023
         if seasonal_ratio < 0.75:  # 0.00011 to 0.00023
-            t = DTindex - pd.Timestamp(origin_ts)
-            t = (t.days * 24) + (t.components['minutes'] / 60)
+            t = (DTindex - pd.Timestamp(origin_ts)) / pd.Timedelta(hours=1)
             # add hourly, weekly, yearly
             seasonal_list.append(fourier_series(t, p=8766, n=10))
             seasonal_list.append(fourier_series(t, p=24, n=3))
