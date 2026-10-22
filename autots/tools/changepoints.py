@@ -3274,7 +3274,11 @@ def changepoint_fcst_from_last_row(x_t_last_row, n_forecast=10):
 
 
 def half_yr_spacing(df):
-    return int(df.shape[0] / ((df.index.max().year - df.index.min().year + 1) * 2))
+    """Return rows per half-year, using at least one elapsed year of history."""
+    elapsed_years = max(
+        (df.index.max() - df.index.min()) / pd.Timedelta(days=365.25), 1.0
+    )
+    return max(1, int(df.shape[0] / (elapsed_years * 2)))
 
 
 def _create_pelt_changepoint_features(
