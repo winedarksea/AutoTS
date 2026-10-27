@@ -1,5 +1,6 @@
 """Numerical and observation-mask contracts for the linear forecast models."""
 
+import random
 import unittest
 from statistics import NormalDist
 from unittest.mock import patch
@@ -13,6 +14,7 @@ from autots.tools.linear import (
     linear_fit_covariance,
     observation_mask_groups,
     solve_linear_coefficients,
+    solve_huber_coefficients,
 )
 
 
@@ -44,6 +46,59 @@ class TestLinearCoefficients(unittest.TestCase):
         with patch("numpy.linalg.solve", side_effect=np.linalg.LinAlgError):
             actual = solve_linear_coefficients(self.design, self.targets, 2)
         np.testing.assert_allclose(actual, expected, atol=1e-12)
+
+    def test_huber_fit_resists_outliers_and_handles_missing_targets(self):
+        x = np.linspace(-1, 1, 101)
+        design = np.column_stack((x, np.ones_like(x)))
+        targets = np.column_stack((3 + 2 * x, 4 - x))
+        targets[50, 0] += 100
+        targets[::7, 1] = np.nan
+        ordinary = np.column_stack(
+            [
+                solve_linear_coefficients(
+                    design[np.isfinite(targets[:, column])],
+                    targets[np.isfinite(targets[:, column]), column],
+                    0,
+                )
+                for column in range(targets.shape[1])
+            ]
+        )
+        robust = solve_huber_coefficients(design, targets, penalty=0, iterations=50)
+        self.assertLess(abs(robust[1, 0] - 3), abs(ordinary[1, 0] - 3))
+        self.assertLess(abs(robust[0, 1] + 1), 1e-6)
+        self.assertTrue(np.isfinite(robust).all())
+
+    def test_huber_wide_fit_matches_independent_series_with_distinct_masks(self):
+        rng = np.random.default_rng(43)
+        targets = rng.normal(size=(len(self.design), 600))
+        targets[30, :] += 40
+        targets[::7, 512:] = np.nan
+        design = self.design.copy()
+        design[0, 0] = np.nan
+        actual = solve_huber_coefficients(design, targets, penalty=2, iterations=8)
+        for column in (0, 511, 512, 599):
+            with self.subTest(column=column):
+                expected = solve_huber_coefficients(
+                    design, targets[:, column], penalty=2, iterations=8
+                )
+                np.testing.assert_allclose(actual[:, column], expected, atol=1e-12)
+
+    def test_basic_linear_huber_selection_is_rare_and_excluded_from_fast(self):
+        original_choices = random.choices
+
+        def choose_huber(population, weights=None, **kwargs):
+            if population == ["lstsq", "huber"]:
+                self.assertEqual(weights, [0.98, 0.02])
+                return ["huber"]
+            return original_choices(population, weights=weights, **kwargs)
+
+        with patch("autots.models.basics.random.choices", side_effect=choose_huber):
+            model = BasicLinearModel(holiday_countries_used=False)
+            random_params = model.get_new_params(method="random")
+            fast_params = model.get_new_params(method="fast")
+        self.assertEqual(random_params["linear_model"], "huber")
+        self.assertEqual(random_params["huber_iterations"], 50)
+        self.assertEqual(fast_params["linear_model"], "lstsq")
 
     def test_single_target_and_singular_partially_penalized_design(self):
         design = np.column_stack((self.design, np.zeros(90)))
@@ -153,6 +208,7 @@ class TestBasicLinearMissingData(unittest.TestCase):
             self.assertTrue(
                 (prediction.lower_forecast <= prediction.forecast).all().all()
             )
+
             self.assertTrue(
                 (prediction.upper_forecast >= prediction.forecast).all().all()
             )
@@ -161,6 +217,13 @@ class TestBasicLinearMissingData(unittest.TestCase):
                 components[self.data.columns], prediction.forecast, atol=1e-10
             )
         pd.testing.assert_frame_equal(self.data, original)
+
+    def test_huber_mode_fits_and_round_trips_model_parameters(self):
+        model = self.model(linear_model="huber", huber_iterations=8).fit(self.data)
+        prediction = model.predict(7)
+        self.assertEqual(model.get_params()["linear_model"], "huber")
+        self.assertEqual(model.get_params()["huber_iterations"], 8)
+        self.assertTrue(np.isfinite(prediction.forecast.to_numpy()).all())
 
     def test_invalid_training_design_rows_are_excluded_before_products(self):
         regressor = pd.DataFrame({"regressor": np.arange(400.0)}, index=self.data.index)

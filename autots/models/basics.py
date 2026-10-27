@@ -51,6 +51,7 @@ from autots.models.sklearn import rolling_x_regressor_regressor
 from autots.tools.kalman import kalman_fusion_forecasts
 from autots.tools.linear import (
     solve_linear_coefficients,
+    solve_huber_coefficients,
     linear_fit_covariance,
     observation_mask_groups,
 )
@@ -3663,14 +3664,9 @@ class BasicLinearModel(ModelObject):
         name (str): String to identify class
         frequency (str): String alias of datetime index frequency or else 'infer'
         prediction_interval (float): Confidence interval for probabilistic forecast
+        linear_model (str): ``'lstsq'`` (default) or fixed-scale ``'huber'`` fitting
+        huber_iterations (int): Fixed number of Huber coefficient updates
         regression_type (str): "User" or None. If used, will be as covariate. The ratio of num_series:num_regressor_series will largely determine the impact
-        window (int): length of forecast history to match on
-        point_method (int): how to summarize the nearest neighbors to generate the point forecast
-            "weighted_mean", "mean", "median", "midhinge"
-        distance_metric (str): all valid values for scipy cdist + "nan_euclidean" from sklearn
-        include_differenced (bool): True to have the distance metric result be an average of the distance on absolute values as well as differenced values
-        k (int): number of closest neighbors to consider
-        stride_size (int): how many obs to skip between each new window. Higher numbers will reduce the number of matching windows and make the model faster.
     """
 
     def __init__(
@@ -3686,6 +3682,8 @@ class BasicLinearModel(ModelObject):
         changepoint_spacing: int = 60,
         changepoint_distance_end: int = 180,
         lambda_: float = 2.0,
+        linear_model: str = "lstsq",
+        huber_iterations: int = 50,
         trend_phi: float = None,
         holiday_countries_used: bool = True,
         **kwargs,
@@ -3704,6 +3702,12 @@ class BasicLinearModel(ModelObject):
         self.changepoint_spacing = changepoint_spacing
         self.changepoint_distance_end = changepoint_distance_end
         self.lambda_ = lambda_
+        self.linear_model = str(linear_model).lower()
+        if self.linear_model not in {"lstsq", "huber"}:
+            raise ValueError("linear_model must be 'lstsq' or 'huber'.")
+        self.huber_iterations = int(huber_iterations)
+        if self.huber_iterations < 1:
+            raise ValueError("huber_iterations must be at least 1.")
         self.trend_phi = trend_phi
         self.holiday_countries_used = holiday_countries_used
 
@@ -3819,7 +3823,15 @@ class BasicLinearModel(ModelObject):
         for rows, columns in observation_mask_groups(X_values, Y_values):
             design = X_values[rows]
             targets = Y_values[np.ix_(rows, columns)]
-            coefficients = solve_linear_coefficients(design, targets, self.lambda_)
+            if self.linear_model == "huber":
+                coefficients = solve_huber_coefficients(
+                    design,
+                    targets,
+                    self.lambda_,
+                    iterations=self.huber_iterations,
+                )
+            else:
+                coefficients = solve_linear_coefficients(design, targets, self.lambda_)
             covariance, residual_dof = linear_fit_covariance(design, self.lambda_)
             self.beta[:, columns] = coefficients
             self.sigma[columns] = np.sqrt(
@@ -4143,6 +4155,11 @@ class BasicLinearModel(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning"""
+        linear_model = (
+            random.choices(["lstsq", "huber"], [0.98, 0.02])[0]
+            if method not in {"fast", "superfast"}
+            else "lstsq"
+        )
         if "regressor" in method:
             regression_choice = "User"
         else:
@@ -4163,6 +4180,8 @@ class BasicLinearModel(ModelObject):
                 [0.6, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
                 k=1,
             )[0],
+            "linear_model": linear_model,
+            "huber_iterations": 50,
             "trend_phi": random.choices(
                 [None, 0.995, 0.99, 0.98, 0.97, 0.8], [0.9, 0.05, 0.05, 0.1, 0.02, 0.01]
             )[0],
@@ -4177,6 +4196,8 @@ class BasicLinearModel(ModelObject):
             "changepoint_distance_end": self.changepoint_distance_end,
             "regression_type": self.regression_type,
             "lambda_": self.lambda_,
+            "linear_model": self.linear_model,
+            "huber_iterations": self.huber_iterations,
             "trend_phi": self.trend_phi,
             "holiday_countries_used": self.holiday_countries_used,
         }
