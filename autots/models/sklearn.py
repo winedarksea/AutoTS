@@ -7,8 +7,11 @@ Decision Tree, Elastic Net,  Random Forest, MLPRegressor, KNN, Adaboost
 import hashlib
 import datetime
 import random
+import warnings
 import numpy as np
 import pandas as pd
+
+warnings.filterwarnings("ignore", message="Liblinear failed to converge")
 
 # because this attempts to make sklearn optional for overall usage
 try:
