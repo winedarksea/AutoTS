@@ -223,6 +223,41 @@ class MLEnsembleTest(unittest.TestCase):
 
         print("Datepart methods tests passed!")
 
+    def test_model_nan_in_holdout(self):
+        """NaN actuals in the holdout (fillna=None upstream) must not reach the regressor as labels."""
+        n_timesteps = 120
+        n_series = 4
+        forecast_length = 10
+        dates = pd.date_range(start='2023-01-01', periods=n_timesteps, freq='D')
+
+        np.random.seed(42)
+        data = np.random.randn(n_timesteps, n_series) * 0.5 + 10
+        df_train = pd.DataFrame(
+            data, index=dates, columns=[f'series_{i}' for i in range(n_series)]
+        )
+        df_train.iloc[-forecast_length:, :2] = np.nan
+
+        model = MLEnsemble(
+            forecast_length=forecast_length,
+            num_validations=0,
+            validation_method="backwards",
+            datepart_method="simple",
+            models=[
+                {
+                    'Model': 'LastValueNaive',
+                    'ModelParameters': '{}',
+                    'TransformationParameters': '{"fillna": "ffill", "transformations": {}, "transformation_params": {}}',
+                },
+            ],
+            verbose=0,
+            random_seed=42,
+        )
+        model.fit(df_train)
+        self.assertTrue(np.isfinite(model.y).all())
+        self.assertTrue(np.isfinite(model.X).all())
+        prediction = model.predict(forecast_length=forecast_length)
+        self.assertTrue(np.isfinite(prediction.forecast.values).all())
+
 
 if __name__ == '__main__':
     unittest.main()

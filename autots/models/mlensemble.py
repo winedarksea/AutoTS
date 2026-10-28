@@ -70,6 +70,13 @@ def _align_result_windows(result_windows, source_columns, target_columns):
     return aligned
 
 
+def _sanitize_feature_matrix(feature_matrix):
+    """Replace NaN/inf features (from unfilled history stats) so any regressor accepts them."""
+    if not np.isfinite(feature_matrix).all():
+        feature_matrix = np.nan_to_num(feature_matrix, nan=0.0, posinf=0.0, neginf=0.0)
+    return feature_matrix
+
+
 def create_feature(
     df_train,
     models,
@@ -445,10 +452,16 @@ class MLEnsemble(ModelObject):
                 if val < 1:
                     raise e
                 else:
-                    print(f"validation round {y} failed with {repr(e)}")
+                    print(f"validation round {val} failed with {repr(e)}")
 
-        self.X = np.concatenate(X, axis=1).T
-        self.y = np.concatenate(y, axis=0)
+        self.X = _sanitize_feature_matrix(np.concatenate(X, axis=1).T)
+        self.y = np.concatenate(y, axis=0).astype(float)
+        # Missing/inf actuals (fillna=None, unstable transforms) carry no label; drop rather than impute
+        valid_label_mask = np.isfinite(self.y) & (np.abs(self.y) < 1e12)
+        if not valid_label_mask.any():
+            raise ValueError("MLEnsemble: no finite target values in validation holdouts")
+        self.X = self.X[valid_label_mask]
+        self.y = self.y[valid_label_mask]
 
         self.regr = retrieve_regressor(
             regression_model=self.regression_model,
@@ -497,7 +510,7 @@ class MLEnsemble(ModelObject):
             n_jobs=self.n_jobs,
         )
         X.append(res.reshape(res.shape[0], -1))
-        X = np.concatenate(X, axis=1).T
+        X = _sanitize_feature_matrix(np.concatenate(X, axis=1).T)
         forecast = pd.DataFrame(
             self.regr.predict(X).reshape(self.forecast_length, self.df.shape[1]),
             index=test_index,
