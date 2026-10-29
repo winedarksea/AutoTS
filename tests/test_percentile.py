@@ -3,9 +3,45 @@ import unittest
 from autots import load_linear
 from autots.tools.percentile import nan_quantile, nan_percentile
 import timeit
+import warnings
 
 
 class TestImpute(unittest.TestCase):
+    def _assert_all_nan_slices(self, quantile):
+        values = np.array(
+            [[1.0, np.nan, 9.0], [2.0, np.nan, np.nan],
+             [np.nan, np.nan, 6.0], [4.0, np.nan, 3.0],
+             [8.0, np.nan, 2.0]]
+        )
+        for method, numpy_method in [
+            ("linear", "linear"), ("nearest", "nearest"),
+            ("lowest", "lower"), ("highest", "higher"),
+        ]:
+            for array in [values, np.stack([values, values[:, ::-1]], axis=1)]:
+                for percentile in [50, [0, 50, 100]]:
+                    with self.subTest(method=method, shape=array.shape, q=percentile):
+                        original = array.copy()
+                        keyword = ("method" if np.lib.NumpyVersion(np.__version__) >= "1.22.0"
+                                   else "interpolation")
+                        with warnings.catch_warnings():
+                            warnings.simplefilter("ignore", RuntimeWarning)
+                            expected = np.nanpercentile(
+                                array, percentile, axis=0, **{keyword: numpy_method}
+                            )
+                        if quantile:
+                            q = (np.asarray(percentile) / 100).tolist()
+                            actual = nan_quantile(array, q=q, method=method)
+                        else:
+                            actual = nan_percentile(array, q=percentile, method=method)
+                        np.testing.assert_allclose(actual, expected, equal_nan=True)
+                        np.testing.assert_array_equal(array, original)
+
+    def test_percentile_all_nan_slices(self):
+        self._assert_all_nan_slices(quantile=False)
+
+    def test_quantile_all_nan_slices(self):
+        self._assert_all_nan_slices(quantile=True)
+
     def test_percentile(self):
         print("Starting test_percentile")
         df = load_linear(

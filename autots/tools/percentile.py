@@ -47,6 +47,7 @@ def nan_percentile(in_arr, q, method="linear", axis=0, errors="raise"):
             raise ValueError("input not supported by internal percentile function")
     # valid (non NaN) observations along the first axis
     valid_obs = np.sum(np.isfinite(arr), axis=0)
+    all_nan_slices = np.all(np.isnan(arr), axis=0)
     # replace NaN with maximum
     max_val = np.nanmax(arr)
     arr = np.where(np.isnan(arr), max_val, arr)
@@ -99,6 +100,7 @@ def nan_percentile(in_arr, q, method="linear", axis=0, errors="raise"):
         else:
             raise ValueError("interpolation method not supported")
 
+        quant_arr[all_nan_slices] = np.nan
         if flag_2d:
             result.append(quant_arr[0])
         else:
