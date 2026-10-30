@@ -716,12 +716,15 @@ class HolidayDetector(object):
             iqr = float(method_params.get("iqr_threshold", 2.0) or 2.0)
             method_params["iqr_threshold"] = max(1.2, iqr - 0.5)
             changed = True
-        if "responsibility_threshold" in method_params:
-            rt = float(method_params.get("responsibility_threshold", 0.05) or 0.05)
-            method_params["responsibility_threshold"] = max(0.01, rt * 0.6)
-            changed = True
 
-        if not changed and method in {"zscore", "rolling_zscore", "mad"}:
+        # GMM methods flag the alpha share; a saved responsibility_threshold is ignored
+        if not changed and method in {
+            "zscore",
+            "rolling_zscore",
+            "mad",
+            "gaussianmixture",
+            "gaussianmixturebase",
+        }:
             method_params["alpha"] = 0.1
             changed = True
         if not changed and method == "iqr":

@@ -1382,7 +1382,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
                     "RandomForest": 0.2,
                     "ExtraTrees": 0.25,
                     "SVM": 0.1,
-                    "RadiusRegressor": 0.1,
+                    "RadiusNeighbors": 0.1,
                     'MultioutputGPR': 0.0001,
                     "ElasticNetwork": 0.05,
                 }
@@ -1628,8 +1628,8 @@ class DatepartRegressionTransformer(EmptyTransformer):
         transform_dict entries such as ReconciliationTransformer append aggregate
         series, so the fitted targets can be wider than df.
         """
-        # RadiusNeighbors returns NaN where no neighbor falls in radius, and the
-        # result is added to / subtracted from df, so a single NaN would spread
+        # the result is added to / subtracted from df, so one non-finite
+        # prediction (corrupt input rows, a diverging model) would spread
         # across the whole forecast. Zero leaves those cells untouched.
         pred = np.nan_to_num(
             np.asarray(pred, dtype=float), nan=0.0, posinf=0.0, neginf=0.0

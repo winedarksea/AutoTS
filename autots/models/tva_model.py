@@ -75,9 +75,8 @@ class TVAModel(ModelObject):
         fit_horizon: internal validation/calibration horizon for the 'factor'
             and 'none' modes; None caps it at max(28, T // 4) so long forecasts
             keep usable inner origins. Forecasts still cover forecast_length.
-        season_length: seasonal period for TVA's inner folds, seasonal-naive
-            baselines and origin anchor. None infers it from the data; an int
-            overrides.
+        season_length: seasonal period for TVA's inner folds and seasonal-naive
+            baselines. None infers it from the data; an int overrides.
         random_seed: Reproducibility seed.
         verbose: 0=silent, 1=progress bar, 2=per-epoch loss.
         n_jobs: Unused, kept for API compatibility.

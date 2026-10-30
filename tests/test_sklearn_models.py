@@ -62,15 +62,96 @@ class TestRetrieveRegressor(unittest.TestCase):
         )
         self.assertTrue(np.all(np.isfinite(small.predict(query))))
 
-    def test_radius_neighbors_out_of_range_uses_nearest_rows(self):
+    def _radius(self, radius=1.5, **kwargs):
+        return retrieve_regressor(
+            {
+                "model": "RadiusNeighbors",
+                "model_params": {"radius": radius, **kwargs},
+            },
+            multioutput=False,
+        )
+
+    def test_radius_neighbors_radius_scales_with_query_distance(self):
         X = np.arange(100, dtype=float).reshape(-1, 1)
         y = np.arange(100, dtype=float)
-        model = retrieve_regressor(
-            {"model": "RadiusNeighbors", "model_params": {"radius": 1.5}},
-            multioutput=False,
-        ).fit(X, y)
-        # 500 is far outside every training row: mean of the 5 nearest targets
-        np.testing.assert_allclose(model.predict(np.array([[500.0]])), [97.0])
+        model = self._radius(1.5).fit(X, y)
+        # nearest row is 99 (d1=401); 1.5*d1 holds the 50-row cap, rows 50-99
+        np.testing.assert_allclose(model.predict(np.array([[500.0]])), [74.5])
+        # in range: d1=0.2, so only rows within 0.3 count
+        np.testing.assert_allclose(model.predict(np.array([[50.2]])), [50.0])
+
+    def test_radius_below_one_is_nearest_row(self):
+        X = np.arange(20, dtype=float).reshape(-1, 1)
+        y = np.arange(20, dtype=float) * 3
+        model = self._radius(0.5).fit(X, y)
+        np.testing.assert_allclose(model.predict(np.array([[7.3], [30.0]])), [21, 57])
+
+    def test_radius_neighbors_mixed_scale_stays_local(self):
+        # one global radius let small-scale rows average large-scale targets
+        rng = np.random.default_rng(0)
+        small = rng.normal(1.0, 0.1, (60, 3))
+        large = rng.normal(1e4, 1e3, (60, 3))
+        X = np.vstack([small, large])
+        y = np.r_[np.ones(60), np.full(60, 1e4)]
+        for radius in (1.1, 2.0, 5.0):
+            pred = self._radius(radius).fit(X, y).predict(small[:10] * 1.05)
+            np.testing.assert_allclose(pred, 1.0)
+
+    def test_radius_distance_weights_and_multioutput(self):
+        X = np.arange(10, dtype=float).reshape(-1, 1)
+        Y = np.column_stack([X[:, 0], 2 * X[:, 0]])
+        model = self._radius(2.0, weights="distance").fit(X, Y)
+        pred = model.predict(np.array([[4.0], [6.4]]))
+        # exact match takes all the weight; else 1/d over rows 6 and 7
+        expected = (6 / 0.4 + 7 / 0.6) / (1 / 0.4 + 1 / 0.6)
+        np.testing.assert_allclose(pred, [[4, 8], [expected, 2 * expected]])
+
+    def test_radius_one_row_fit(self):
+        model = self._radius(2.0).fit(np.array([[1.0, 2.0]]), np.array([3.0]))
+        np.testing.assert_allclose(model.predict(np.array([[5.0, 5.0]])), [3.0])
+
+
+class _InfOnFirstPredict:
+    """Wraps a fitted regressor; the first predict returns inf in every cell."""
+
+    def __init__(self, model):
+        self.model = model
+        self.calls = 0
+
+    def predict(self, X):
+        pred = np.asarray(self.model.predict(X), dtype=float)
+        self.calls += 1
+        return np.full_like(pred, np.inf) if self.calls == 1 else pred
+
+
+class TestRecursiveNonFiniteGuards(unittest.TestCase):
+    def setUp(self):
+        idx = pd.date_range("2020-01-01", periods=60, freq="D")
+        t = np.arange(60, dtype=float)
+        self.df = pd.DataFrame({"a": 10 + t, "b": 50 - 0.5 * t}, index=idx)
+
+    def test_rolling_regression_carries_last_value(self):
+        model = RollingRegression(
+            regression_model={"model": "LinearRegression", "model_params": {}},
+            window=3,
+            mean_rolling_periods=3,
+        ).fit(self.df)
+        model.model = _InfOnFirstPredict(model.model)
+        forecast = model.predict(forecast_length=4, just_point_forecast=True)
+        self.assertTrue(np.isfinite(forecast.to_numpy()).all())
+        np.testing.assert_allclose(forecast.iloc[0], self.df.iloc[-1])
+
+    def test_multivariate_regression_carries_last_value(self):
+        model = MultivariateRegression(
+            forecast_length=4,
+            regression_model={"model": "LinearRegression", "model_params": {}},
+            mean_rolling_periods=3,
+            window=3,
+            verbose=0,
+        ).fit(self.df)
+        model.model = _InfOnFirstPredict(model.model)
+        forecast = model.predict(forecast_length=4, just_point_forecast=True)
+        self.assertTrue(np.isfinite(forecast.to_numpy()).all())
 
 
 class TestRetrieveClassifier(unittest.TestCase):

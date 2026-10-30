@@ -202,6 +202,28 @@ class TestSeasonLengthResolution(unittest.TestCase):
         model = _fit(_panel(), trend_network='none', season_length=14)
         self.assertEqual(model._season_length, 14)
 
+    def test_anchor_window_stays_seven_with_a_longer_season(self):
+        # a season-length window would add slope*(w + min(H, w))/2 trend bias
+        from unittest import mock
+
+        from autots.evaluator.tva import anchoring
+
+        model = _fit(
+            _panel(),
+            trend_network='none',
+            season_length=12,
+            factor_config={'origin_anchor': 'last_value'},
+        )
+        self.assertEqual(model._season_length, 12)
+        with mock.patch.object(
+            anchoring,
+            'origin_anchor_adjustment',
+            wraps=anchoring.origin_anchor_adjustment,
+        ) as spy:
+            _predict(model, 28)
+        self.assertTrue(spy.called)
+        self.assertTrue(all(c.kwargs['window'] == 7 for c in spy.call_args_list))
+
 
 class TestOriginAnchorNumpyMode(unittest.TestCase):
     def test_none_mode_anchor_matches_recent_level(self):

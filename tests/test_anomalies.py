@@ -795,5 +795,23 @@ class TestFeatureDetectorAnomalyParams(unittest.TestCase):
                 )
 
 
+
+class TestHolidayDetectorRelaxedParams(unittest.TestCase):
+    def test_gmm_saved_responsibility_threshold_loosens_alpha(self):
+        # gaussian_mixture ignores responsibility_threshold; only alpha loosens
+        for method in ("GaussianMixture", "GaussianMixtureBase"):
+            mod = HolidayDetector(
+                anomaly_detector_params={
+                    "method": method,
+                    "method_params": {"responsibility_threshold": 0.05},
+                }
+            )
+            relaxed = mod._relaxed_anomaly_detector_params()
+            self.assertEqual(relaxed["method_params"]["alpha"], 0.1)
+            self.assertEqual(
+                relaxed["method_params"]["responsibility_threshold"], 0.05
+            )
+
+
 if __name__ == '__main__':
     unittest.main()

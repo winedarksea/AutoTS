@@ -161,8 +161,8 @@ class TVA:
             keep usable inner origins (a 730-step horizon on 900 rows leaves
             none); predict still returns any requested length. v1/v2 always
             use forecast_horizon, their output head is that length.
-        season_length: Seasonal period used by the inner folds, seasonal
-            naive baselines and the origin-anchor window. None (default)
+        season_length: Seasonal period used by the inner folds and seasonal
+            naive baselines (the origin anchor stays at 7). None (default)
             infers it from the training panel (falling back to 7 when no
             season is detected); an int overrides.
         loss_weights: Dict overriding loss component weights.
@@ -1778,11 +1778,13 @@ class TVA:
             in_sample_periodic = in_sample_periodic[:end]
         else:
             in_sample_periodic = None
-        default_window = max(7, int(getattr(self, '_season_length', 7) or 7))
+        # not the season: on a trend the window-mean gap is a real
+        # slope*(w + min(H, w))/2 that the anchor removes, so longer windows
+        # bias more, and only 7 has been benchmarked
         adjustment = origin_anchor_adjustment(
             history,
             forecast_values,
-            window=int(cfg.get('origin_anchor_window') or default_window),
+            window=int(cfg.get('origin_anchor_window') or 7),
             mode=str(mode),
             history_periodic=in_sample_periodic,
             forecast_periodic=forecast_periodic,
@@ -2229,13 +2231,14 @@ class TVA:
         from autots.evaluator.tva import safety as sf
 
         sconf = cfg.get('safety_config') or {}
-        # folds at the full forecast horizon need T >= ~2H+2 and otherwise
-        # switch the layer off; selection at fit_horizon matches continuation
-        # selection, and the per-series weights/alphas don't depend on H
-        fold_horizon = max(min(int(horizon), int(self._fit_horizon or horizon)), 1)
-        folds = self._factor_inner_folds(
-            fold_horizon, int(cfg.get('inner_folds', 3) or 3)
-        )
+        # blend weights, alphas and the cap quantile all depend on H, so full-H
+        # folds are used whenever one fits; fit_horizon only keeps the layer
+        # on when T < ~2H+2 leaves no full-H origin
+        n_folds = int(cfg.get('inner_folds', 3) or 3)
+        folds = self._factor_inner_folds(horizon, n_folds)
+        fit_horizon = int(self._fit_horizon or horizon)
+        if not folds and 1 <= fit_horizon < int(horizon):
+            folds = self._factor_inner_folds(fit_horizon, n_folds)
         if not folds:
             return forecast_values, {'reason': 'insufficient history for inner folds'}
 

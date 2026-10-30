@@ -531,6 +531,38 @@ class TestSafetyLayerShortHistory(unittest.TestCase):
         self.assertEqual(fc.shape, (horizon, 4))
         self.assertTrue(np.isfinite(fc.values).all())
 
+    def test_full_horizon_folds_when_they_fit(self):
+        # T in [2H+2, 4H): full-H folds fit, so fit_horizon must not shorten them
+        import warnings
+
+        import pandas as pd
+
+        from autots.evaluator.tva.tva import TVA
+
+        n_time, horizon, fit_horizon = 200, 90, 28
+        values = _panel(n_time=n_time, n_series=4, seed=5)
+        df = pd.DataFrame(
+            values,
+            index=pd.date_range('2022-01-01', periods=n_time, freq='D'),
+            columns=[f's{i}' for i in range(4)],
+        )
+        model = TVA(
+            trend_network='factor',
+            forecast_horizon=horizon,
+            fit_horizon=fit_horizon,
+            random_seed=0,
+            verbose=0,
+            factor_config={'sn_blend': True, 'conformal_sigma': True},
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            model.fit(df)
+            model.predict(horizon)
+        info = model._safety_info
+        self.assertNotIn('reason', info)
+        self.assertEqual(info['origins'], [n_time - 1 - horizon])
+        self.assertEqual(len(info['bucket_scales']), horizon)
+
 
 class TestEndToEndFloor(unittest.TestCase):
     """The realistic shape of the wiring the caller will do."""
