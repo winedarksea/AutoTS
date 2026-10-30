@@ -12,11 +12,11 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from autots.tools.changepoints import (
     ChangepointDetector,
-    _build_ed_prefix_sums,
     _calculate_segment_cost,
     _detect_l0_trend_changepoints,
     _detect_pelt_changepoints,
     _detect_wbs2_changepoints,
+    _extend_ed_running_pairwise_sums,
     create_changepoint_features,
     find_market_changepoints_multivariate,
 )
@@ -696,39 +696,47 @@ class TestEdPelt(unittest.TestCase):
         seg = data[s:t]
         return float(np.sum(np.abs(seg[:, None] - seg[None, :])))
 
+    def _running_sums_at(self, data, end, low=0):
+        """Advance ED running sums point by point up to segments ending at end."""
+        running = np.zeros(len(data) + 1)
+        for t in range(1, end + 1):
+            _extend_ed_running_pairwise_sums(data, running, low, t)
+        return running
+
     # ------------------------------------------------------------------
-    # _build_ed_prefix_sums correctness
+    # _extend_ed_running_pairwise_sums correctness
     # ------------------------------------------------------------------
 
-    def test_prefix_sums_small_known(self):
-        """Prefix-sum matrix gives the correct cost for a hand-checked example."""
+    def test_running_sums_small_known(self):
+        """Running sums give the correct ordered cost for a hand-checked example."""
         data = np.array([1.0, 3.0, 6.0])
-        P = _build_ed_prefix_sums(data)
-        # Full segment: |1-1|+|1-3|+|1-6|+|3-1|+|3-3|+|3-6|+|6-1|+|6-3|+|6-6|
-        #             = 0+2+5+2+0+3+5+3+0 = 20
-        cost_full = P[3, 3] - P[0, 3] - P[3, 0] + P[0, 0]
-        self.assertAlmostEqual(cost_full, 20.0, places=6)
-        # Sub-segment [0,2): {1,3}  -> 0+2+2+0 = 4
-        cost_01 = P[2, 2] - P[0, 2] - P[2, 0] + P[0, 0]
-        self.assertAlmostEqual(cost_01, 4.0, places=6)
+        # Full segment ordered sum: 0+2+5+2+0+3+5+3+0 = 20 (running stores half).
+        self.assertAlmostEqual(2 * self._running_sums_at(data, 3)[0], 20.0, places=6)
+        # Sub-segment [0,2): {1,3} -> 0+2+2+0 = 4
+        self.assertAlmostEqual(2 * self._running_sums_at(data, 2)[0], 4.0, places=6)
 
-    def test_prefix_sums_agrees_with_brute_force(self):
-        """Prefix-sum matrix agrees with the brute-force double-loop on random data."""
+    def test_running_sums_agree_with_brute_force(self):
+        """Running sums agree with the brute-force double loop for every start."""
         rng = np.random.default_rng(7)
         data = rng.normal(0, 1, 50).astype(float)
-        P = _build_ed_prefix_sums(data)
-        for s, t in [(0, 50), (0, 20), (20, 50), (10, 30), (5, 15)]:
-            fast = float(P[t, t] - P[s, t] - P[t, s] + P[s, s])
-            slow = self._brute_ed_cost(data, s, t)
-            self.assertAlmostEqual(fast, slow, places=5, msg=f"segment [{s},{t})")
+        for t in (2, 20, 37, 50):
+            running = self._running_sums_at(data, t)
+            for s in range(t):
+                self.assertAlmostEqual(
+                    2 * running[s], self._brute_ed_cost(data, s, t), places=5,
+                    msg=f"segment [{s},{t})",
+                )
 
-    def test_prefix_sums_single_element_zero(self):
-        """A one-element segment has zero energy-distance cost."""
-        data = np.array([5.0, 9.0, 2.0])
-        P = _build_ed_prefix_sums(data)
-        for i in range(len(data)):
-            cost = float(P[i + 1, i + 1] - P[i, i + 1] - P[i + 1, i] + P[i, i])
-            self.assertAlmostEqual(cost, 0.0, places=10)
+    def test_running_sums_exact_above_low_bound(self):
+        """Starts at or above the low bound stay exact when lower ones are skipped."""
+        rng = np.random.default_rng(99)
+        data = rng.normal(0, 1, 30).astype(float)
+        running = self._running_sums_at(data, 30, low=12)
+        for s in range(12, 30):
+            self.assertAlmostEqual(
+                2 * running[s], _calculate_segment_cost(data[s:30], "ed"), places=5,
+                msg=f"segment [{s},30)",
+            )
 
     # ------------------------------------------------------------------
     # _calculate_segment_cost 'ed' correctness
@@ -750,20 +758,6 @@ class TestEdPelt(unittest.TestCase):
         seg = np.array([2.0, 8.0])
         # full matrix: 0+6+6+0 = 12
         self.assertAlmostEqual(_calculate_segment_cost(seg, "ed"), 12.0, places=6)
-
-    def test_prefix_sums_consistent_with_segment_cost(self):
-        """_build_ed_prefix_sums and _calculate_segment_cost agree for all sub-segments."""
-        rng = np.random.default_rng(99)
-        data = rng.normal(0, 1, 30).astype(float)
-        P = _build_ed_prefix_sums(data)
-        for s in range(0, 25, 5):
-            for t in range(s + 2, 30, 5):
-                via_prefix = float(P[t, t] - P[s, t] - P[t, s] + P[s, s])
-                via_cost = _calculate_segment_cost(data[s:t], "ed")
-                self.assertAlmostEqual(
-                    via_prefix, via_cost, places=5,
-                    msg=f"[{s},{t}) prefix={via_prefix:.4f} cost={via_cost:.4f}",
-                )
 
     # ------------------------------------------------------------------
     # _detect_pelt_changepoints with loss_function='ed'

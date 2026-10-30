@@ -1,7 +1,6 @@
 import random
 import heapq
 from math import comb
-from functools import lru_cache
 import numpy as np
 import pandas as pd
 from autots.tools.shaping import infer_frequency
@@ -262,8 +261,8 @@ def _calculate_segment_cost(segment_data, loss_function):
         # Uses the sorted-order identity to avoid an O(n^2) double loop:
         #   sum_{i,j} |x_i - x_j| = 2 * sum_k (2k - n + 1) * x_sorted[k]
         # where k is 0-indexed and x_sorted is the within-segment sorted order.
-        # The factor of 2 makes this consistent with _build_ed_prefix_sums which
-        # accumulates both (i,j) and (j,i) directions.
+        # The factor of 2 counts both (i,j) and (j,i) directions, matching the
+        # ordered-pair convention ED-PELT uses.
         n = len(segment_data)
         if n < 2:
             return 0.0
@@ -274,28 +273,22 @@ def _calculate_segment_cost(segment_data, loss_function):
         raise ValueError(f"Unknown loss function: {loss_function}")
 
 
-def _build_ed_prefix_sums(data):
+def _extend_ed_running_pairwise_sums(data, running_pairwise, low, end):
     """
-    Precompute the 2-D prefix-sum matrix of the absolute pairwise difference matrix
-    so that the energy-distance cost of any segment [s, t) can be retrieved in O(1):
+    Extend energy-distance running sums from segments ending at ``end - 1`` to
+    segments ending at ``end`` by adding the point ``data[end - 1]``.
 
-        cost(s, t) = P[t, t] - P[s, t] - P[t, s] + P[s, s]
-
-    Memory footprint is O(n^2): ~8 MB at n=1000, ~200 MB at n=5000.
-
-    Parameters:
-    data (np.ndarray): 1-D float array of length n.
-
-    Returns:
-    np.ndarray: Zero-padded (n+1, n+1) prefix-sum array P where
-        P[i, j] = sum_{r<i, c<j} |data[r] - data[c]|.
+    Contract: before the call ``running_pairwise[s] == sum_{s<=i<j<end-1}
+    |x_i - x_j|`` for every ``s >= low``; afterwards the same holds with
+    ``end``. Entries below ``low`` go stale, so ``low`` must never exceed the
+    smallest start still queried. Memory is O(n) and each call costs
+    O(end - low), versus the O(n^2) memory of a 2-D prefix-sum table.
     """
-    # Build full pairwise |x_i - x_j| matrix via broadcasting -- O(n^2) time and space.
-    diff_matrix = np.abs(data[:, None] - data[None, :])  # shape (n, n)
-    # Two cumulative sums turn the diff matrix into a 2-D prefix sum (SAT).
-    prefix_2d = np.zeros((len(data) + 1, len(data) + 1), dtype=float)
-    prefix_2d[1:, 1:] = np.cumsum(np.cumsum(diff_matrix, axis=0), axis=1)
-    return prefix_2d
+    new_index = end - 1
+    if new_index > low:
+        new_point_diffs = np.abs(data[low:new_index] - data[new_index])
+        # Reversed cumsum gives sum_{i=s}^{new_index-1} |x_new - x_i| for each s.
+        running_pairwise[low:new_index] += np.cumsum(new_point_diffs[::-1])[::-1]
 
 
 def _detect_pelt_changepoints(
@@ -310,10 +303,11 @@ def _detect_pelt_changepoints(
       O(1) and the full algorithm is O(n) amortised (fastest).
     * ``'ed'``  – energy-distance cost (ED-PELT, Haynes et al. 2017).  Detects
       distributional changes rather than pure level shifts, making it robust to
-      heavy-tailed noise and outliers.  Precomputes an O(n^2) 2-D prefix-sum
-      matrix so individual queries are O(1); total complexity O(n^2) in space
-      and time.  The pairwise sum is divided by segment length so the cost
-      grows O(L) like 'l2' and a fixed penalty controls it.
+      heavy-tailed noise and outliers.  Keeps O(n) running pairwise sums for
+      every start at or after the oldest live candidate, so time is O(n^2) in
+      the worst case (no changepoints) but memory stays O(n).  The pairwise sum
+      is divided by segment length so the cost grows O(L) like 'l2' and a fixed
+      penalty controls it.
     * ``'l1'``  – absolute-error cost.  Per-segment recomputation; slow for
       large n.
     * ``'huber'`` – Huber-loss cost.  Per-segment recomputation; slow for
@@ -347,14 +341,11 @@ def _detect_pelt_changepoints(
     # batch_segment_cost(starts, t): vectorized cost of segments [s, t)
     # for an int array of start indices.
     # ------------------------------------------------------------------
+    running_pairwise = None
     if loss_function == 'l2':
         # O(1) per query via 1-D prefix sums.
         prefix_sum = np.concatenate(([0.0], np.cumsum(data)))
         prefix_sq_sum = np.concatenate(([0.0], np.cumsum(data**2)))
-
-        def segment_cost(start, end):
-            s_sum = prefix_sum[end] - prefix_sum[start]
-            return prefix_sq_sum[end] - prefix_sq_sum[start] - s_sum * s_sum / (end - start)
 
         def batch_segment_cost(starts, end):
             lengths = end - starts
@@ -364,42 +355,28 @@ def _detect_pelt_changepoints(
 
     elif loss_function == 'ed':
         # ED-PELT (Energy Distance PELT, Haynes et al. 2017).
-        # Precompute 2-D prefix sum of |x_i - x_j|; O(n^2) memory/time up-front
-        # but O(1) per segment query thereafter.
-        # For n > ~6000 memory may become substantial (~290 MB at n=6000).
-        prefix_2d = _build_ed_prefix_sums(data)
-
-        def segment_cost(start, end):
-            return (
-                prefix_2d[end, end]
-                - prefix_2d[start, end]
-                - prefix_2d[end, start]
-                + prefix_2d[start, start]
-            ) / (end - start)
+        # running_pairwise[s] holds the unordered pairwise sum of segment [s, t),
+        # advanced one point per step by _extend_ed_running_pairwise_sums.
+        running_pairwise = np.zeros(n + 1)
 
         def batch_segment_cost(starts, end):
             # The raw pairwise sum grows O(L^2), which no fixed penalty can
             # balance (pure noise fragments at any penalty). Dividing by L gives
-            # L * mean|x_i - x_j|, the same O(L) growth as the l2 cost.
-            pairwise = (
-                prefix_2d[end, end]
-                - prefix_2d[starts, end]
-                - prefix_2d[end, starts]
-                + prefix_2d[starts, starts]
-            )
-            return pairwise / (end - starts)
+            # L * mean|x_i - x_j|, the same O(L) growth as the l2 cost. The 2x
+            # converts unordered pairs to the ordered sum of _calculate_segment_cost.
+            return 2.0 * running_pairwise[starts] / (end - starts)
 
     else:
-        # l1 / huber: per-segment recomputation with lru_cache.
-        # Inherently sequential; slow for large n.
-        @lru_cache(maxsize=10000)
-        def segment_cost(start, end):
-            if end <= start:
-                return 0.0
-            return float(_calculate_segment_cost(data[start:end], loss_function))
-
+        # l1 / huber: per-segment recomputation. Each (start, end) pair is
+        # queried once, so caching would never hit.
         def batch_segment_cost(starts, end):
-            return np.array([segment_cost(int(s), end) for s in starts], dtype=float)
+            return np.array(
+                [
+                    _calculate_segment_cost(data[start:end], loss_function)
+                    for start in starts
+                ],
+                dtype=float,
+            )
 
     # Approximate mode (pruning_factor > 1) bounds the candidate set to the
     # best-scoring few. Value margins fail here: a candidate at a true change
@@ -411,57 +388,77 @@ def _detect_pelt_changepoints(
     else:
         candidate_cap = None
 
-    # Candidate last-changepoint positions with their expiry times. Candidates
-    # are added lagged by min_segment_length so every live one is admissible.
+    # Candidate last-changepoint positions with their expiry times, held in
+    # preallocated arrays (live entries are [:candidate_count], ascending) so all
+    # per-step bookkeeping is vectorized. Candidates are added lagged by
+    # min_segment_length so every live one is admissible.
     # Exact pruning: a candidate s dominated at t (F[s] + C(s, t) > F[t]) is only
     # provably beaten by t once t itself is admissible, at t + min_segment_length,
     # so removal is deferred until then.
-    candidates = [0]
-    expiry = [n + 1]
+    candidates = np.zeros(n + 1, dtype=np.intp)
+    expiry = np.full(n + 1, n + 1, dtype=np.intp)
+    candidate_count = 1
     next_expiry = n + 1
+    # Oldest live candidate; ED running sums below it are never queried again.
+    oldest_candidate = 0
+
+    if running_pairwise is not None:
+        for t in range(1, min_segment_length):
+            _extend_ed_running_pairwise_sums(data, running_pairwise, 0, t)
 
     for t in range(min_segment_length, n + 1):
+        if running_pairwise is not None:
+            _extend_ed_running_pairwise_sums(
+                data, running_pairwise, oldest_candidate, t
+            )
         new_candidate = t - min_segment_length
         if new_candidate >= min_segment_length and F[new_candidate] < np.inf:
-            candidates.append(new_candidate)
-            expiry.append(n + 1)
+            candidates[candidate_count] = new_candidate
+            expiry[candidate_count] = n + 1
+            candidate_count += 1
         if t >= next_expiry:
-            kept = [i for i, e in enumerate(expiry) if e > t]
-            candidates = [candidates[i] for i in kept]
-            expiry = [expiry[i] for i in kept]
-            next_expiry = min(expiry, default=n + 1)
-        if not candidates:
+            keep = expiry[:candidate_count] > t
+            kept_count = int(keep.sum())
+            candidates[:kept_count] = candidates[:candidate_count][keep]
+            expiry[:kept_count] = expiry[:candidate_count][keep]
+            candidate_count = kept_count
+            next_expiry = int(expiry[:candidate_count].min()) if kept_count else n + 1
+            if kept_count:
+                oldest_candidate = int(candidates[0])
+        if candidate_count == 0:
             continue
 
-        # Scalar loop for small sets: numpy call overhead dominates below ~16.
-        if len(candidates) <= 16:
-            partial = [F[s] + segment_cost(s, t) for s in candidates]
-            best_idx = min(range(len(partial)), key=partial.__getitem__)
-            best_partial = partial[best_idx]
-        else:
-            partial = F[candidates] + batch_segment_cost(np.asarray(candidates), t)
-            best_idx = int(np.argmin(partial))
-            best_partial = partial[best_idx]
-            partial = partial.tolist()
-        F[t] = best_partial + penalty
-        cp[t] = candidates[best_idx]
+        live = candidates[:candidate_count]
+        partial = F[live] + batch_segment_cost(live, t)
+        best_idx = int(partial.argmin())
+        F_t = partial[best_idx] + penalty
+        F[t] = F_t
+        cp[t] = live[best_idx]
 
         # Pruning (Killick et al. 2012, K=0): segment costs are additive-or-better
         # under splitting, so s can never beat t once F[s] + C(s, t) > F[t].
         if candidate_cap is None:
             expire_at = t + min_segment_length
-            for i, value in enumerate(partial):
-                if value > F[t] and expiry[i] > expire_at:
-                    expiry[i] = expire_at
-                    if expire_at < next_expiry:
-                        next_expiry = expire_at
+            live_expiry = expiry[:candidate_count]
+            dominated = (partial > F_t) & (live_expiry > expire_at)
+            if dominated.any():
+                live_expiry[dominated] = expire_at
+                if expire_at < next_expiry:
+                    next_expiry = expire_at
         else:
-            kept = [i for i, value in enumerate(partial) if value <= F[t]]
-            if len(kept) > candidate_cap:
-                kept = sorted(kept, key=partial.__getitem__)[:candidate_cap]
-                kept.sort()
-            candidates = [candidates[i] for i in kept]
-            expiry = [n + 1] * len(candidates)
+            keep = partial <= F_t
+            kept_count = int(keep.sum())
+            if kept_count > candidate_cap:
+                kept_idx = np.flatnonzero(keep)
+                best_kept = np.argpartition(partial[kept_idx], candidate_cap - 1)
+                kept_idx = np.sort(kept_idx[best_kept[:candidate_cap]])
+                candidates[:candidate_cap] = live[kept_idx]
+                candidate_count = candidate_cap
+            elif kept_count < candidate_count:
+                candidates[:kept_count] = live[keep]
+                candidate_count = kept_count
+            if candidate_count:
+                oldest_candidate = int(candidates[0])
 
     # Backtrack through cp[] to recover the optimal segmentation.
     changepoints = []
@@ -5287,8 +5284,8 @@ class ChangepointDetector(object):
             else:
                 penalty_options = [10, 20, 50, 100, 200]
                 penalty_weights = [0.15, 0.25, 0.3, 0.2, 0.1]
-                # 'ed' kept rare because its O(n^2) precomputation is expensive
-                # for long series.
+                # 'ed' kept rare because its O(n^2) worst-case time is expensive
+                # for long series without changepoints.
                 loss_functions = ['l2', 'l1', 'huber', 'ed']
                 loss_weights = [0.89, 0.01, 0.02, 0.08]
                 min_segment_options = [2, 5, 10, 15]
