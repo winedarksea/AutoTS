@@ -11,8 +11,6 @@ import warnings
 import numpy as np
 import pandas as pd
 
-warnings.filterwarnings("ignore", message="Liblinear failed to converge")
-
 # because this attempts to make sklearn optional for overall usage
 try:
     from sklearn import config_context
@@ -24,6 +22,14 @@ try:
         RANSACRegressor,
         Ridge,
     )
+    from sklearn.base import BaseEstimator, RegressorMixin
+    from sklearn.neighbors import (
+        KNeighborsRegressor,
+        NearestNeighbors,
+        RadiusNeighborsRegressor,
+    )
+    from sklearn.preprocessing import StandardScaler as _RadiusScaler
+    from sklearn.svm import LinearSVR
     from sklearn.tree import (
         DecisionTreeRegressor,
         DecisionTreeClassifier,
@@ -48,6 +54,101 @@ try:
                 finally:
                     self.min_samples = None
             return super().fit(X, y, **kwargs)
+
+    class QuietLinearSVR(LinearSVR):
+        """LinearSVR that silences only its own Liblinear convergence warning.
+
+        Scoped to fit rather than a module-level filter so importing AutoTS does
+        not change warnings process-wide; also reaches joblib worker processes.
+        """
+
+        def fit(self, X, y, sample_weight=None):
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore", message="Liblinear failed to converge"
+                )
+                return super().fit(X, y, sample_weight=sample_weight)
+
+    class RelativeRadiusNeighborsRegressor(RegressorMixin, BaseEstimator):
+        """RadiusNeighbors whose radius is a multiple of the median 1-NN distance.
+
+        An absolute radius on unscaled lag/date features rarely contains any
+        training row (85-100% of predictions were NaN on load_daily/monthly), so
+        features are standardized and the radius scales with training density.
+        Queries outside the training range (trending series, future date
+        features) still have no neighbor at any radius; those use the k nearest
+        rows, as RadiusNeighborsClassifier's outlier_label does for classes.
+        """
+
+        outlier_neighbors = 5
+
+        def __init__(
+            self,
+            radius=1.0,
+            weights="uniform",
+            algorithm="auto",
+            leaf_size=30,
+            p=2,
+            metric="minkowski",
+            n_jobs=None,
+        ):
+            self.radius = radius
+            self.weights = weights
+            self.algorithm = algorithm
+            self.leaf_size = leaf_size
+            self.p = p
+            self.metric = metric
+            self.n_jobs = n_jobs
+
+        def fit(self, X, y):
+            neighbor_args = dict(
+                algorithm=self.algorithm,
+                leaf_size=self.leaf_size,
+                p=self.p,
+                metric=self.metric,
+                n_jobs=self.n_jobs,
+            )
+            self.scaler_ = _RadiusScaler().fit(np.asarray(X, dtype=float))
+            X_scaled = self.scaler_.transform(np.asarray(X, dtype=float))
+            # density from a row sample is enough and keeps fit O(sample log n)
+            sample = X_scaled
+            if X_scaled.shape[0] > 2000:
+                rng = np.random.default_rng(0)
+                sample = X_scaled[rng.choice(X_scaled.shape[0], 2000, replace=False)]
+            distances, _ = (
+                NearestNeighbors(n_neighbors=2, **neighbor_args)
+                .fit(X_scaled)
+                .kneighbors(sample)
+            )
+            # column 0 is the row itself; duplicate rows give 0, which is no scale
+            nearest = distances[:, 1]
+            nearest = nearest[np.isfinite(nearest) & (nearest > 0)]
+            self.radius_ = float(self.radius) * (
+                float(np.median(nearest)) if nearest.size else 1.0
+            )
+            self.model_ = RadiusNeighborsRegressor(
+                radius=self.radius_, weights=self.weights, **neighbor_args
+            ).fit(X_scaled, y)
+            self.outlier_model_ = KNeighborsRegressor(
+                n_neighbors=min(self.outlier_neighbors, X_scaled.shape[0]),
+                weights=self.weights,
+                **neighbor_args,
+            ).fit(X_scaled, y)
+            return self
+
+        def predict(self, X):
+            X_scaled = self.scaler_.transform(np.asarray(X, dtype=float))
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore", message="One or more samples have no neighbors"
+                )
+                pred = np.asarray(self.model_.predict(X_scaled), dtype=float)
+            # an empty neighborhood is NaN in every output; a NaN training
+            # target only blanks its own column
+            empty = np.isnan(pred.reshape(pred.shape[0], -1)).all(axis=1)
+            if empty.any():
+                pred[empty] = self.outlier_model_.predict(X_scaled[empty])
+            return pred
 
 except Exception:
     pass
@@ -514,9 +615,7 @@ def retrieve_regressor(
         from sklearn.ensemble import AdaBoostRegressor
 
         if regression_model["model_params"]['estimator'] == 'SVR':
-            from sklearn.svm import LinearSVR
-
-            svc = LinearSVR(verbose=0, random_state=random_seed, max_iter=1500)
+            svc = QuietLinearSVR(verbose=0, random_state=random_seed, max_iter=1500)
             regr = AdaBoostRegressor(
                 estimator=svc,
                 n_estimators=regression_model["model_params"]['n_estimators'],
@@ -586,15 +685,13 @@ def retrieve_regressor(
             )
         return regr
     elif model_class in ['SVM', "LinearSVR"]:
-        from sklearn.svm import LinearSVR
-
         if multioutput:
             regr = MultiOutputRegressor(
-                LinearSVR(verbose=verbose_bool, **model_param_dict),
+                QuietLinearSVR(verbose=verbose_bool, **model_param_dict),
                 n_jobs=n_jobs,
             )
         else:
-            regr = LinearSVR(verbose=verbose_bool, **model_param_dict)
+            regr = QuietLinearSVR(verbose=verbose_bool, **model_param_dict)
         return regr
     elif model_class == 'Ridge':
         return Ridge(random_state=random_seed, **model_param_dict)
@@ -620,10 +717,7 @@ def retrieve_regressor(
         "RadiusRegressor",
         "RadiusNeighborsRegressor",
     ]:
-        from sklearn.neighbors import RadiusNeighborsRegressor
-
-        regr = RadiusNeighborsRegressor(n_jobs=n_jobs, **model_param_dict)
-        return regr
+        return RelativeRadiusNeighborsRegressor(n_jobs=n_jobs, **model_param_dict)
     elif model_class == "PoissonRegresssion":
         from sklearn.linear_model import PoissonRegressor
 
@@ -1669,8 +1763,9 @@ def generate_regressor_params(
                 },
             }
         elif model == 'RadiusNeighbors':
+            # multiples of the median 1-NN distance (RelativeRadiusNeighborsRegressor)
             radius_choice = random.choices(
-                [0.5, 1.0, 2.0, 5.0, 10.0], [0.1, 0.4, 0.4, 0.15, 0.05]
+                [1.0, 1.5, 2.0, 3.0, 5.0], [0.15, 0.25, 0.25, 0.2, 0.15]
             )[0]
             weights_choice = random.choices(["uniform", "distance"], [0.6, 0.4])[0]
             algorithm_choice = random.choices(
@@ -1988,18 +2083,6 @@ class RollingRegression(ModelObject):
                 index=[forecast_idx],
                 columns=history.columns,
             )
-            # RadiusNeighbors emits NaN when no neighbors are found
-            arr = rf_pred.to_numpy(dtype=float)
-            if not np.isfinite(arr).all():
-                bad = ~np.isfinite(arr)
-                fill = np.nan_to_num(
-                    history.iloc[-1].to_numpy(dtype=float),
-                    nan=0.0,
-                    posinf=0.0,
-                    neginf=0.0,
-                )
-                arr[bad] = np.broadcast_to(fill, arr.shape)[bad]
-                rf_pred = pd.DataFrame(arr, index=rf_pred.index, columns=rf_pred.columns)
             forecasts.append(rf_pred.copy())
             history = pd.concat([history, rf_pred], axis=0)
 
@@ -2415,11 +2498,10 @@ class WindowRegression(ModelObject):
                 if self.input_dim == 'univariate':
                     rfPred = rfPred.transpose()
                     rfPred.columns = self.last_window.columns
-                # RadiusNeighbors emits NaN when no neighbors are found, and
                 # boosted models can diverge to inf on unscaled data. Fed back
-                # into last_window either one poisons every later step, so carry
-                # the most recent value forward instead.
-                arr = rfPred.to_numpy(dtype=float)
+                # into last_window it poisons every later step, so carry the
+                # most recent value forward instead.
+                arr = rfPred.to_numpy(dtype=float, copy=True)
                 if not np.isfinite(arr).all():
                     bad = ~np.isfinite(arr)
                     if rfPred.shape[1] == self.last_window.shape[1]:
@@ -2480,9 +2562,6 @@ class WindowRegression(ModelObject):
 
         df.columns = self.column_names
         df.index = index
-        if self.regression_model.get("model", "None") == "RadiusNeighbors":
-            print('interpolating')
-            df = df.interpolate("pchip").bfill()
         if just_point_forecast:
             return df
         else:
@@ -2765,10 +2844,6 @@ class DatepartRegression(ModelObject):
             raise ValueError(
                 f"Datepart prediction with params {self.get_params()} failed. This is often due to an improperly indexed future_regressor (with drop_most_recent especially)"
             ) from e
-        # RadiusNeighbors works decently well but starts throwing out NaN when it can't find neighbors
-        if self.regression_model.get("model", "None") == "RadiusNeighbors":
-            print('interpolating')
-            forecast = forecast.interpolate("pchip").bfill()
 
         if just_point_forecast:
             return forecast
@@ -3536,19 +3611,6 @@ class MultivariateRegression(ModelObject):
                 c_x_pred = np.nan_to_num(c_x_pred, nan=0.0, posinf=0.0, neginf=0.0)
 
             rfPred = self.model.predict(c_x_pred)
-            # RadiusNeighbors returns NaN when no neighbor falls inside the radius.
-            # pred_clean is fed back into current_x, so one NaN poisons every later
-            # step and the whole forecast; carry the last value forward instead.
-            if np.any(~np.isfinite(rfPred)):
-                rfPred = np.asarray(rfPred, dtype=float)
-                bad = ~np.isfinite(rfPred)
-                last_vals = np.nan_to_num(
-                    current_x.iloc[-1].to_numpy(dtype=float),
-                    nan=0.0,
-                    posinf=0.0,
-                    neginf=0.0,
-                )
-                rfPred[bad] = last_vals[bad]
             pred_clean = pd.DataFrame(
                 rfPred, index=current_x.columns, columns=[index[fcst_step]]
             ).transpose()

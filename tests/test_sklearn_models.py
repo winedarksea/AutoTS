@@ -48,6 +48,30 @@ class TestRetrieveRegressor(unittest.TestCase):
                 multioutput=False,
             )
 
+    def test_radius_neighbors_radius_is_scale_free(self):
+        # an absolute radius of 2 finds no neighbors at this scale
+        rng = np.random.default_rng(0)
+        X = rng.normal(size=(200, 4))
+        y = X @ np.array([1.0, -2.0, 0.5, 3.0])
+        query = rng.normal(size=(20, 4))
+        params = {"model": "RadiusNeighbors", "model_params": {"radius": 2.0}}
+        small = retrieve_regressor(params, multioutput=False).fit(X, y)
+        large = retrieve_regressor(params, multioutput=False).fit(X * 1e5, y)
+        np.testing.assert_allclose(
+            small.predict(query), large.predict(query * 1e5), rtol=1e-8
+        )
+        self.assertTrue(np.all(np.isfinite(small.predict(query))))
+
+    def test_radius_neighbors_out_of_range_uses_nearest_rows(self):
+        X = np.arange(100, dtype=float).reshape(-1, 1)
+        y = np.arange(100, dtype=float)
+        model = retrieve_regressor(
+            {"model": "RadiusNeighbors", "model_params": {"radius": 1.5}},
+            multioutput=False,
+        ).fit(X, y)
+        # 500 is far outside every training row: mean of the 5 nearest targets
+        np.testing.assert_allclose(model.predict(np.array([[500.0]])), [97.0])
+
 
 class TestRetrieveClassifier(unittest.TestCase):
     def test_sgd_multioutput_classifier(self):
@@ -109,6 +133,28 @@ class TestRollingRegression(unittest.TestCase):
         forecast = model.predict(forecast_length=3, just_point_forecast=True)
         self.assertEqual(forecast.shape, (3, 1))
         self.assertEqual(forecast.index[0], df.index[-1] + pd.Timedelta(days=1))
+
+    def test_radius_neighbors_trending_large_scale_is_finite(self):
+        # forecasts walk past the training range, where the old absolute radius
+        # returned NaN for every step
+        idx = pd.date_range("2021-01-01", periods=120, freq="D")
+        t = np.arange(120, dtype=float)
+        df = pd.DataFrame(
+            {"a": 1e5 + 500 * t + 2e3 * np.sin(t / 3), "b": 3e5 - 200 * t},
+            index=idx,
+        )
+        model = RollingRegression(
+            regression_model={
+                "model": "RadiusNeighbors",
+                "model_params": {"radius": 2.0},
+            },
+            window=7,
+            mean_rolling_periods=14,
+        )
+        model.fit(df)
+        forecast = model.predict(forecast_length=10, just_point_forecast=True)
+        self.assertEqual(forecast.shape, (10, 2))
+        self.assertTrue(np.all(np.isfinite(forecast.to_numpy())))
 
     def test_generate_regressor_params_trees_method(self):
         random.seed(1)

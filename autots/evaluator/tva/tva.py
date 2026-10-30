@@ -1786,7 +1786,7 @@ class TVA:
             mode=str(mode),
             history_periodic=in_sample_periodic,
             forecast_periodic=forecast_periodic,
-            # a missing key (configs saved before the guard) still gets it
+            # cfg can be the raw user factor_config (no defaults merged in)
             max_ratio=cfg.get(
                 'origin_anchor_max_ratio', DEFAULT_ORIGIN_ANCHOR_MAX_RATIO
             ),

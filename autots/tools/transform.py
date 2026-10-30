@@ -2574,6 +2574,7 @@ class ScipyFilter(EmptyTransformer):
                 if isinstance(mysize, int):
                     mysize = (mysize, 1)
             filtered = wiener(df.values, mysize=mysize)
+            # constant windows give 0/0 in scipy's wiener; raw is exact there
             filtered = np.where(np.isfinite(filtered), filtered, df.values)
             return pd.DataFrame(filtered, columns=df.columns, index=df.index)
         elif self.method == "savgol_filter":
