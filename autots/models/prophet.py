@@ -363,7 +363,9 @@ class FBProphet(ModelObject):
                 args['holiday'] = mod.dates_to_holidays(
                     self.df_train.index.union(test_index), style="prophet"
                 )
-            except Exception:
+            except Exception as e:
+                if self.verbose > 1:
+                    print(f"Prophet auto-holiday detection failed with error: {e}")
                 args['holiday'] = None
 
         parallel = True
