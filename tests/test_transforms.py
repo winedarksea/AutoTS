@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Overall testing."""
 import json
+import random
 import unittest
 import numpy as np
 import pandas as pd
@@ -750,14 +751,21 @@ class TestTransforms(unittest.TestCase):
             {'series1': series1, 'series2': series2, 'series3': series3}, index=dates
         )
 
-        # Test get_new_params
-        params = LevelShiftMagic.get_new_params()
-        self.assertTrue(params)
-        self.assertIsInstance(params, dict)
-        self.assertIn('window_size', params)
-        self.assertIn('alpha', params)
-        self.assertIn('output', params)
-        self.assertIn(params['output'], ['multivariate', 'univariate'])
+        # Test get_new_params; linear_gap draws carry scales instead of window_size
+        seen_window_methods = set()
+        for seed in range(40):
+            random.seed(seed)
+            params = LevelShiftMagic.get_new_params()
+            self.assertIsInstance(params, dict)
+            self.assertIn('alpha', params)
+            self.assertIn(params['output'], ['multivariate', 'univariate'])
+            if params['window_method'] == 'linear_gap':
+                self.assertIn('scales', params)
+                self.assertNotIn('window_size', params)
+            else:
+                self.assertIn('window_size', params)
+            seen_window_methods.add(params['window_method'] == 'linear_gap')
+        self.assertEqual(seen_window_methods, {True, False})
 
         # Test basic fit/transform/inverse (multivariate mode)
         transformer = LevelShiftMagic(

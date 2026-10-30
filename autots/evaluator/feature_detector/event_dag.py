@@ -2,7 +2,6 @@
 """Event DAG utilities for TimeSeriesFeatureDetector."""
 
 import copy
-import random
 from typing import Optional
 
 import numpy as np
@@ -114,23 +113,6 @@ def empty_event_dag(
     if resolved['tag_recurring_doy']:
         dag['meta']['tag_recurring_doy'] = True
     return dag
-
-
-def get_new_event_dag_params(method='random'):
-    """Sample event DAG options; non-default choices are deliberately rare."""
-    if method not in ('random', 'default'):
-        method = 'random'
-    if method == 'default':
-        return {}
-    window = random.choices([1, 'auto', 7, 14], [0.7, 0.15, 0.1, 0.05])[0]
-    return {
-        'magnitude_normalization': (
-            'series_scale' if random.random() < 0.25 else 'none'
-        ),
-        'cluster_window_periods': window,
-        'tag_recurring_doy': random.random() < 0.2,
-        'slope_horizon_periods': random.choices([28, 90, 365], [0.2, 0.6, 0.2])[0],
-    }
 
 
 def _resolve_window_periods(window, step: pd.Timedelta) -> int:

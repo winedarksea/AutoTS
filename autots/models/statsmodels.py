@@ -1946,18 +1946,12 @@ class VAR(ModelObject):
 
             transformer = EmptyTransformer()
 
-        # statsmodels refuses to estimate when maxlags is too large for the panel.
-        # The cap is conservative (ic selection needs more room than a plain fit), and a
-        # k_ar=0 result cannot forecast at all (forecast_interval IndexErrors), so k_ar<1
-        # retries a plain lag-1 fit; panels too wide even for that fail as unestimable.
-        maxlags = self.maxlags
-        if maxlags is not None:
-            nobs, neqs = self.df_train.shape
-            maxlags = max(0, min(maxlags, int((nobs - 1) / (neqs + 1)) - 1))
+        # ic selection can pick 0 lags (select_order allows p=0), but statsmodels cannot
+        # forecast a VAR(0) (forecast_interval IndexErrors), so k_ar<1 refits at lag 1.
         if self.regression_type in ["User", "Holiday"]:
             self.model = VAR(
                 self.df_train, freq=self.frequency, exog=self.regressor_train
-            ).fit(maxlags=maxlags, ic=self.ic, trend='n')
+            ).fit(maxlags=self.maxlags, ic=self.ic, trend='n')
             if self.model.k_ar < 1:
                 self.model = VAR(
                     self.df_train, freq=self.frequency, exog=self.regressor_train
@@ -1969,7 +1963,7 @@ class VAR(ModelObject):
             )
         else:
             self.model = VAR(self.df_train, freq=self.frequency).fit(
-                ic=self.ic, maxlags=maxlags
+                ic=self.ic, maxlags=self.maxlags
             )
             if self.model.k_ar < 1:
                 self.model = VAR(self.df_train, freq=self.frequency).fit(maxlags=1)

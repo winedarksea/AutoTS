@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """Tests for opt-in Event DAG options (normalization, auto window, DOY tags)."""
 
-import copy
 import unittest
 from types import SimpleNamespace
 
@@ -10,7 +9,6 @@ import pandas as pd
 
 from autots.evaluator.feature_detector.event_dag import (
     build_event_dag_from_detector,
-    get_new_event_dag_params,
     resolve_event_dag_params,
 )
 
@@ -151,14 +149,6 @@ class TestEventDagOptions(unittest.TestCase):
         self.assertTrue(tags['2020-01-02'])
         self.assertFalse(tags['2019-07-01'])
         self.assertFalse(tags['2019-07-03'])
-
-    def test_get_new_event_dag_params_resolves(self):
-        for _ in range(50):
-            sampled = get_new_event_dag_params('random')
-            resolved = resolve_event_dag_params(sampled)
-            self.assertIn(resolved['magnitude_normalization'], ('none', 'series_scale'))
-            copy.deepcopy(resolved)
-        self.assertEqual(get_new_event_dag_params('default'), {})
 
 
 class TestEventDagOptionsRealDetector(unittest.TestCase):
