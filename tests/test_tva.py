@@ -1480,13 +1480,19 @@ class TestTVASeasonalityTrendPrior(unittest.TestCase):
             self._prior_flag('factor', {'seasonality_trend_prior': True})
         )
 
-    def test_model_search_leaves_it_to_tva(self):
+    def test_model_search_leaves_it_to_tva_in_factor_mode(self):
         from autots.models.tva_model import TVAModel
-        for _ in range(5):
+        for _ in range(20):
             params = TVAModel.get_new_params()
-            self.assertNotIn(
-                'seasonality_trend_prior', params['detector_params']
-            )
+            if params['trend_network'] == 'factor':
+                self.assertNotIn(
+                    'seasonality_trend_prior', params['detector_params']
+                )
+            else:
+                # other modes keep the detector's sampled value searchable
+                self.assertIn(
+                    'seasonality_trend_prior', params['detector_params']
+                )
 
 
 @SKIP_INTEGRATION

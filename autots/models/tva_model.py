@@ -75,6 +75,9 @@ class TVAModel(ModelObject):
         fit_horizon: internal validation/calibration horizon for the 'factor'
             and 'none' modes; None caps it at max(28, T // 4) so long forecasts
             keep usable inner origins. Forecasts still cover forecast_length.
+        season_length: seasonal period for TVA's inner folds, seasonal-naive
+            baselines and origin anchor. None infers it from the data; an int
+            overrides.
         random_seed: Reproducibility seed.
         verbose: 0=silent, 1=progress bar, 2=per-epoch loss.
         n_jobs: Unused, kept for API compatibility.
@@ -122,6 +125,7 @@ class TVAModel(ModelObject):
         verbose: int = 0,
         n_jobs: int = None,
         fit_horizon: int = None,
+        season_length: int = None,
         **kwargs,
     ):
         ModelObject.__init__(
@@ -167,6 +171,7 @@ class TVAModel(ModelObject):
         self.detector_params = detector_params
         self.holiday_countries = holiday_countries
         self.fit_horizon = fit_horizon
+        self.season_length = season_length
         self._tva = None
 
     def fit(self, df, future_regressor=None):
@@ -238,6 +243,7 @@ class TVAModel(ModelObject):
             window_size=effective_window,
             forecast_horizon=self.forecast_length,
             fit_horizon=self.fit_horizon,
+            season_length=self.season_length,
             loss_weights=self.loss_weights,
             series_metadata=self._coerced_series_metadata(),
             prior_adjacency=self.prior_adjacency,
@@ -421,6 +427,7 @@ class TVAModel(ModelObject):
             "detector_params": self.detector_params,
             "holiday_countries": self.holiday_countries,
             "fit_horizon": self.fit_horizon,
+            "season_length": self.season_length,
         }
 
     @staticmethod
@@ -775,9 +782,10 @@ class TVAModel(ModelObject):
         from autots.evaluator.feature_detector import TimeSeriesFeatureDetector
 
         detector_params = TimeSeriesFeatureDetector.get_new_params(method=method)
-        # left to TVA, which turns it off for 'factor' (blow-ups) and keeps it on
-        # elsewhere; a sampled value would override that per-mode default
-        detector_params.pop("seasonality_trend_prior", None)
+        # factor mode only: TVA turns the prior off there (it blew up factor
+        # fits) and a sampled value would override that; other modes may search it
+        if trend_network == 'factor':
+            detector_params.pop("seasonality_trend_prior", None)
 
         return {
             "trend_network": trend_network,

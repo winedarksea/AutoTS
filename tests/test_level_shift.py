@@ -5,7 +5,8 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from autots.tools.level_shift import chow_gap, detect_multiscale, PrefixSums
+from autots.tools.level_shift import chow_gap, detect_multiscale, PrefixSums, robust_z
+from autots.tools.level_shift_seasonality import infer_season_length
 from autots.tools.transform import LevelShiftMagic
 
 T = 730
@@ -164,6 +165,53 @@ class TestLinearGapDetection(unittest.TestCase):
         for i in range(3):
             rows = [row for row, _ in _shift_rows(model, df)[i]]
             self.assertTrue(any(abs(row - 400) <= 2 for row in rows), rows)
+
+
+class TestRobustZColumnIndependence(unittest.TestCase):
+    def test_late_starting_column_leaves_existing_column_unchanged(self):
+        rng = np.random.default_rng(11)
+        base = 50 + rng.normal(0, 1, T)
+        base[400:] += 6.0
+        # under 21 valid rows: used to switch every column to unthinned medians
+        late = np.full(T, np.nan)
+        late[-15:] = rng.normal(0, 1, 15)
+        alone = base[:, None]
+        joined = np.column_stack([base, late])
+        window = 30
+        stride = window // 8
+        _, norm_alone = chow_gap(PrefixSums(alone), window)
+        _, norm_joined = chow_gap(PrefixSums(joined), window)
+        np.testing.assert_allclose(
+            robust_z(norm_alone, stride=stride)[:, 0],
+            robust_z(norm_joined, stride=stride)[:, 0],
+        )
+        scales = LINEAR_GAP["scales"]
+        rows_alone = detect_multiscale(alone, scales, 4.0, 5)[0]
+        rows_joined, cols_joined = detect_multiscale(joined, scales, 4.0, 5)[:2]
+        self.assertGreater(rows_alone.size, 0)
+        np.testing.assert_array_equal(rows_alone, rows_joined[cols_joined == 0])
+
+
+class TestInferSeasonLength(unittest.TestCase):
+    def test_prefers_period_over_its_multiple(self):
+        # a period-12 season also correlates at lag 24; it used to win ~half the time
+        t = np.arange(120)[:, None]
+        values = np.sin(2 * np.pi * t / 12) * np.ones((1, 3))
+        self.assertEqual(infer_season_length(values), 12)
+        rng = np.random.default_rng(0)
+        noisy = (
+            np.cumsum(rng.normal(size=(144, 5)), axis=0)
+            + 5 * np.sin(2 * np.pi * np.arange(144)[:, None] / 12)
+            + rng.normal(size=(144, 5))
+        )
+        self.assertEqual(infer_season_length(noisy), 12)
+
+    def test_weekly_unchanged(self):
+        rng = np.random.default_rng(1)
+        values = 3 * np.sin(2 * np.pi * np.arange(400)[:, None] / 7) + rng.normal(
+            size=(400, 4)
+        )
+        self.assertEqual(infer_season_length(values), 7)
 
 
 class TestLegacyBugFixes(unittest.TestCase):

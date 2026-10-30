@@ -2688,6 +2688,8 @@ class Cassandra(ModelObject):
             "trend_model": self.trend_model,
             "trend_phi": self.trend_phi,
             "x_scaler": self.x_scaler,
+            "max_colinearity": self.max_colinearity,
+            "max_multicolinearity": self.max_multicolinearity,
             # "constraint": self.constraint,
         }
 

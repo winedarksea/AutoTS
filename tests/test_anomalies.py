@@ -7,7 +7,12 @@ Created on Mon Jul 18 16:27:48 2022
 import unittest
 import numpy as np
 import pandas as pd
-from autots.tools.anomaly_utils import available_methods, fast_methods, values_to_anomalies
+from autots.tools.anomaly_utils import (
+    available_methods,
+    detect_anomalies,
+    fast_methods,
+    values_to_anomalies,
+)
 from autots.evaluator.anomaly_detector import AnomalyDetector, HolidayDetector
 from autots.datasets import load_live_daily
 from autots.tools.transform import expanding_transformers
@@ -181,6 +186,29 @@ class TestNonparametricAnomalies(unittest.TestCase):
         self.assertEqual(anomalies.shape, df.shape)
         self.assertEqual(scores.shape, df.shape)
         self.assertTrue(np.all(np.isin(anomalies.to_numpy(), [-1, 1])))
+
+
+class TestGaussianMixtureAnomalies(unittest.TestCase):
+    def test_flags_alpha_share_and_score_ranks_flags_highest(self):
+        rng = np.random.default_rng(3)
+        n, alpha = 400, 0.05
+        values = rng.normal(0, 1, (n, 3))
+        values[::40] = rng.choice([-1.0, 1.0], (10, 3)) * rng.uniform(6, 10, (10, 3))
+        df = pd.DataFrame(values, index=pd.date_range("2024-01-01", periods=n))
+        for method in ["GaussianMixture", "GaussianMixtureBase"]:
+            with self.subTest(method=method):
+                anomalies, scores = detect_anomalies(
+                    df,
+                    output="univariate",
+                    method=method,
+                    method_params={"n_components": 2, "alpha": alpha},
+                )
+                flagged = anomalies.iloc[:, 0].to_numpy() == -1
+                row_score = scores.to_numpy()[:, 0]
+                self.assertLessEqual(abs(flagged.sum() - alpha * n), 1)
+                self.assertGreater(row_score[flagged].min(), row_score[~flagged].max())
+
+
 class TestVAEAnomalies(unittest.TestCase):
     """Test VAE anomaly detection functionality."""
 

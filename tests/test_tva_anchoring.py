@@ -160,6 +160,49 @@ def _predict(model, horizon):
         return model.predict(horizon)
 
 
+def _seasonal_panel(n_time, season, freq, n_series=5, seed=0):
+    rng = np.random.default_rng(seed)
+    t = np.arange(n_time)
+    common = np.cumsum(rng.normal(0, 0.3, n_time))
+    values = (
+        100.0
+        + common[:, None] * rng.uniform(0.5, 1.5, n_series)
+        + 4 * np.sin(2 * np.pi * t / season)[:, None]
+        + rng.normal(0, 0.5, (n_time, n_series))
+    )
+    index = pd.date_range('2015-01-01', periods=n_time, freq=freq)
+    return pd.DataFrame(values, index=index, columns=[f's{i}' for i in range(n_series)])
+
+
+class TestSeasonLengthResolution(unittest.TestCase):
+    def test_default_before_fit_is_seven(self):
+        self.assertEqual(TVA(trend_network='none', verbose=0)._season_length, 7)
+
+    def test_daily_panel_infers_seven(self):
+        model = _fit(_panel(), trend_network='none')
+        self.assertEqual(model._season_length, 7)
+
+    def test_monthly_panel_infers_twelve(self):
+        # 60 months; longer monthly panels can read the 24 harmonic instead
+        df = _seasonal_panel(60, 12, 'MS')
+        model = _fit(df, horizon=12, trend_network='none')
+        self.assertEqual(model._season_length, 12)
+        fc = _predict(model, 12)
+        self.assertEqual(fc.shape, (12, df.shape[1]))
+        self.assertTrue(np.isfinite(fc.values).all())
+
+    def test_no_detected_season_falls_back_to_seven(self):
+        rng = np.random.default_rng(3)
+        values = 100.0 + np.cumsum(rng.normal(0, 1.0, (200, 3)), axis=0)
+        index = pd.date_range('2020-01-01', periods=200, freq='D')
+        df = pd.DataFrame(values, index=index, columns=['a', 'b', 'c'])
+        self.assertEqual(_fit(df, trend_network='none')._season_length, 7)
+
+    def test_user_override_wins(self):
+        model = _fit(_panel(), trend_network='none', season_length=14)
+        self.assertEqual(model._season_length, 14)
+
+
 class TestOriginAnchorNumpyMode(unittest.TestCase):
     def test_none_mode_anchor_matches_recent_level(self):
         df = _panel()

@@ -14,14 +14,20 @@ SEASON_CANDIDATES = (7, 12, 24, 52)
 
 
 @quiet_empty_slices
-def infer_season_length(values, candidates=SEASON_CANDIDATES, min_correlation=0.2):
+def infer_season_length(
+    values, candidates=SEASON_CANDIDATES, min_correlation=0.2, divisor_tolerance=0.05
+):
     """Season length with the largest median lag-m autocorrelation of first differences.
 
-    Returns 0 when no candidate clears ``min_correlation`` (no seasonality).
+    A candidate that divides the winner and scores within ``divisor_tolerance``
+    of it is returned instead: a period-12 season also correlates at lag 24, and
+    the shorter period gives more cycles per phase. Returns 0 when no candidate
+    clears ``min_correlation`` (no seasonality).
     """
     T = values.shape[0]
     differences = np.diff(values, axis=0)
     best_length, best_correlation = 0, min_correlation
+    correlation_by_length = {}
     for m in candidates:
         if 3 * m >= T:
             continue
@@ -35,8 +41,20 @@ def infer_season_length(values, candidates=SEASON_CANDIDATES, min_correlation=0.
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
             median_correlation = np.nanmedian(correlation)
-        if np.isfinite(median_correlation) and median_correlation > best_correlation:
+        if not np.isfinite(median_correlation):
+            continue
+        correlation_by_length[m] = median_correlation
+        if median_correlation > best_correlation:
             best_length, best_correlation = m, median_correlation
+    for m in sorted(correlation_by_length):
+        if m >= best_length:
+            break
+        if (
+            best_length % m == 0
+            and correlation_by_length[m] > min_correlation
+            and correlation_by_length[m] >= best_correlation - divisor_tolerance
+        ):
+            return m
     return best_length
 
 

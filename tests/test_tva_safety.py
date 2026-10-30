@@ -483,6 +483,55 @@ class TestSummarize(unittest.TestCase):
         self.assertIsNone(diag['capped_cells'])
 
 
+try:
+    from autots.evaluator.tva.factor_network import HAS_TORCH
+except Exception:  # pragma: no cover
+    HAS_TORCH = False
+
+
+@unittest.skipUnless(HAS_TORCH, "torch required for trend_network='factor'")
+class TestSafetyLayerShortHistory(unittest.TestCase):
+    """T < 2H+2 has no inner origins at the full horizon; the folds run at
+    fit_horizon so the layer stays on."""
+
+    def test_folds_use_fit_horizon(self):
+        import warnings
+
+        import pandas as pd
+
+        from autots.evaluator.tva.tva import TVA
+
+        n_time, horizon, fit_horizon = 150, 90, 28
+        values = _panel(n_time=n_time, n_series=4, seed=5)
+        df = pd.DataFrame(
+            values,
+            index=pd.date_range('2022-01-01', periods=n_time, freq='D'),
+            columns=[f's{i}' for i in range(4)],
+        )
+        self.assertLess(n_time, 2 * horizon + 2)
+        model = TVA(
+            trend_network='factor',
+            forecast_horizon=horizon,
+            fit_horizon=fit_horizon,
+            random_seed=0,
+            verbose=0,
+            factor_config={'sn_blend': True, 'conformal_sigma': True},
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            model.fit(df)
+            fc = model.predict(horizon)
+        info = model._safety_info
+        self.assertNotIn('reason', info)
+        self.assertTrue(info.get('origins'))
+        self.assertEqual(len(info['blend_weights']), 4)
+        # bucket scales are padded from fit_horizon out to the full horizon
+        self.assertEqual(len(info['bucket_scales']), horizon)
+        self.assertEqual(info['bucket_scales'][-1], info['bucket_scales'][fit_horizon - 1])
+        self.assertEqual(fc.shape, (horizon, 4))
+        self.assertTrue(np.isfinite(fc.values).all())
+
+
 class TestEndToEndFloor(unittest.TestCase):
     """The realistic shape of the wiring the caller will do."""
 

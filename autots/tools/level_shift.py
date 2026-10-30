@@ -147,17 +147,33 @@ def robust_z(norm, scale_floor=None, stride=1):
     miscalibrated under autocorrelated noise). ``scale_floor`` stops float noise
     on noiseless data from being blown up into detections.
     """
-    complete_rows = ~np.isnan(norm).any(axis=1)
-    if complete_rows.sum() > 20:
-        # the window score is autocorrelated over ~N rows, so every stride-th row
-        # carries nearly all the information; stride N//8 matched unthinned FP
-        # rates on the benchmark, N//4 doubled them
-        sample = norm[np.flatnonzero(complete_rows)[::stride]]
+    valid = ~np.isnan(norm)
+    # The window score is autocorrelated over ~N rows, so every stride-th valid
+    # row carries nearly all the information; stride N//8 matched unthinned FP
+    # rates on the benchmark, N//4 doubled them. Columns with <= 20 valid rows
+    # keep every row.
+    if (valid == valid[:, :1]).all():
+        # common case (no missing data): every column shares the same valid rows
+        shared_rows = np.flatnonzero(valid[:, 0] if valid.shape[1] else valid.any(1))
+        sample = norm[shared_rows[:: stride if len(shared_rows) > 20 else 1]]
         median = np.median(sample, axis=0)
         mad = np.median(np.abs(sample - median), axis=0)
     else:
-        median = np.nanmedian(norm, axis=0)
-        mad = np.nanmedian(np.abs(norm - median), axis=0)
+        # per-column thinning and medians, so a late-starting column cannot
+        # change another column's z
+        column_stride = np.where(valid.sum(axis=0) > 20, stride, 1)
+        keep = valid
+        if stride > 1:
+            keep = valid & ((np.cumsum(valid, axis=0) - 1) % column_stride == 0)
+        # compact each column's kept values (row order) to the front of a
+        # (columns, kept) array; boolean indexing of the transpose walks per column
+        kept_counts = keep.sum(axis=0)
+        sample_t = np.full((norm.shape[1], int(kept_counts.max())), np.nan)
+        front = np.arange(sample_t.shape[1]) < kept_counts[:, None]
+        sample_t[front] = norm.T[keep.T]
+        sample_ok = ~np.isnan(sample_t)
+        median = row_masked_median(sample_t, sample_ok)
+        mad = row_masked_median(np.abs(sample_t - median[:, None]), sample_ok)
     scale = MAD_TO_STD * mad
     # MAD collapses to 0 when most windows are identical (integer or noiseless data)
     collapsed = ~(scale > 0)

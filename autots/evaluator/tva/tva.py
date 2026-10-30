@@ -161,6 +161,10 @@ class TVA:
             keep usable inner origins (a 730-step horizon on 900 rows leaves
             none); predict still returns any requested length. v1/v2 always
             use forecast_horizon, their output head is that length.
+        season_length: Seasonal period used by the inner folds, seasonal
+            naive baselines and the origin-anchor window. None (default)
+            infers it from the training panel (falling back to 7 when no
+            season is detected); an int overrides.
         loss_weights: Dict overriding loss component weights.
         reconciliation_method: None, 'mint', 'erm', etc.
         reconciliation_covariance: how MinT's W is obtained when no per-node
@@ -240,6 +244,7 @@ class TVA:
         factor_deconfound_edges: bool = False,
         reconciliation_covariance: str = 'auto',
         fit_horizon: Optional[int] = None,
+        season_length: Optional[int] = None,
     ):
         if not HAS_TORCH and str(trend_network) != 'none':
             raise ImportError(
@@ -304,6 +309,9 @@ class TVA:
         self.forecast_horizon = forecast_horizon
         self.fit_horizon = fit_horizon
         self._fit_horizon = forecast_horizon
+        self.season_length = season_length
+        # resolved in fit(); 7 keeps pre-fit and older unpickled objects working
+        self._season_length = 7
         self.recency_halflife_days = recency_halflife_days
         self.loss_weights = loss_weights
         self.reconciliation_method = reconciliation_method
@@ -361,6 +369,7 @@ class TVA:
         np.random.seed(self.random_seed)
         self._df_original = df
         self._fit_horizon = self._resolve_fit_horizon(len(df))
+        self._season_length = self._resolve_season_length(df)
 
         # Step 0: normalize whatever prior form the user supplied into one
         # signed (N, N) matrix over this panel's column order. Every
@@ -1307,6 +1316,17 @@ class TVA:
                 method=self._reconciliation_method_effective
             )
 
+    def _resolve_season_length(self, df: pd.DataFrame) -> int:
+        """User season_length, else inferred; 7 when nothing is detected."""
+        user_season = getattr(self, 'season_length', None)
+        if user_season:
+            return max(int(user_season), 1)
+        from autots.tools.level_shift_seasonality import infer_season_length
+
+        inferred = infer_season_length(df.to_numpy(dtype=float))
+        # 0 means no candidate cleared the correlation floor: keep the old 7
+        return int(inferred) if inferred and int(inferred) >= 2 else 7
+
     def _resolve_fit_horizon(self, n_periods: int) -> int:
         """Internal training/validation horizon; see ``fit_horizon``."""
         return resolve_fit_horizon(
@@ -1758,7 +1778,7 @@ class TVA:
             in_sample_periodic = in_sample_periodic[:end]
         else:
             in_sample_periodic = None
-        default_window = max(7, int(getattr(self, 'season_length', 7) or 7))
+        default_window = max(7, int(getattr(self, '_season_length', 7) or 7))
         adjustment = origin_anchor_adjustment(
             history,
             forecast_values,
@@ -1798,7 +1818,7 @@ class TVA:
         values = df.to_numpy(dtype=float)
         T = values.shape[0]
         H = max(int(horizon), 1)
-        season = int(getattr(self, 'season_length', 7) or 7)
+        season = int(getattr(self, '_season_length', 7) or 7)
 
         adjusted = self._factor_input_panel()
         cfg_all = (self._factor_info or {}).get('config') or {}
@@ -1911,7 +1931,7 @@ class TVA:
         cfg = ((self._factor_info or {}).get('config') or {}).get(
             'seasonal_config'
         ) or {}
-        season = int(cfg.get('season_m', getattr(self, 'season_length', 7) or 7))
+        season = int(cfg.get('season_m', getattr(self, '_season_length', 7) or 7))
         df = self._df_original
         values = df.to_numpy(dtype=float)
         end = len(values) if upto is None else int(upto) + 1
@@ -1974,7 +1994,7 @@ class TVA:
             T = values.shape[0]
             H = max(int(horizon), 1)
             origin = T - H - 1
-            season = int(getattr(self, 'season_length', 7) or 7)
+            season = int(getattr(self, '_season_length', 7) or 7)
             if origin < max(3 * H, 2 * season):
                 return datepart_future, {'reason': 'insufficient history'}
 
@@ -2118,7 +2138,7 @@ class TVA:
             std_panel = (adjusted - center[np.newaxis, :]) / scale[np.newaxis, :]
             T = std_panel.shape[0]
             H = max(int(horizon), 1)
-            season = int(getattr(self, 'season_length', 7) or 7)
+            season = int(getattr(self, '_season_length', 7) or 7)
             origins = []
             for i in range(max(int(n_folds), 0)):
                 origin = T - 1 - H * (i + 1)
@@ -2209,7 +2229,13 @@ class TVA:
         from autots.evaluator.tva import safety as sf
 
         sconf = cfg.get('safety_config') or {}
-        folds = self._factor_inner_folds(horizon, int(cfg.get('inner_folds', 3) or 3))
+        # folds at the full forecast horizon need T >= ~2H+2 and otherwise
+        # switch the layer off; selection at fit_horizon matches continuation
+        # selection, and the per-series weights/alphas don't depend on H
+        fold_horizon = max(min(int(horizon), int(self._fit_horizon or horizon)), 1)
+        folds = self._factor_inner_folds(
+            fold_horizon, int(cfg.get('inner_folds', 3) or 3)
+        )
         if not folds:
             return forecast_values, {'reason': 'insufficient history for inner folds'}
 
@@ -2265,6 +2291,14 @@ class TVA:
                 [tva_folds[i] - folds['actual_folds'][i] for i in range(len(tva_folds))]
             )
             bucket_scales = sf.horizon_bucket_scales(residuals, sconf)
+            if bucket_scales.size and bucket_scales.size < horizon:
+                # steps past the validated horizon take the last scale
+                bucket_scales = np.concatenate(
+                    [
+                        bucket_scales,
+                        np.repeat(bucket_scales[-1:], horizon - bucket_scales.size),
+                    ]
+                )
 
         # ---- 1b: error cap --------------------------------------------------
         capped = 0

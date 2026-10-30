@@ -79,7 +79,9 @@ class ARHelperTest(unittest.TestCase):
         # head has no history: first observation, not a later one
         self.assertEqual(lagged[0, 0, 1], 0.0)
         self.assertEqual(lagged[1, 0, 1], 0.0)
-        valid = np.asarray(df.index) >= np.asarray(idx[2])
+        # comparing the index to a Timestamp yields a numpy bool array; np.asarray(Timestamp)
+        # is an object scalar that raises TypeError on some pandas/numpy versions
+        valid = df.index >= idx[2]
         self.assertTrue(np.all(lag1.to_numpy()[valid] < df["a"].to_numpy()[valid]))
 
     def test_history_tail_on_date_grid(self):

@@ -119,94 +119,15 @@ def sk_outliers(df, method, method_params={}):
         gm_params = method_params.copy()
         alpha = gm_params.pop("alpha", 0.05)
         model = GaussianMixture(**gm_params)
-        # ndarray in and out: the calibration helpers score raw arrays, and sklearn warns
-        # on feature-name mismatch if fit saw a DataFrame
+        # ndarray in and out: sklearn warns on feature-name mismatch if fit saw a DataFrame
         values = df.to_numpy()
         model.fit(values)
         scores = -model.score_samples(values)
-        if values.shape[1] == 1:
-            # per-series hot path (loop_sk_outliers): exact and ~4x cheaper than sampling
-            p_values = _gmm_univariate_tail_p_values(model, scores)
-        else:
-            reference_scores = _gmm_reference_scores(
-                model, _gmm_n_samples(df.shape[0], df.shape[1]), df.shape[1]
-            )
-            p_values = _tail_p_values(reference_scores, scores)
-        res = np.where(p_values < alpha, -1, 1)
+        # flag the alpha share of least likely rows, so the flag agrees with the score
+        res = np.where(scores > np.percentile(scores, 100 * (1 - alpha)), -1, 1)
     return pd.DataFrame({"anomaly": res}, index=df.index), pd.DataFrame(
         {"anomaly_score": scores}, index=df.index
     )
-
-
-def _gmm_n_samples(n_obs, n_features=1, min_samples=2000, max_draw_elements=2_000_000):
-    """Calibration draws for GMM tail p-values.
-
-    Wants enough draws to resolve small alpha (smallest searched is 0.005); min_samples
-    keeps ~10 exceedances at alpha=0.005. Memory is bounded by chunked drawing in
-    _gmm_reference_scores, but compute is not: scoring a full-covariance draw costs
-    O(n_features^2), so on wide panels the uncapped count (20k+ draws, often 20-100x
-    n_obs) made calibration 5-15x the cost of the fit itself. max_draw_elements caps
-    draws * n_features, falling back toward min_samples as the panel widens.
-    """
-    n_samples = min(max(20000, 20 * n_obs), 100000)
-    n_samples = min(n_samples, max_draw_elements // max(int(n_features), 1))
-    return int(max(n_samples, min_samples))
-
-
-def _gmm_reference_scores(model, n_samples, n_features, max_elements=5_000_000):
-    """Negative log-density of n_samples draws from a fitted GaussianMixture.
-
-    The univariate path passes the whole wide panel, so one sample matrix would be
-    n_samples * n_features; drawing in chunks caps it at ~max_elements (~40 MB float64)
-    plus scoring intermediates. sklearn's sample() rebuilds its RNG from an int
-    random_state on every call (identical chunks), so pin a stateful RandomState first.
-    """
-    chunk_size = max(1, min(n_samples, max_elements // max(int(n_features), 1)))
-    if not isinstance(model.random_state, np.random.RandomState):
-        model.random_state = (
-            np.random.mtrand._rand
-            if model.random_state is None
-            else np.random.RandomState(model.random_state)
-        )
-    reference_scores = np.empty(n_samples, dtype=float)
-    for start in range(0, n_samples, chunk_size):
-        stop = min(start + chunk_size, n_samples)
-        simulated, _ = model.sample(stop - start)
-        reference_scores[start:stop] = -model.score_samples(simulated)
-    return reference_scores
-
-
-def _gmm_univariate_tail_p_values(model, scores, points_per_component=1024, width=12.0):
-    """P(score >= s) for a 1-feature GaussianMixture by quadrature instead of sampling.
-
-    score >= s is the level set {x: p(x) <= exp(-s)}, so the tail mass is the integral of
-    p over grid cells with density at or below the threshold. One grid per component
-    (mean +/- width sd) keeps narrow components resolved next to wide ones; the error is
-    ~1/points_per_component (~2% relative at p=0.005 for 1024, vs ~10% for 20k MC draws).
-    Normalizing by the grid's total mass absorbs the truncated outer tails.
-    """
-    means = np.ravel(model.means_)
-    # full (K,1,1), diag (K,1), spherical (K,) all ravel to K; tied (1,1) broadcasts
-    stdevs = np.sqrt(np.ravel(model.covariances_))
-    unit_grid = np.linspace(-width, width, int(points_per_component))
-    grid = np.sort((means[:, None] + stdevs[:, None] * unit_grid[None, :]).ravel())
-    density = np.exp(model.score_samples(grid[:, None]))
-    cell_width = np.gradient(grid)
-    order = np.argsort(density)
-    sorted_density = density[order]
-    cumulative_mass = np.cumsum(density[order] * cell_width[order])
-    n_at_or_below = np.searchsorted(sorted_density, np.exp(-scores), side="right")
-    tail_mass = np.where(
-        n_at_or_below > 0, cumulative_mass[np.maximum(n_at_or_below - 1, 0)], 0.0
-    )
-    return tail_mass / cumulative_mass[-1]
-
-
-def _tail_p_values(reference_scores, scores):
-    """P(score >= s) under the fitted mixture, estimated from scores of samples drawn from it."""
-    reference = np.sort(np.asarray(reference_scores, dtype=float))
-    exceed = len(reference) - np.searchsorted(reference, scores, side="left")
-    return (exceed + 1.0) / (len(reference) + 1.0)
 
 
 def loop_sk_outliers(df, method, method_params={}, n_jobs=1):
@@ -1777,10 +1698,9 @@ def gaussian_mixture(
     responsibility_threshold=None,
 ):
     from scipy.stats import multivariate_normal
+    from scipy.special import logsumexp
 
-    # responsibility_threshold is accepted so previously saved params still load
-    if responsibility_threshold is not None:
-        alpha = responsibility_threshold
+    # responsibility_threshold is accepted (and ignored) so saved params load; no-op at 1.0.4
 
     n, d = df.shape
     data = df.fillna(0).to_numpy()
@@ -1793,19 +1713,25 @@ def gaussian_mixture(
     covariances = np.array([np.eye(d)] * n_components)
     weights = np.ones(n_components) / n_components
 
+    def weighted_log_densities():
+        # log space: the pdf underflows to 0 far from every component (wide d)
+        with np.errstate(divide="ignore"):
+            log_weights = np.log(weights)
+        return np.column_stack(
+            [
+                log_weights[i]
+                + multivariate_normal.logpdf(data, means[i], covariances[i])
+                for i in range(n_components)
+            ]
+        )
+
     log_likelihood = -np.inf
 
     for iteration in range(max_iter):
         # E-step: compute responsibilities
-        responsibilities = np.zeros((n, n_components))
-
-        for i in range(n_components):
-            responsibilities[:, i] = weights[i] * multivariate_normal.pdf(
-                data, means[i], covariances[i]
-            )
-
-        sum_responsibilities = responsibilities.sum(axis=1)[:, np.newaxis]
-        responsibilities /= sum_responsibilities
+        log_r = weighted_log_densities()
+        log_sum = logsumexp(log_r, axis=1)
+        responsibilities = np.exp(log_r - log_sum[:, np.newaxis])
 
         # M-step: update parameters
         Nk = responsibilities.sum(axis=0)
@@ -1829,45 +1755,26 @@ def gaussian_mixture(
         weights = Nk / n
 
         # Compute log-likelihood and check convergence
-        new_log_likelihood = np.sum(np.log(sum_responsibilities))
+        new_log_likelihood = log_sum.sum()
 
         if np.abs(new_log_likelihood - log_likelihood) < tol:
             break
 
         log_likelihood = new_log_likelihood
 
-    def neg_log_density(x):
-        density = sum(
-            weights[i] * multivariate_normal.pdf(x, means[i], covariances[i])
-            for i in range(n_components)
-        )
-        return -np.log(np.maximum(np.atleast_1d(density), 1e-300))
-
-    rng = np.random.default_rng(42)
-    n_sim = _gmm_n_samples(n, d)
-    comp = rng.choice(n_components, size=n_sim, p=weights / weights.sum())
-    simulated = np.empty((n_sim, d))
-    for i in range(n_components):
-        mask = comp == i
-        simulated[mask] = rng.multivariate_normal(
-            means[i], covariances[i], size=mask.sum()
-        )
-    p_values = _tail_p_values(neg_log_density(simulated), neg_log_density(data))
+    # score is the negative log-density under the final fit; flag its top alpha share
+    row_scores = -logsumexp(weighted_log_densities(), axis=1)
     anomalies = pd.DataFrame(
-        np.where(p_values < alpha, -1, 1),
+        np.where(row_scores > np.percentile(row_scores, 100 * (1 - alpha)), -1, 1),
         index=df.index,
         columns=['anomaly'],
     )
-
-    # Score: can still calculate log-likelihood-based scores per data point if needed
-    scores = np.zeros((n, d))
-    for i in range(n_components):
-        comp_scores = -multivariate_normal.logpdf(
-            data, means[i], covariances[i]
-        ).reshape(-1, 1)
-        scores += responsibilities[:, i][:, np.newaxis] * comp_scores
-
-    scores = pd.DataFrame(scores, index=df.index, columns=df.columns)
+    # broadcast to (n, d) to keep the per-series score shape callers expect
+    scores = pd.DataFrame(
+        np.repeat(row_scores[:, np.newaxis], d, axis=1),
+        index=df.index,
+        columns=df.columns,
+    )
 
     return anomalies, scores
 

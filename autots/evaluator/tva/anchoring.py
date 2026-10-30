@@ -9,6 +9,8 @@ native equivalent of AutoTS ``AlignLastValue``.
 
 Both sides are compared as a full-window mean (last ``window`` observations vs
 first ``window`` forecast steps) so a weekly cycle doesn't read as a level gap.
+A median, and matching H < window to the same seasonal slots one window back
+(which drops the latest rows), were both tried and lost on the benchmark panels.
 
 Modes:
     'last_value': raw values on both sides (the backtested arm).
