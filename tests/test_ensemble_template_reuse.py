@@ -10,7 +10,7 @@ import pandas as pd
 
 from autots.evaluator.auto_model import create_model_id, model_forecast
 from autots.models.basics import AverageValueNaive, LastValueNaive
-from autots.models.ensemble import HorizontalEnsemble, MosaicEnsemble
+from autots.models.ensemble import HorizontalEnsemble, MosaicEnsemble, n_limited_horz
 
 
 class TestEnsembleTemplateReuse(unittest.TestCase):
@@ -138,3 +138,126 @@ class TestEnsembleTemplateReuse(unittest.TestCase):
                 self.assertIsNot(result.model_parameters, template)
                 self.assertEqual(set(result.model_parameters['series']), {'A'})
                 np.testing.assert_array_equal(result.forecast['A'], 1)
+
+
+class TestEnsembleComponentIdentity(unittest.TestCase):
+    """Components are keyed by template ID, not by re-hashing returned params."""
+
+    def setUp(self):
+        self.horizon = 3
+        steps = np.arange(200)
+        self.df = pd.DataFrame(
+            {'A': 100 + steps / 10, 'B': 50 + np.sin(steps / 7)},
+            index=pd.date_range('2023-01-01', periods=200),
+        )
+        # both transformers resolve params at fit time (n_quantiles, window_size -> Wn)
+        self.components = {
+            'quantile_component': (
+                'LastValueNaive',
+                {
+                    'fillna': 'ffill',
+                    'transformations': {'0': 'QuantileTransformer'},
+                    'transformation_params': {
+                        '0': {'output_distribution': 'uniform', 'n_quantiles': 'quarter'}
+                    },
+                },
+            ),
+            'butter_component': (
+                'AverageValueNaive',
+                {
+                    'fillna': 'ffill',
+                    'transformations': {'0': 'ScipyFilter'},
+                    'transformation_params': {
+                        '0': {
+                            'method': 'butter',
+                            'method_args': {
+                                'N': 4,
+                                'window_size': 12,
+                                'btype': 'lowpass',
+                                'analog': False,
+                                'output': 'sos',
+                            },
+                        }
+                    },
+                },
+            ),
+        }
+
+    def forecast(self, model_name, params, transforms):
+        return model_forecast(
+            model_name, params, transforms, self.df,
+            forecast_length=self.horizon, frequency='D', n_jobs=1, verbose=-1,
+        )
+
+    def template(self, series_mapping, components=None):
+        components = components or self.components
+        return {
+            'model_name': 'Horizontal',
+            'model_count': len(components),
+            'model_metric': 'mae',
+            'models': {
+                model_id: {
+                    'Model': model,
+                    'ModelParameters': '{}',
+                    'TransformationParameters': json.dumps(transforms),
+                }
+                for model_id, (model, transforms) in components.items()
+            },
+            'series': series_mapping,
+        }
+
+    def test_components_with_non_hash_ids_are_used_as_assigned(self):
+        # imported templates need not use hashed IDs; every series must still come
+        # from its assigned component rather than a generalized substitute
+        template = self.template(
+            {'A': 'quantile_component', 'B': 'butter_component'}
+        )
+        result = self.forecast('Ensemble', template, {})
+        for series, model_id in template['series'].items():
+            model, transforms = self.components[model_id]
+            expected = self.forecast(model, {}, copy.deepcopy(transforms))
+            pd.testing.assert_series_equal(
+                result.forecast[series], expected.forecast[series]
+            )
+
+    def test_transformer_params_not_mutated(self):
+        for model_id, (model, transforms) in self.components.items():
+            with self.subTest(model_id=model_id):
+                original = copy.deepcopy(transforms)
+                result = self.forecast(model, {}, transforms)
+                self.assertEqual(transforms, original)
+                self.assertEqual(result.transformation_parameters, original)
+
+    def test_failure_message_lists_components(self):
+        components = {
+            'broken_component': ('NotARealModel', {}),
+            'quantile_component': self.components['quantile_component'],
+        }
+        template = self.template(
+            {'A': 'broken_component', 'B': 'broken_component'}, components
+        )
+        with self.assertRaises(ValueError) as caught:
+            self.forecast('Ensemble', template, {})
+        message = str(caught.exception)
+        self.assertIn('broken_component (NotARealModel): failed', message)
+        self.assertIn('quantile_component (LastValueNaive): ok', message)
+
+
+class TestNLimitedHorz(unittest.TestCase):
+    def test_all_na_column_does_not_raise(self):
+        # pandas >= 3 raises on idxmin of an all-NA column, which the depth loop
+        # creates once failed-model NaN and earlier passes exhaust a series
+        per_series = pd.DataFrame(
+            {
+                'a': [0.0, 0.0, 0.0, 1.0, 2.0],
+                'b': [np.nan, np.nan, 3.0, 0.5, 4.0],
+                'c': [3.0, 1.0, 2.0, 2.5, 0.1],
+            },
+            index=list('mnopq'),
+        )
+        for K in (3, 5):
+            for safety_model in (True, False):
+                with self.subTest(K=K, safety_model=safety_model):
+                    selected = n_limited_horz(per_series, K, safety_model=safety_model)
+                    self.assertGreater(len(selected), 0)
+                    self.assertTrue(set(selected).issubset(per_series.index))

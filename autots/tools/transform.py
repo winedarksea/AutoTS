@@ -1,5 +1,6 @@
 """Preprocessing data methods."""
 
+import copy
 import random
 import warnings
 from collections.abc import Mapping
@@ -8265,7 +8266,9 @@ class GeneralTransformer(object):
         if transformation_params is None or not transformation_params:
             keys = transformations.keys()
             transformation_params = {x: {} for x in keys}
-        self.transformation_params = transformation_params
+        # some transformers resolve params in place; the caller's dict is the model's
+        # identity (hashed into its ID) so it must not change
+        self.transformation_params = copy.deepcopy(transformation_params)
 
         self.grouping = grouping
         self.reconciliation = reconciliation
@@ -8408,8 +8411,9 @@ class GeneralTransformer(object):
                 quants = int(df.shape[0] / 10)
             else:
                 quants = quants if df.shape[0] > quants else int(df.shape[0] / 3)
-            param["n_quantiles"] = max(1, quants)
-            return QuantileTransformer(copy=True, **param)
+            return QuantileTransformer(
+                copy=True, **{**param, "n_quantiles": max(1, quants)}
+            )
 
         elif transformation == "StandardScaler":
             try:

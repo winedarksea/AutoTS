@@ -1423,6 +1423,7 @@ def model_forecast(
         else:
             all_series = None
         total_ens = ens_template.shape[0]
+        component_status = {}
         for index, row in ens_template.iterrows():
             # recursive recursion!
             try:
@@ -1459,10 +1460,18 @@ def model_forecast(
                     force_gc=force_gc,
                     internal_validation=False,  # allow sub ensembles to have postprocessing
                 )
-                model_id = create_model_id(
+                # combiners look components up by template ID, so key by it rather than
+                # re-hashing returned params (which drift if anything mutates them)
+                model_id = row['ID']
+                returned_id = create_model_id(
                     df_forecast.model_name,
                     df_forecast.model_parameters,
                     df_forecast.transformation_parameters,
+                )
+                component_status[model_id] = (
+                    "ok"
+                    if returned_id == model_id
+                    else "ok (returned params re-hash to a different ID)"
                 )
                 total_runtime = (
                     df_forecast.fit_runtime
@@ -1476,22 +1485,32 @@ def model_forecast(
                 # print(f"{model_param_dict['model_name']} with shape {df_forecast.forecast.shape}")
             except Exception as e:
                 # currently this leaves no key/value for models that fail
+                component_status[row['ID']] = f"failed: {repr(e)}"
                 if verbose >= 1:  # 1
                     print(tb.format_exc())
                     p = f"FAILED: Ensemble {model_param_dict['model_name']} component {index + 1} of {total_ens} {row['Model']} with error: {repr(e)}"
                     print(p)
-        ens_forecast = EnsembleForecast(
-            model_name,
-            model_param_dict,
-            forecasts_list=list(forecasts.keys()),
-            forecasts=forecasts,
-            lower_forecasts=lower_forecasts,
-            upper_forecasts=upper_forecasts,
-            forecasts_runtime=forecasts_runtime,
-            prediction_interval=prediction_interval,
-            df_train=df_train,
-            prematched_series=all_series,
-        )
+        try:
+            ens_forecast = EnsembleForecast(
+                model_name,
+                model_param_dict,
+                forecasts_list=list(forecasts.keys()),
+                forecasts=forecasts,
+                lower_forecasts=lower_forecasts,
+                upper_forecasts=upper_forecasts,
+                forecasts_runtime=forecasts_runtime,
+                prediction_interval=prediction_interval,
+                df_train=df_train,
+                prematched_series=all_series,
+            )
+        except Exception as e:
+            status_lines = "; ".join(
+                f"{mod_id} ({mod}): {component_status.get(mod_id, 'not run')}"
+                for mod_id, mod in zip(ens_template['ID'], ens_template['Model'])
+            )
+            raise ValueError(
+                f"Ensemble {model_param_dict['model_name']} failed: {repr(e)}. Components: {status_lines}"
+            ) from e
         ens_forecast.runtime_dict = forecasts_runtime
         # POST PROCESSING ONLY
         if model_transform_dict and not internal_validation:

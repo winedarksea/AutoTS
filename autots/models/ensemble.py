@@ -1541,7 +1541,7 @@ def find_pattern(strings, x, sep="-"):
 
 def n_limited_horz(per_series, K, safety_model=False):
     # progressively remove best models to try and achieve wider coverage with a few
-    mods = pd.Series()
+    mods = pd.Series(dtype='object')
     per_series_des = per_series.copy()
     if K <= 1:
         safety_model_id = per_series.mean(axis=1).idxmin()
@@ -1557,9 +1557,13 @@ def n_limited_horz(per_series, K, safety_model=False):
         tr_df = pd.DataFrame()
         # find the most common models at this depth
         for _ in range(n_dep):
-            cr_df = pd.DataFrame(per_series_des.idxmin()).transpose()
-            tr_df = pd.concat([tr_df, cr_df], axis=0)
-            models_pos.extend(per_series_des.idxmin().tolist())
+            # ties and failed-model NaN exhaust a column early; pandas >= 3 raises on all-NA idxmin
+            remaining = per_series_des.dropna(axis=1, how='all')
+            if remaining.shape[1] == 0:
+                break
+            best_per_series = remaining.idxmin()
+            tr_df = pd.concat([tr_df, pd.DataFrame(best_per_series).transpose()], axis=0)
+            models_pos.extend(best_per_series.tolist())
             per_series_des[per_series_des == per_series_des.min()] = np.nan
         cur_mods = pd.Series(models_pos).value_counts()
         cur_mods = cur_mods.sort_values(ascending=False).head(1)
