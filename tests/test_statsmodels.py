@@ -225,7 +225,7 @@ class TestARDL(unittest.TestCase):
 
 
 class TestVAR(unittest.TestCase):
-    """VAR lag clamping: a k_ar=0 result cannot forecast, so it must refit at lag 1."""
+    """VAR preserves requested maxlags and refits zero-lag results at lag 1."""
 
     def make_panel(self, n_rows, n_series, random_walk):
         rng = np.random.default_rng(0)
@@ -242,11 +242,12 @@ class TestVAR(unittest.TestCase):
         self.assertTrue(np.isfinite(prediction.forecast.to_numpy()).all())
         self.assertTrue(np.isfinite(prediction.upper_forecast.to_numpy()).all())
 
-    def test_wide_panel_clamps_maxlags_to_zero_then_refits(self):
-        # 30 rows x 14 series: int(29 / 15) - 1 = 0 lags allowed for ic selection
+    def test_wide_panel_rejects_infeasible_maxlags(self):
+        # Infeasible lag requests must surface instead of being silently capped.
         model = VAR(maxlags=15, ic='aic')
         model.fit(self.make_panel(30, 14, random_walk=True))
-        self.assert_forecasts_at_lag_one(model, 14)
+        with self.assertRaisesRegex(ValueError, 'maxlags'):
+            model.predict(forecast_length=7)
 
     def test_ic_selecting_zero_lags_refits(self):
         # aic picks 0 lags on white noise
