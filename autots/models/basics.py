@@ -3809,18 +3809,16 @@ class BasicLinearModel(ModelObject):
         X_values = X.to_numpy(dtype=float, na_value=np.nan)
         Y_values = df.to_numpy(dtype=float, na_value=np.nan)
 
-        usable = np.isfinite(Y_values) & np.isfinite(X_values).all(axis=1)[:, None]
-        empty_columns = self.column_names[~usable.any(axis=0)].tolist()
-        if empty_columns:
-            raise ValueError(
-                f"BasicLinearModel has no usable observations for series {empty_columns}"
-            )
-        self.beta = np.empty((X_values.shape[1], Y_values.shape[1]))
-        self.sigma = np.empty(Y_values.shape[1])
+        # Series without usable observations keep NaN coefficients rather than
+        # failing the batch, so one empty series does not block the others.
+        self.beta = np.full((X_values.shape[1], Y_values.shape[1]), np.nan)
+        self.sigma = np.full(Y_values.shape[1], np.nan)
         self._linear_training_design = X_values
         self._linear_feature_columns = X.columns.copy()
         self._linear_observation_groups = []
         for rows, columns in observation_mask_groups(X_values, Y_values):
+            if not rows.any():
+                continue
             design = X_values[rows]
             targets = Y_values[np.ix_(rows, columns)]
             if self.linear_model == "huber":

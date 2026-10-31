@@ -107,7 +107,10 @@ def summarize_series(df):
             ProfileWarning,
             stacklevel=2,
         )
-    df_sum.loc["null_percentage"] = (first_non_nan_index / df.shape[0]).fillna(1)
+    # idxmax returns 0 for an all-NaN column, so mask those to fall through to 1
+    df_sum.loc["null_percentage"] = (
+        (first_non_nan_index / df.shape[0]).where(df.notna().any()).fillna(1)
+    )
     diffs = df.diff().iloc[1:]
     valid_pairs = (df.notna() & df.shift(1).notna()).iloc[1:]
     zero_diffs = ((diffs == 0) & valid_pairs).sum()

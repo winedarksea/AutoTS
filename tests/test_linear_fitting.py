@@ -242,10 +242,16 @@ class TestBasicLinearMissingData(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "no future_regressor"):
             model.predict(7)
 
-    def test_no_usable_observations_names_the_series(self):
-        self.data["empty"] = np.nan
-        with self.assertRaisesRegex(ValueError, "empty"):
-            self.model().fit(self.data)
+    def test_series_without_observations_does_not_affect_others(self):
+        expected = self.model().fit(self.data).predict(7)
+        data = self.data.assign(empty=np.nan)
+        actual = self.model().fit(data).predict(7)
+        for name in ("forecast", "upper_forecast"):
+            result = getattr(actual, name)
+            pd.testing.assert_frame_equal(
+                result[self.data.columns], getattr(expected, name)
+            )
+            self.assertTrue(result["empty"].isna().all())
 
     def test_nullable_float_targets_preserve_missingness(self):
         expected = self.model().fit(self.data).predict(7).forecast

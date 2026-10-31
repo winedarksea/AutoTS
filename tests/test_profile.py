@@ -1,6 +1,7 @@
 """Profiler numerical equivalence, identity, and failure reporting regressions."""
 
 import unittest
+import warnings
 from unittest.mock import patch
 
 import numpy as np
@@ -172,7 +173,7 @@ class TestProfile(unittest.TestCase):
         expected_cv = (self.df.std() / self.df.abs().mean().replace(0, 1)) ** 2
         np.testing.assert_allclose(summary.loc['cv_squared'], expected_cv)
 
-    def test_empty_series_labels_remain_unchanged(self):
+    def test_empty_series_labels(self):
         df = self.df.iloc[:, :1].copy()
         df['zero'] = 0.0
         df['all_nan'] = np.nan
@@ -180,7 +181,34 @@ class TestProfile(unittest.TestCase):
             profiles = profile_time_series(df).set_index('SERIES')['PROFILE']
             summary = summarize_series(df)
         self.assertEqual(profiles['zero'], 'flat')
-        self.assertEqual(profiles['all_nan'], 'smooth')
-        np.testing.assert_array_equal(
-            summary.loc['null_percentage', ['zero', 'all_nan']], 0
+        self.assertEqual(profiles['all_nan'], 'new_product')
+        self.assertEqual(summary.loc['null_percentage', 'zero'], 0)
+        self.assertEqual(summary.loc['null_percentage', 'all_nan'], 1)
+
+    def test_all_nan_series_does_not_zero_seasonality_of_others(self):
+        t = np.arange(400)
+        random = np.random.default_rng(3)
+        seasonal = pd.DataFrame(
+            {
+                f's{i}': 100
+                + 60 * np.sin(2 * np.pi * t / 7)
+                + 40 * np.sin(2 * np.pi * t / 365.25)
+                + random.normal(scale=0.5, size=t.size)
+                for i in range(3)
+            },
+            index=pd.date_range('2022-01-01', periods=t.size),
         )
+        df = seasonal.copy()
+        df['all_nan'] = np.nan
+        expected = summarize_series(seasonal).loc['season_trend_percent']
+        with warnings.catch_warnings():
+            warnings.simplefilter('error', ProfileWarning)
+            with np.errstate(divide='ignore', invalid='ignore'):
+                summary = summarize_series(df)
+                profiles = profile_time_series(df).set_index('SERIES')['PROFILE']
+        pd.testing.assert_series_equal(
+            summary.loc['season_trend_percent', seasonal.columns], expected
+        )
+        self.assertTrue(np.isnan(summary.loc['season_trend_percent', 'all_nan']))
+        self.assertEqual(profiles[seasonal.columns].tolist(), ['highly_seasonal'] * 3)
+        self.assertEqual(profiles['all_nan'], 'new_product')
