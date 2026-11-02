@@ -1766,10 +1766,18 @@ class DifferencedTransformer:
             df_with_first = pd.concat(
                 [self.first_values, df.tail(df.shape[0] - self.lag)]
             )
+            if self.lag > 1:
+                return df_with_first.groupby(
+                    np.arange(len(df_with_first)) % self.lag
+                ).cumsum()
             return df_with_first.cumsum()
         elif trans_method == "forecast":
             df_len = df.shape[0]
             df_with_last = pd.concat([self.last_values, df])
+            if self.lag > 1:
+                return df_with_last.groupby(
+                    np.arange(len(df_with_last)) % self.lag
+                ).cumsum().tail(df_len)
             return df_with_last.cumsum().tail(df_len)
         else:
             raise ValueError("Invalid transformation method specified.")

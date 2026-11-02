@@ -8,6 +8,7 @@ import pandas as pd
 from autots.datasets import load_daily, load_monthly, load_artificial, load_sine
 from autots.templates.general import general_template_dict
 from autots.tools.transform import (
+    DifferencedTransformer,
     ThetaTransformer,
     FIRFilter,
     HistoricValues,
@@ -1332,3 +1333,78 @@ class TestTransforms(unittest.TestCase):
             # All values should be either from forecast or -999
             reintroduced = (inverse[col] == -999).sum()
             self.assertGreaterEqual(reintroduced, 0)  # At least 0
+
+
+class TestDifferencedTransformer(unittest.TestCase):
+    @staticmethod
+    def make_data(length):
+        positions = np.arange(length, dtype=float)
+        return pd.DataFrame(
+            {
+                "first": positions ** 2 + 3 * positions + 2,
+                "second": (-1.0) ** positions * positions + 0.25 * positions ** 2,
+            },
+            index=pd.date_range("2024-01-01", periods=length, freq="D", tz="UTC", name="date"),
+        )
+
+    def check_original(self, lag, fill):
+        original = self.make_data(2 * lag + 2)
+        snapshot = original.copy(deep=True)
+        transformer = DifferencedTransformer(lag=lag, fill=fill)
+        transformed = transformer.fit_transform(original)
+        transformed_snapshot = transformed.copy(deep=True)
+        restored = transformer.inverse_transform(transformed, trans_method="original")
+        pd.testing.assert_frame_equal(restored, snapshot)
+        pd.testing.assert_frame_equal(original, snapshot)
+        pd.testing.assert_frame_equal(transformed, transformed_snapshot)
+
+    def check_forecast(self, lag, horizon):
+        train_length = 2 * lag + 2
+        full = self.make_data(train_length + horizon)
+        train = full.iloc[:train_length].copy()
+        expected = full.iloc[train_length:].copy()
+        train_snapshot = train.copy(deep=True)
+        # Independent positional differences, not the transformer's own output.
+        differences = expected - full.iloc[train_length - lag:-lag].set_axis(expected.index)
+        differences_snapshot = differences.copy(deep=True)
+        transformer = DifferencedTransformer(lag=lag).fit(train)
+        restored = transformer.inverse_transform(differences)
+        pd.testing.assert_frame_equal(restored, expected)
+        pd.testing.assert_frame_equal(train, train_snapshot)
+        pd.testing.assert_frame_equal(differences, differences_snapshot)
+        pd.testing.assert_frame_equal(transformer.inverse_transform(differences), expected)
+
+    def test_lag_one_control(self):
+        for fill in ("bfill", "zero", "one"):
+            with self.subTest(fill=fill):
+                self.check_original(1, fill)
+        for horizon in (1, 3):
+            with self.subTest(horizon=horizon):
+                self.check_forecast(1, horizon)
+
+    def test_lagged_original(self):
+        for lag in (2, 7):
+            for fill in ("bfill", "zero", "one"):
+                with self.subTest(lag=lag, fill=fill):
+                    self.check_original(lag, fill)
+
+    def test_lagged_forecast(self):
+        for lag in (2, 7):
+            for horizon in (1, lag, 2 * lag + 1):
+                with self.subTest(lag=lag, horizon=horizon):
+                    self.check_forecast(lag, horizon)
+
+    def test_general_transformer_lagged_difference(self):
+        full = self.make_data(11)
+        train, expected = full.iloc[:6].copy(), full.iloc[6:].copy()
+        transformer = GeneralTransformer(
+            fillna=None,
+            transformations={0: "DifferencedTransformer"},
+            transformation_params={0: {"lag": 2, "fill": "zero"}},
+        )
+        transformed = transformer.fit_transform(train)
+        pd.testing.assert_frame_equal(
+            transformer.inverse_transform(transformed, trans_method="original"), train
+        )
+        differences = expected - full.iloc[4:-2].set_axis(expected.index)
+        pd.testing.assert_frame_equal(transformer.inverse_transform(differences), expected)
