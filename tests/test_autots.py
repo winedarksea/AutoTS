@@ -1532,3 +1532,89 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(set_n_jobs(8.0), 8)
         self.assertIsInstance(set_n_jobs("auto"), int)
         self.assertEqual(set_n_jobs("auto"), set_n_jobs(-1))
+
+
+class TestCachedPredictionInterval(unittest.TestCase):
+    def make_model(self, interval=0.9, model_name="DatepartRegression"):
+        parameters = {}
+        if model_name == "DatepartRegression":
+            parameters = {
+                "regression_model": {
+                    "model": "DecisionTree",
+                    "model_params": {"max_depth": 2, "min_samples_split": 2},
+                },
+                "datepart_method": "simple",
+                "holiday_countries_used": False,
+            }
+        template = pd.DataFrame([{
+            "Model": model_name,
+            "ModelParameters": json.dumps(parameters),
+            "TransformationParameters": json.dumps({
+                "fillna": None, "transformations": {}, "transformation_params": {}
+            }),
+            "Ensemble": 0,
+        }])
+        model = AutoTS(
+            forecast_length=5, frequency="D", prediction_interval=interval,
+            max_generations=0, num_validations=0, validation_method="backwards",
+            model_list=[model_name], initial_template="General",
+            transformer_list="superfast", ensemble=None, verbose=-1,
+            random_seed=2022, n_jobs=1,
+        )
+        model.import_best_model(template)
+        t = np.arange(90, dtype=float)
+        data = pd.DataFrame(
+            {"a": 20 + t / 10 + np.sin(t), "b": 40 + t / 7 + np.cos(t / 2)},
+            index=pd.date_range("2023-01-01", periods=90, freq="D"),
+        )
+        original = data.copy(deep=True)
+        model.fit_data(data)
+        pd.testing.assert_frame_equal(data, original)
+        return model
+
+    def assert_prediction_equal(self, actual, expected, interval):
+        for name in ("forecast", "lower_forecast", "upper_forecast"):
+            frame = getattr(actual, name)
+            self.assertEqual(frame.shape, (5, 2))
+            pd.testing.assert_frame_equal(frame, getattr(expected, name))
+        self.assertEqual(actual.prediction_interval, interval)
+
+    def test_scalar_change_reuse_and_default(self):
+        model = self.make_model()
+        wide = model.predict(prediction_interval=0.9)
+        cached = model.model
+        self.assert_prediction_equal(model.predict(prediction_interval=0.9), wide, 0.9)
+        self.assertIs(model.model, cached)
+        narrow = model.predict(prediction_interval=0.5)
+        fresh = self.make_model(0.5).predict()
+        self.assert_prediction_equal(narrow, fresh, 0.5)
+        self.assertIsNot(model.model, cached)
+        self.assertLess(
+            (narrow.upper_forecast - narrow.lower_forecast).to_numpy().sum(),
+            (wide.upper_forecast - wide.lower_forecast).to_numpy().sum(),
+        )
+        cached = model.model
+        self.assert_prediction_equal(model.predict(prediction_interval=0.5), fresh, 0.5)
+        self.assertIs(model.model, cached)
+        self.assert_prediction_equal(model.predict(), wide, 0.9)
+        self.assertIsNot(model.model, cached)
+        self.assertEqual(model.prediction_interval, 0.9)
+
+    def test_list_followed_by_default(self):
+        model = self.make_model()
+        forecasts = model.predict(prediction_interval=[0.9, 0.5])
+        self.assertEqual(set(forecasts), {"0.9", "0.5"})
+        for interval in (0.9, 0.5):
+            self.assert_prediction_equal(
+                forecasts[str(interval)], self.make_model(interval).predict(), interval
+            )
+        self.assert_prediction_equal(model.predict(), forecasts["0.9"], 0.9)
+        self.assertEqual(model.prediction_interval, 0.9)
+
+    def test_noncached_model_interval_control(self):
+        model = self.make_model(model_name="LastValueNaive")
+        for interval in (0.9, 0.5):
+            self.assert_prediction_equal(
+                model.predict(prediction_interval=interval),
+                self.make_model(interval, "LastValueNaive").predict(), interval,
+            )

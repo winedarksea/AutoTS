@@ -2370,7 +2370,11 @@ class AutoTS(object):
             use_model in update_fit
         )  # True means model can be updated without retraining
         if self.update_fit_check and not bypass_save:
-            if self.model is None or refit:
+            if (
+                self.model is None
+                or refit
+                or self.model.prediction_interval != prediction_interval
+            ):
                 self.model = ModelPrediction(
                     transformation_dict=use_trans,
                     model_str=use_model,
