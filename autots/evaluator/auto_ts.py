@@ -2943,6 +2943,10 @@ class AutoTS(object):
 
         Input can be filename with .csv or .pickle.
         or can be a DataFrame of model results or a full TemplateEvalObject
+
+        Warning:
+            .pickle files are loaded with pickle.load, which can execute arbitrary code.
+            Only load pickles you created yourself; prefer .csv for results from other sources.
         """
         csv_flag = False
         if isinstance(filename, str):
@@ -2974,7 +2978,8 @@ class AutoTS(object):
             elif '.pickle' in filename:
                 import pickle
 
-                new_obj = pickle.load(open(filename, "rb"))
+                with open(filename, "rb") as f:
+                    new_obj = pickle.load(f)
             else:
                 raise ValueError("import type not recognized.")
             self.initial_results = self.initial_results.concat(new_obj)

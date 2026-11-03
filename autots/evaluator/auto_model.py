@@ -1228,7 +1228,9 @@ class TemplateEvalObject(object):
         elif filename.endswith('.pickle'):
             import pickle
 
-            new_obj = pickle.load(open(filename, "rb"))
+            # pickle.load can execute arbitrary code: only load trusted, self-created files
+            with open(filename, "rb") as f:
+                new_obj = pickle.load(f)
         else:
             raise ValueError("import type not recognized.")
         self = self.concat(new_obj)
