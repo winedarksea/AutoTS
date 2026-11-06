@@ -23,6 +23,7 @@
 * General templates 29 and 37: replaced sokalmichener with rogerstanimoto for SciPy compatibility (sokalmichener was deprecated in SciPy 1.15 and removed in 1.17; see the [SciPy release notes](https://docs.scipy.org/doc/scipy/release/1.17.0-notes.html)).
 * TVAModel/TVA season_length: None (also older templates without the key) now infers the season for inner folds and seasonal-naive baselines instead of always using 7. The origin-anchor window stays 7. Safety-layer folds run at the full horizon when history allows and fall back to fit_horizon only when it does not.
 * sklearn models no longer install a process-wide warnings filter at import; the Liblinear convergence warning is silenced only inside LinearSVR fits.
+* MLflow: `load_model` (now also `autots.mlflow_load_model`) restores AutoTS runs fully. It brings back the logged constructor settings (newly saved as `init_params` in `model_as_code.json`) and the `best_model` template, so `fit_data(df)` + `predict()` refits only the winner; keyword overrides such as `forecast_length=` replace logged values. Previously only 7 settings came back (losing no_negatives, constraint, model_list, etc.) and best_model stayed empty, breaking export/per-series helpers. ModelObject payloads now record frequency and prediction_interval. Runs logged by older versions still load. Tests use a sqlite tracking store, since MLflow 3.18 rejects the file store by default.
 
 ### New Model Checklist:
 * Add to ModelMonster in auto_model.py

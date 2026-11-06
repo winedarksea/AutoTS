@@ -235,12 +235,48 @@ def _build_model_as_code_payload(model_obj, extra: dict | None = None):
             payload["model_parameters"] = params
     except Exception:
         pass
+    # prediction_interval sets upper/lower bounds; reload must not fall back to defaults
+    for key in ["frequency", "prediction_interval"]:
+        value = getattr(model_obj, key, None)
+        if isinstance(value, (str, int, float)):
+            payload[key] = value
     last_date = getattr(model_obj, "train_last_date", None)
     if last_date is not None:
         payload["last_obs_date"] = _to_jsonable(last_date)
     if extra:
         payload.update(extra)
     return payload
+
+
+# machine-specific (n_jobs is resolved to a core count, current_model_file is a local
+# path) or not serializable (custom_metric); the loader uses AutoTS defaults instead
+_AUTOTS_INIT_PARAMS_EXCLUDED = {"self", "n_jobs", "current_model_file", "custom_metric"}
+_JSON_ROUNDTRIP_TYPES = (str, int, float, bool, type(None), dict, list, tuple, np.generic)
+
+
+def _extract_autots_init_params(autots_obj) -> dict:
+    """Constructor args read back from the fitted object, for rebuilding in load_model.
+
+    Post-init values (list ensemble, expanded model_list) are valid constructor inputs.
+    Values that would not survive JSON (e.g. a DateOffset frequency) are skipped.
+    """
+    import inspect
+
+    init_params = {}
+    try:
+        signature = inspect.signature(type(autots_obj).__init__)
+    except Exception:
+        return init_params
+    missing = object()
+    for name in signature.parameters:
+        if name in _AUTOTS_INIT_PARAMS_EXCLUDED:
+            continue
+        value = getattr(autots_obj, name, missing)
+        if value is missing or callable(value):
+            continue
+        if isinstance(value, _JSON_ROUNDTRIP_TYPES):
+            init_params[name] = value
+    return init_params
 
 
 def _build_autots_model_as_code_payload(autots_obj, best_row=None):
@@ -255,6 +291,11 @@ def _build_autots_model_as_code_payload(autots_obj, best_row=None):
         "best_model_transformation_parameters": getattr(
             autots_obj, "best_model_transformation_params", None
         ),
+        "best_model_ensemble": _to_jsonable(
+            getattr(autots_obj, "best_model_ensemble", None)
+        ),
+        "best_model_id": _to_jsonable(getattr(autots_obj, "best_model_id", None)),
+        "init_params": _extract_autots_init_params(autots_obj),
     }
     try:
         if (
@@ -267,9 +308,14 @@ def _build_autots_model_as_code_payload(autots_obj, best_row=None):
     except Exception:
         pass
     if isinstance(best_row, pd.Series):
-        payload["best_model_id"] = _to_jsonable(best_row.get("ID"))
+        # the object's own best_model_* is authoritative; the results row only fills gaps
         payload["best_model_generation"] = _to_jsonable(best_row.get("Generation"))
-        payload["best_model_ensemble"] = _to_jsonable(best_row.get("Ensemble"))
+        for payload_key, row_key in [
+            ("best_model_id", "ID"),
+            ("best_model_ensemble", "Ensemble"),
+        ]:
+            if payload[payload_key] in (None, ""):
+                payload[payload_key] = _to_jsonable(best_row.get(row_key))
     return payload
 
 
@@ -820,13 +866,94 @@ def modelobject_predict_end(model_obj, context=None, result=None, error=None):
             _end_run(mlflow, run_ctx, status=status)
 
 
-def load_model(run_id: str, artifact_path: str = None) -> Any:
+def _parse_logged_param(value):
+    """Invert _short_param_value for run params (JSON for containers, 'None' for None)."""
+    if value is None or value == "None":
+        return None
+    try:
+        return json.loads(value)
+    except Exception:
+        return value
+
+
+def _legacy_autots_init_params(mlflow, run_id: str) -> dict:
+    """Init args for runs logged before payloads carried init_params (truncated run params)."""
+    try:
+        params = mlflow.get_run(run_id).data.params
+    except Exception:
+        params = {}
+    casts = {
+        "forecast_length": int,
+        "frequency": str,
+        "prediction_interval": float,
+        "ensemble": lambda x: x,
+        "random_seed": int,
+    }
+    init_params = {}
+    for key, cast in casts.items():
+        value = _parse_logged_param(params.get(key))
+        if value is None:
+            continue
+        try:
+            init_params[key] = cast(value)
+        except Exception:
+            continue
+    return init_params
+
+
+def _build_autots_from_payload(mlflow, run_id: str, payload: dict, autots_overrides):
+    """AutoTS with the logged winner imported; fit_data(df) then predict() runs no search."""
+    from autots import AutoTS
+    import inspect
+
+    best_model_name = payload.get("best_model_name")
+    best_model_params = payload.get("best_model_parameters")
+    best_model_trans = payload.get(
+        "best_model_transformation_parameters",
+        payload.get("best_model_transformation_params"),
+    )
+    if not best_model_name or best_model_params is None or best_model_trans is None:
+        raise ValueError(
+            f"MLflow run {run_id} has no best model to load (did AutoTS.fit fail?)"
+        )
+
+    init_params = payload.get("init_params")
+    if not isinstance(init_params, dict):
+        init_params = _legacy_autots_init_params(mlflow, run_id)
+    allowed = set(inspect.signature(AutoTS.__init__).parameters) - {"self"}
+    init_params = {k: v for k, v in init_params.items() if k in allowed}
+    init_params.update(autots_overrides)
+    model = AutoTS(**init_params)
+
+    best_model_ensemble = payload.get("best_model_ensemble")
+    template = {
+        "Model": best_model_name,
+        "ModelParameters": json.dumps(best_model_params),
+        "TransformationParameters": json.dumps(best_model_trans),
+        "Ensemble": 0 if best_model_ensemble is None else int(best_model_ensemble),
+    }
+    # without an ID, parse_best_model recomputes it from name and params
+    if payload.get("best_model_id"):
+        template["ID"] = payload["best_model_id"]
+    # enforce_model_list=False: the winner may be outside the default model_list
+    return model.import_best_model(
+        pd.DataFrame([template]), enforce_model_list=False, include_ensemble=True
+    )
+
+
+def load_model(run_id: str, artifact_path: str = None, **autots_overrides) -> Any:
     """Load an AutoTS or ModelObject instance from an MLflow run.
+
+    For AutoTS runs, returns an AutoTS with the logged best model imported and the
+    original constructor settings restored. Call `fit_data(df)` then `predict()` to
+    refit only the winner on new data; calling `fit()` would run a new search.
 
     Args:
         run_id (str): MLflow run ID.
         artifact_path (str): Path to the JSON artifact.
             If None, tries 'autots/model_as_code.json' then 'modelobject/model_as_code.json'.
+        **autots_overrides: AutoTS constructor args that replace logged values,
+            e.g. forecast_length=56 or n_jobs=4. Ignored for ModelObject runs.
 
     Returns:
         autots.AutoTS or ModelObject: The reconstructed model instance.
@@ -834,9 +961,6 @@ def load_model(run_id: str, artifact_path: str = None) -> Any:
     mlflow = _get_mlflow()
     if mlflow is None:
         raise ImportError("mlflow is required for load_model")
-
-    import json
-    import tempfile
 
     # Selection logic for finding the right artifact
     search_paths = (
@@ -863,44 +987,7 @@ def load_model(run_id: str, artifact_path: str = None) -> Any:
 
     model_class = payload.get("model_class")
     if model_class == "AutoTS":
-        from autots import AutoTS
-
-        # Get params from MLflow tracking to initialize correctly
-        try:
-            run = mlflow.get_run(run_id)
-            params = run.data.params
-        except Exception:
-            params = {}
-
-        def get_p(key, default, transform=lambda x: x):
-            val = params.get(key)
-            if val is None or val == "None":
-                return default
-            try:
-                return transform(val)
-            except Exception:
-                return default
-
-        # Start with original params, but default max_generations=0 to avoid search on refit
-        model = AutoTS(
-            forecast_length=get_p("forecast_length", 14, int),
-            frequency=get_p("frequency", "infer"),
-            prediction_interval=get_p("prediction_interval", 0.9, float),
-            max_generations=get_p("max_generations", 0, int),
-            num_validations=get_p("num_validations", 0, int),
-            ensemble=get_p("ensemble", None),
-            random_seed=get_p("random_seed", 2022, int),
-        )
-        # Restore winner state
-        model.best_model_name = payload.get("best_model_name")
-        model.best_model_params = payload.get("best_model_parameters")
-        model.best_model_transformation_params = payload.get(
-            "best_model_transformation_params",
-            payload.get("best_model_transformation_parameters"),
-        )
-        model.best_model_ensemble = payload.get("best_model_ensemble", 0)
-        model.best_model_id = payload.get("best_model_id")
-        return model
+        return _build_autots_from_payload(mlflow, run_id, payload, autots_overrides)
     else:
         from autots.evaluator.auto_model import ModelMonster
 

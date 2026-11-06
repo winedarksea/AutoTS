@@ -5,14 +5,16 @@ import json
 import os
 import tempfile
 import unittest
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from autots import AutoTS
+from autots import AutoTS, mlflow_load_model
 from autots.models.basics import LastValueNaive, AverageValueNaive
 from autots.tools.mlflow import (
     autolog,
+    load_model,
     _AUTOLOG_CONFIG,
     _get_mlflow,
     _safe_float,
@@ -40,6 +42,36 @@ def _make_df(rows=40, cols=2, freq="D"):
     return pd.DataFrame(
         data, index=pd.date_range("2020-01-01", periods=rows, freq=freq)
     )
+
+
+def _make_seasonal_df(rows=120, cols=3, seed=7):
+    """Weekly-seasonal noisy series, so naive models give different forecasts."""
+    rng = np.random.default_rng(seed)
+    t = np.arange(rows)[:, None]
+    data = (
+        50
+        + 0.2 * t * np.arange(1, cols + 1)
+        + 10 * np.sin(2 * np.pi * t / 7 + np.arange(cols))
+        + rng.normal(0, 2, (rows, cols))
+    )
+    return pd.DataFrame(
+        data,
+        index=pd.date_range("2020-01-01", periods=rows, freq="D"),
+        columns=[f"series_{i}" for i in range(cols)],
+    )
+
+
+def _use_temp_tracking_store(experiment_name):
+    """Point MLflow at a fresh sqlite store; MLflow 3.18 rejects the file store."""
+    tmpdir = tempfile.mkdtemp()
+    mlflow.set_tracking_uri(f"sqlite:///{os.path.join(tmpdir, 'mlflow.db')}")
+    # explicit artifact root, as the sqlite default is ./mlruns in the working directory
+    mlflow.create_experiment(
+        experiment_name,
+        artifact_location=Path(tmpdir, "artifacts").as_uri(),
+    )
+    mlflow.set_experiment(experiment_name)
+    return tmpdir
 
 
 class TestHelperFunctions(unittest.TestCase):
@@ -211,9 +243,7 @@ class TestModelObjectAutolog(unittest.TestCase):
     """Test ModelObject-level autologging with MLflow."""
 
     def setUp(self):
-        self.tmpdir = tempfile.mkdtemp()
-        mlflow.set_tracking_uri(f"file://{self.tmpdir}")
-        mlflow.set_experiment("test_modelobject")
+        self.tmpdir = _use_temp_tracking_store("test_modelobject")
         autolog(disable=False, tried_models_logging="single")
 
     def tearDown(self):
@@ -297,9 +327,7 @@ class TestAutoTSAutologSingleMode(unittest.TestCase):
     """Test AutoTS-level autologging in 'single' mode (default)."""
 
     def setUp(self):
-        self.tmpdir = tempfile.mkdtemp()
-        mlflow.set_tracking_uri(f"file://{self.tmpdir}")
-        mlflow.set_experiment("test_autots_single")
+        self.tmpdir = _use_temp_tracking_store("test_autots_single")
         autolog(disable=False, tried_models_logging="single")
 
     def tearDown(self):
@@ -459,9 +487,7 @@ class TestAutoTSAutologIndividualMode(unittest.TestCase):
     """Test AutoTS autologging in 'individual' mode."""
 
     def setUp(self):
-        self.tmpdir = tempfile.mkdtemp()
-        mlflow.set_tracking_uri(f"file://{self.tmpdir}")
-        mlflow.set_experiment("test_autots_individual")
+        self.tmpdir = _use_temp_tracking_store("test_autots_individual")
         autolog(disable=False, tried_models_logging="individual")
 
     def tearDown(self):
@@ -498,9 +524,7 @@ class TestAutoTSAutologNoneMode(unittest.TestCase):
     """Test AutoTS autologging in 'none' mode."""
 
     def setUp(self):
-        self.tmpdir = tempfile.mkdtemp()
-        mlflow.set_tracking_uri(f"file://{self.tmpdir}")
-        mlflow.set_experiment("test_autots_none")
+        self.tmpdir = _use_temp_tracking_store("test_autots_none")
         autolog(disable=False, tried_models_logging="none")
 
     def tearDown(self):
@@ -545,9 +569,7 @@ class TestDisableStopsLogging(unittest.TestCase):
     """Verify that autolog(disable=True) actually stops all logging."""
 
     def setUp(self):
-        self.tmpdir = tempfile.mkdtemp()
-        mlflow.set_tracking_uri(f"file://{self.tmpdir}")
-        mlflow.set_experiment("test_disable")
+        self.tmpdir = _use_temp_tracking_store("test_disable")
 
     def tearDown(self):
         autolog(disable=True)
@@ -594,6 +616,9 @@ class TestAutoTSModelAsCodePayload(unittest.TestCase):
         self.assertTrue(payload["refit_expected"])
         self.assertIn("best_model_name", payload)
         self.assertIn("last_obs_date", payload)
+        self.assertEqual(payload["best_model_id"], model.best_model_id)
+        self.assertEqual(payload["init_params"]["forecast_length"], 3)
+        self.assertNotIn("n_jobs", payload["init_params"])
         # Verify JSON-serializable
         json.dumps(_to_jsonable(payload))
 
@@ -608,10 +633,7 @@ class TestMLflowRoundTrip(unittest.TestCase):
             mlflow.end_run()
         except Exception:
             pass
-        self.tmp_dir = tempfile.TemporaryDirectory()
-        self.tracking_uri = f"file://{os.path.abspath(self.tmp_dir.name)}"
-        mlflow.set_tracking_uri(self.tracking_uri)
-        mlflow.set_experiment("test_roundtrip")
+        self.tmpdir = _use_temp_tracking_store("test_roundtrip")
         autolog(tried_models_logging="single", silent=True)
 
     def tearDown(self):
@@ -620,76 +642,132 @@ class TestMLflowRoundTrip(unittest.TestCase):
             mlflow.end_run()
         except Exception:
             pass
-        self.tmp_dir.cleanup()
+
+    def _latest_run_id(self, flavor):
+        """Most recent fit run of the given autots.flavor (predict runs excluded)."""
+        client = MlflowClient()
+        experiment = client.get_experiment_by_name("test_roundtrip")
+        runs = client.search_runs(
+            [experiment.experiment_id], order_by=["attributes.start_time DESC"]
+        )
+        fit_runs = [
+            r
+            for r in runs
+            if r.data.tags.get("autots.flavor") == flavor
+            and r.data.tags.get("autots.stage") != "predict"
+        ]
+        return fit_runs[0].info.run_id
 
     def test_modelobject_roundtrip_consistency(self):
         df = _make_df(30, 2)
-        # 1. Fit original (autolog will create the run)
-        original = LastValueNaive(frequency="D")
+        original = LastValueNaive(frequency="D", prediction_interval=0.8)
         original.fit(df)
-
-        # 2. Get the run ID from MLflow
-        client = MlflowClient()
-        experiment = client.get_experiment_by_name("test_roundtrip")
-        runs = client.search_runs(
-            experiment.experiment_id, order_by=["attributes.start_time DESC"]
-        )
-        run_id = runs[0].info.run_id
-
-        # 3. Get original forecast
+        run_id = self._latest_run_id("ModelObject")
         orig_forecast = original.predict(forecast_length=5).forecast
 
-        # 4. Load from MLflow
-        from autots.tools.mlflow import load_model
-
         loaded = load_model(run_id)
-
-        # 5. Refit and predict loaded
         loaded.fit(df)
         loaded_forecast = loaded.predict(forecast_length=5).forecast
 
-        # 6. Assert consistency
         pd.testing.assert_frame_equal(orig_forecast, loaded_forecast)
         self.assertIsInstance(loaded, LastValueNaive)
+        self.assertEqual(loaded.prediction_interval, 0.8)
 
-    def test_autots_roundtrip_consistency(self):
-        df = _make_df(30, 2)
-        # 1. Fit original AutoTS
-        model = AutoTS(
-            forecast_length=5,
-            frequency="D",
-            model_list=["LastValueNaive", "AverageValueNaive"],
-            max_generations=0,
-            num_validations=0,
-            random_seed=42,
-        )
+    def _assert_autots_roundtrip(self, model, df):
+        """Load the logged winner, refit via fit_data, and match the original forecast."""
         model.fit(df)
-
-        # 2. Get the run ID from MLflow
-        client = MlflowClient()
-        experiment = client.get_experiment_by_name("test_roundtrip")
-        runs = client.search_runs(
-            experiment.experiment_id, order_by=["attributes.start_time DESC"]
-        )
-        # Note: AutoTS might have multiple runs if individual logging is on,
-        # but the top-most (summary) run should be most recent if nested correctly.
-        run_id = runs[0].info.run_id
-
-        # 3. Get original forecast
+        run_id = self._latest_run_id("AutoTS")
         orig_forecast = model.predict().forecast
 
-        # 4. Load from MLflow
-        from autots.tools.mlflow import load_model
-
-        loaded = load_model(run_id)
-
-        # 5. Refit and predict with loaded
-        loaded.fit(df)
+        loaded = mlflow_load_model(run_id)
+        loaded.fit_data(df)
         loaded_forecast = loaded.predict().forecast
 
-        # 6. Assert consistency
         pd.testing.assert_frame_equal(orig_forecast, loaded_forecast)
-        self.assertEqual(loaded.best_model_name, model.best_model_name)
+        self.assertEqual(loaded.best_model_id, model.best_model_id)
+        self.assertEqual(loaded.best_model_ensemble, model.best_model_ensemble)
+        # export/plot/per-series helpers read the best_model template, not best_model_*
+        self.assertEqual(
+            loaded.export_template(models="best", n=1)["ID"].iloc[0],
+            model.best_model_id,
+        )
+        # fit_data + predict must refit only the winner, never search
+        self.assertTrue(loaded.initial_results.model_results.empty)
+        return run_id, loaded
+
+    def test_autots_roundtrip_refits_winner_without_search(self):
+        df = _make_seasonal_df(120, 3)
+        model = AutoTS(
+            forecast_length=7,
+            frequency="infer",
+            model_list=["SeasonalNaive", "AverageValueNaive", "LastValueNaive"],
+            transformer_list="superfast",
+            transformer_max_depth=2,
+            max_generations=1,
+            num_validations=1,
+            ensemble=None,
+            no_negatives=True,
+            random_seed=7,
+            verbose=-1,
+        )
+        run_id, loaded = self._assert_autots_roundtrip(model, df)
+        self.assertTrue(loaded.no_negatives)
+        self.assertEqual(loaded.model_list, model.model_list)
+
+        overridden = mlflow_load_model(run_id, forecast_length=10)
+        overridden.fit_data(df)
+        self.assertEqual(overridden.predict().forecast.shape, (10, 3))
+
+    def test_autots_roundtrip_horizontal_ensemble(self):
+        df = _make_seasonal_df(120, 4)
+        model = AutoTS(
+            forecast_length=7,
+            frequency="infer",
+            model_list=["SeasonalNaive", "AverageValueNaive", "LastValueNaive"],
+            transformer_list="superfast",
+            transformer_max_depth=1,
+            max_generations=1,
+            num_validations=1,
+            ensemble="horizontal-max",
+            random_seed=7,
+            verbose=-1,
+        )
+        self._assert_autots_roundtrip(model, df)
+        self.assertEqual(model.best_model_ensemble, 2)
+
+    def test_autots_legacy_payload_loads(self):
+        """Runs logged before init_params/best_model_id were in the payload still load."""
+        legacy_payload = {
+            "model_name": "AutoTS",
+            "model_class": "AutoTS",
+            "best_model_name": "AverageValueNaive",
+            "best_model_parameters": {"method": "median", "window": None},
+            "best_model_transformation_parameters": {
+                "fillna": "ffill",
+                "transformations": {},
+                "transformation_params": {},
+            },
+        }
+        with mlflow.start_run(run_name="legacy") as run:
+            mlflow.log_param("forecast_length", "5")
+            mlflow.log_param("ensemble", "None")
+            mlflow.log_dict(legacy_payload, "autots/model_as_code.json")
+
+        loaded = mlflow_load_model(run.info.run_id)
+        loaded.fit_data(_make_seasonal_df(60, 2))
+        forecast = loaded.predict().forecast
+        self.assertEqual(forecast.shape, (5, 2))
+        self.assertEqual(loaded.best_model_name, "AverageValueNaive")
+        self.assertFalse(loaded.best_model.empty)
+
+    def test_load_model_without_best_model_raises(self):
+        with mlflow.start_run(run_name="failed_fit") as run:
+            mlflow.log_dict(
+                {"model_class": "AutoTS", "best_model_name": ""},
+                "autots/model_as_code.json",
+            )
+        with self.assertRaises(ValueError):
+            mlflow_load_model(run.info.run_id)
 
 
 if __name__ == "__main__":
