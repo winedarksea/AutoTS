@@ -72,6 +72,7 @@ def _forecast_base_model(
     forecast_length,
     future_regressor_train=None,
     future_regressor_forecast=None,
+    prediction_interval=0.9,
     random_seed=2020,
     verbose=0,
     n_jobs=1,
@@ -84,7 +85,7 @@ def _forecast_base_model(
         df_train=df_train,
         forecast_length=forecast_length,
         frequency='infer',
-        prediction_interval=0.9,
+        prediction_interval=prediction_interval,
         no_negatives=False,
         future_regressor_train=future_regressor_train,
         future_regressor_forecast=future_regressor_forecast,
@@ -102,11 +103,16 @@ def collect_base_forecasts(
     forecast_length,
     future_regressor_train=None,
     future_regressor_forecast=None,
+    prediction_interval=0.9,
     random_seed=2020,
     verbose=0,
     n_jobs=1,
 ):
-    """Point, upper and lower base forecasts as (M, H, N) arrays plus the forecast index."""
+    """Point, upper and lower base forecasts as (M, H, N) arrays plus the forecast index.
+
+    prediction_interval must match the ensemble's, as interval_method='base_models'
+    uses these base bounds directly.
+    """
     points, uppers, lowers = [], [], []
     for model in models:
         forecasts = _forecast_base_model(
@@ -117,6 +123,7 @@ def collect_base_forecasts(
             forecast_length,
             future_regressor_train=future_regressor_train,
             future_regressor_forecast=future_regressor_forecast,
+            prediction_interval=prediction_interval,
             random_seed=random_seed,
             verbose=verbose,
             n_jobs=n_jobs,

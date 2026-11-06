@@ -296,6 +296,7 @@ class MLEnsemble(ModelObject):
             self.forecast_length,
             future_regressor_train=self.regressor_train,
             future_regressor_forecast=future_regressor,
+            prediction_interval=self.prediction_interval,
             random_seed=self.random_seed,
             verbose=self.verbose,
             n_jobs=self.n_jobs,

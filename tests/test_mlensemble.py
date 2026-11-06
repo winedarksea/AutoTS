@@ -385,6 +385,26 @@ class ForecastCorrectorTest(unittest.TestCase):
         np.testing.assert_allclose(forecasts[1][1], forecasts[0][1] * 1e6, rtol=1e-6)
         np.testing.assert_allclose(forecasts[1][[0, 2]], forecasts[0][[0, 2]])
 
+    def test_base_model_intervals_respect_prediction_interval(self):
+        rng = np.random.default_rng(5)
+        dates = pd.date_range("2023-01-01", periods=160, freq="D")
+        df = pd.DataFrame(
+            np.cumsum(rng.normal(size=(160, 4)), axis=0) + 50, index=dates
+        )
+        widths = []
+        for interval in (0.5, 0.95):
+            prediction = MLEnsemble(
+                forecast_length=14,
+                num_validations=2,
+                models=_naive_models(),
+                interval_method="base_models",
+                prediction_interval=interval,
+            ).fit(df).predict()
+            widths.append(
+                (prediction.upper_forecast - prediction.lower_forecast).to_numpy().mean()
+            )
+        self.assertLess(widths[0], widths[1])
+
     def test_new_params_round_trip(self):
         random.seed(0)
         seen_models = set()
