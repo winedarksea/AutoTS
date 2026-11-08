@@ -198,6 +198,55 @@ model = model.import_template(example_filename, method='only') # method='add on'
 print("Overwrite template is: {}".format(str(model.initial_template)))
 ```
 
+### MLflow Tracking and Template Registry
+With `mlflow` installed, the template file above can live in the MLflow Model Registry instead, so every exported template is versioned and an alias picks which one a run uses. 
+`mlflow_autolog()` logs each `fit` as an MLflow run, and `mlflow_log_template` registers the fitted model's top templates as a new version of a registered model. 
+Any `models:/name@alias` URI works wherever a template filename does (`import_template`, `import_best_model`).
+
+```python
+import mlflow
+from autots import AutoTS, mlflow_autolog, mlflow_log_template, mlflow_load_model
+
+mlflow.set_experiment("weekly_demand_forecast")
+mlflow_autolog()
+
+# evolving mode: seed each search with the last templates, then register the new ones
+model = AutoTS(forecast_length=14, frequency="D", ensemble="horizontal-max", max_generations=5)
+try:
+    model.import_template("models:/demand_seed@rolling", method="addon", force_validation=True)
+except FileNotFoundError:
+    pass  # first run: no registered template yet
+model.fit(df)
+mlflow_log_template(model, "demand_seed", alias="rolling", n=60, max_per_model_class=6)
+prediction = model.predict()
+
+# frozen mode: refit only the approved winner, no search
+model = mlflow_load_model("models:/demand_seed@approved")
+model.fit_data(df)
+prediction = model.predict()
+```
+
+If a run's template goes bad (a holiday anomaly corrupting the search, for example), point the `rolling` alias back at an earlier version in the MLflow UI and the next run seeds from that. 
+Leave `alias=None` in `mlflow_log_template` to register versions without moving any alias, then set `approved` by hand after review.
+
+Registered templates are also MLflow pyfunc models, so they can be served behind MLflow model serving or batch scoring. 
+A fitted AutoTS isn't saved, so `predict` refits the winning model on the history it is given (no search) and returns the forecast. Future regressors are not supported here.
+```python
+served = mlflow.pyfunc.load_model("models:/demand_seed@approved")
+forecast_long = served.predict(df, params={"forecast_length": 14})  # long format with upper/lower
+# for JSON/REST input without a datetime index, name the date column
+forecast_wide = served.predict(df_with_date_column, params={"date_col": "date", "output": "forecast"})
+```
+
+Besides parameters, the best model, and results tables, each autologged `fit` run records:
+* `autots.generation_best_score` per generation (step = generation): a flat line early means `max_generations` could be lower, still falling means it could be higher. Scores are relative to that run's models, so compare runs by shape, not level.
+* `autots/per_series_best.json`: the winner's error per series, as an overall good score can hide one bad series. Also `best.worst_series_mape` and `best.worst_series`.
+* `autots/ensemble_routing.json` (and `autots/mosaic_routing.json` for mosaics): which model serves each series. The `best.ensemble_families` tag lists the model types in the winner, so runs can be searched by model type.
+* Seed drift, when the search was seeded: `drift.winner_origin` (seed, new, or mixed), and from `mlflow_log_template`, `drift.seed_survival_rate`, the share of incoming template models kept in the new template. Every search finds some new models, so this is below 1 even on unchanged data; a sudden drop compared with previous runs suggests the data has changed.
+* `autots/forecast.csv` on each `predict` run.
+
+`mlflow_autolog(log_insights=False)` turns off the per-generation, per-series, routing, and drift logging.
+
 ### Running Just One Model
 While the above version of deployment, with  evolving templates and cross_validation on every run, is the recommended deployment, it is also possible to run a single fixed model. 
 

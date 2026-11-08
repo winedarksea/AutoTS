@@ -23,6 +23,7 @@ _AUTOLOG_CONFIG: Dict[str, Any] = {
     "tried_models_logging": "single",  # single | individual | none
     "log_model_runs": True,
     "log_model_forecasts": True,
+    "log_insights": True,
     "silent": True,
 }
 
@@ -384,7 +385,7 @@ def _log_autots_common(mlflow, autots_obj):
         pass
 
 
-def _log_autots_summary(mlflow, autots_obj):
+def _log_autots_summary(mlflow, autots_obj, seed_ids=None):
     initial_df = _extract_autots_results_df(autots_obj, "initial")
     validation_df = _extract_autots_results_df(autots_obj, "validation")
 
@@ -429,6 +430,11 @@ def _log_autots_summary(mlflow, autots_obj):
 
     model_as_code = _build_autots_model_as_code_payload(autots_obj, best_row=best_row)
     _safe_mlflow_log_dict(mlflow, model_as_code, "autots/model_as_code.json")
+
+    if _AUTOLOG_CONFIG.get("log_insights", True):
+        from autots.tools.mlflow_insights import log_autots_insights
+
+        log_autots_insights(mlflow, autots_obj, seed_ids=seed_ids)
 
     if _AUTOLOG_CONFIG.get("tried_models_logging", "single") == "single":
         _safe_mlflow_log_dataframe(
@@ -537,7 +543,24 @@ def _start_autots_fit_run(autots_obj):
     run_ctx = _start_run(mlflow, "AutoTS.fit")
     _suppress_modelobject_logging()
     _log_autots_common(mlflow, autots_obj)
-    return {"mlflow": mlflow, "run_ctx": run_ctx, "closed": False}
+    # mlflow_log_template attaches the registered template to this fit run
+    autots_obj.mlflow_run_id = run_ctx.get("run_id")
+    seed_ids = None
+    if _AUTOLOG_CONFIG.get("log_insights", True):
+        from autots.tools.mlflow_insights import collect_seed_ids
+
+        # fit overwrites initial_template, so the seed must be read before it runs
+        try:
+            seed_ids = collect_seed_ids(autots_obj)
+        except Exception:
+            seed_ids = None
+    autots_obj.mlflow_seed_ids = seed_ids
+    return {
+        "mlflow": mlflow,
+        "run_ctx": run_ctx,
+        "closed": False,
+        "seed_ids": seed_ids,
+    }
 
 
 def _end_autots_fit_run(autots_obj, ctx, error=None):
@@ -554,7 +577,7 @@ def _end_autots_fit_run(autots_obj, ctx, error=None):
                 _safe_mlflow_set_tag(mlflow, "autots.error", repr(error))
             else:
                 _safe_mlflow_set_tag(mlflow, "autots.run_status", "finished")
-            _log_autots_summary(mlflow, autots_obj)
+            _log_autots_summary(mlflow, autots_obj, seed_ids=ctx.get("seed_ids"))
             if _AUTOLOG_CONFIG.get("tried_models_logging", "single") == "individual":
                 _log_autots_individual_model_runs(mlflow, autots_obj)
     finally:
@@ -660,6 +683,15 @@ def _patch_autots_predict():
                         _safe_mlflow_log_param(
                             mlflow, "forecast_cols", forecast_df.shape[1]
                         )
+                    if _AUTOLOG_CONFIG.get("log_model_forecasts", True):
+                        try:
+                            _safe_mlflow_log_dataframe(
+                                mlflow,
+                                result.long_form_results().reset_index(),
+                                "autots/forecast.csv",
+                            )
+                        except Exception:
+                            pass
                 _end_run(
                     mlflow, run_ctx, status="FAILED" if err is not None else "FINISHED"
                 )
@@ -676,6 +708,7 @@ def autolog(
     log_model_runs: bool = True,
     log_model_forecasts: bool = True,
     silent: bool = True,
+    log_insights: bool = True,
 ):
     """Enable or disable AutoTS MLflow autologging.
 
@@ -686,8 +719,12 @@ def autolog(
             "individual" logs a nested run for each tried model row.
             "none" logs only run summary + best model metadata.
         log_model_runs (bool): if True, direct ModelObject.fit() calls are logged.
-        log_model_forecasts (bool): if True, direct ModelObject.predict() calls are logged.
+        log_model_forecasts (bool): if True, direct ModelObject.predict() calls are logged,
+            and AutoTS.predict() logs its long-form forecast as autots/forecast.csv.
         silent (bool): suppress non-fatal integration messages.
+        log_insights (bool): if True, AutoTS fits also log generation convergence
+            (step metrics), per-series errors, ensemble routing tables, and seed drift
+            metrics; see autots.tools.mlflow_insights.
 
     Returns:
         dict: active autolog configuration.
@@ -703,6 +740,7 @@ def autolog(
     _AUTOLOG_CONFIG["log_model_runs"] = bool(log_model_runs)
     _AUTOLOG_CONFIG["log_model_forecasts"] = bool(log_model_forecasts)
     _AUTOLOG_CONFIG["silent"] = bool(silent)
+    _AUTOLOG_CONFIG["log_insights"] = bool(log_insights)
 
     if _AUTOLOG_CONFIG["enabled"]:
         _patch_autots_fit()
@@ -901,8 +939,14 @@ def _legacy_autots_init_params(mlflow, run_id: str) -> dict:
     return init_params
 
 
-def _build_autots_from_payload(mlflow, run_id: str, payload: dict, autots_overrides):
-    """AutoTS with the logged winner imported; fit_data(df) then predict() runs no search."""
+def _build_autots_from_payload(
+    payload: dict, autots_overrides=None, legacy_init_params=None, source: str = ""
+):
+    """AutoTS with the logged winner imported; fit_data(df) then predict() runs no search.
+
+    Shared by load_model and the registered pyfunc so both read the same contract.
+    legacy_init_params is used only when the payload predates init_params.
+    """
     from autots import AutoTS
     import inspect
 
@@ -914,15 +958,15 @@ def _build_autots_from_payload(mlflow, run_id: str, payload: dict, autots_overri
     )
     if not best_model_name or best_model_params is None or best_model_trans is None:
         raise ValueError(
-            f"MLflow run {run_id} has no best model to load (did AutoTS.fit fail?)"
+            f"MLflow source {source} has no best model to load (did AutoTS.fit fail?)"
         )
 
     init_params = payload.get("init_params")
     if not isinstance(init_params, dict):
-        init_params = _legacy_autots_init_params(mlflow, run_id)
+        init_params = legacy_init_params or {}
     allowed = set(inspect.signature(AutoTS.__init__).parameters) - {"self"}
     init_params = {k: v for k, v in init_params.items() if k in allowed}
-    init_params.update(autots_overrides)
+    init_params.update(autots_overrides or {})
     model = AutoTS(**init_params)
 
     best_model_ensemble = payload.get("best_model_ensemble")
@@ -941,16 +985,21 @@ def _build_autots_from_payload(mlflow, run_id: str, payload: dict, autots_overri
     )
 
 
-def load_model(run_id: str, artifact_path: str = None, **autots_overrides) -> Any:
-    """Load an AutoTS or ModelObject instance from an MLflow run.
+def _is_mlflow_uri(value) -> bool:
+    return isinstance(value, str) and value.startswith(("models:/", "runs:/"))
 
-    For AutoTS runs, returns an AutoTS with the logged best model imported and the
+
+def load_model(run_id: str, artifact_path: str = None, **autots_overrides) -> Any:
+    """Load an AutoTS or ModelObject instance from an MLflow run or registered template.
+
+    For AutoTS, returns an AutoTS with the logged best model imported and the
     original constructor settings restored. Call `fit_data(df)` then `predict()` to
     refit only the winner on new data; calling `fit()` would run a new search.
 
     Args:
-        run_id (str): MLflow run ID.
-        artifact_path (str): Path to the JSON artifact.
+        run_id (str): MLflow run ID of an autologged fit, or a model URI from
+            `mlflow_log_template`, such as "models:/demand_seed@approved".
+        artifact_path (str): Path to the JSON artifact (run IDs only).
             If None, tries 'autots/model_as_code.json' then 'modelobject/model_as_code.json'.
         **autots_overrides: AutoTS constructor args that replace logged values,
             e.g. forecast_length=56 or n_jobs=4. Ignored for ModelObject runs.
@@ -961,6 +1010,13 @@ def load_model(run_id: str, artifact_path: str = None, **autots_overrides) -> An
     mlflow = _get_mlflow()
     if mlflow is None:
         raise ImportError("mlflow is required for load_model")
+
+    if _is_mlflow_uri(run_id):
+        from autots.tools.mlflow_registry import download_config
+
+        return _build_autots_from_payload(
+            download_config(run_id), autots_overrides, source=run_id
+        )
 
     # Selection logic for finding the right artifact
     search_paths = (
@@ -987,7 +1043,12 @@ def load_model(run_id: str, artifact_path: str = None, **autots_overrides) -> An
 
     model_class = payload.get("model_class")
     if model_class == "AutoTS":
-        return _build_autots_from_payload(mlflow, run_id, payload, autots_overrides)
+        legacy_init_params = None
+        if not isinstance(payload.get("init_params"), dict):
+            legacy_init_params = _legacy_autots_init_params(mlflow, run_id)
+        return _build_autots_from_payload(
+            payload, autots_overrides, legacy_init_params, source=f"run {run_id}"
+        )
     else:
         from autots.evaluator.auto_model import ModelMonster
 

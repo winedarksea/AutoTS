@@ -156,6 +156,22 @@ autots.tools.mlflow module
    :show-inheritance:
    :undoc-members:
 
+autots.tools.mlflow\_insights module
+------------------------------------
+
+.. automodule:: autots.tools.mlflow_insights
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+autots.tools.mlflow\_registry module
+------------------------------------
+
+.. automodule:: autots.tools.mlflow_registry
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
 autots.tools.mocks module
 -------------------------
 

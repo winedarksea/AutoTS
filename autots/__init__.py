@@ -26,6 +26,7 @@ from autots.tools.shaping import long_to_wide, infer_frequency
 from autots.tools.regressor import create_lagged_regressor, create_regressor
 from autots.tools.mlflow import autolog as mlflow_autolog
 from autots.tools.mlflow import load_model as mlflow_load_model
+from autots.tools.mlflow_registry import log_template as mlflow_log_template
 from autots.evaluator.auto_model import model_forecast, ModelPrediction
 from autots.evaluator.anomaly_detector import AnomalyDetector, HolidayDetector
 from autots.models.cassandra import Cassandra
@@ -57,6 +58,7 @@ __all__ = [
     'create_regressor',
     'mlflow_autolog',
     'mlflow_load_model',
+    'mlflow_log_template',
     'EventRiskForecast',
     'AnomalyDetector',
     'HolidayDetector',

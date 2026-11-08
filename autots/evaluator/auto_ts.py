@@ -2770,6 +2770,11 @@ class AutoTS(object):
         """Helper funciton for just loading the file part of import_template."""
         if isinstance(filename, pd.DataFrame):
             import_template = filename.copy()
+        elif str(filename).startswith(("models:/", "runs:/")):
+            # template logged by autots.mlflow_log_template, e.g. "models:/name@alias"
+            from autots.tools.mlflow_registry import download_template
+
+            import_template = download_template(filename)
         elif '.csv' in filename:
             import_template = pd.read_csv(filename)
         elif '.json' in filename:
