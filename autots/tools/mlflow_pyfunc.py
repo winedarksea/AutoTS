@@ -43,7 +43,9 @@ class AutoTSPyfunc(PythonModel):
         df.index = pd.to_datetime(df.index)
         return df.apply(pd.to_numeric, errors="coerce")
 
-    def predict(self, context, model_input, params=None):
+    # pd.DataFrame hint silences MLflow's missing-hint warning without schema inference,
+    # since series columns vary per model
+    def predict(self, context, model_input: pd.DataFrame, params=None):
         from autots.tools.mlflow import _build_autots_from_payload
 
         params = params or {}

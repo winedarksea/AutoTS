@@ -2665,22 +2665,15 @@ class AutoTS(object):
                     for mod in focus_models:
                         one_model = export_template[export_template["Model"] == mod]
                         extra_mods.append(
-                            extra_mods.append(
-                                one_model.nsmallest(1, columns=['Score']).copy()
-                            )
+                            one_model.nsmallest(1, columns=['Score']).copy()
                         )
+                        # metric columns were already coerced to numeric above
                         if min_metrics is not None:
-                            export_template[metric] = pd.to_numeric(
-                                export_template[metric], errors="coerce"
-                            )
                             for metric in min_metrics:
                                 extra_mods.append(
                                     one_model.nsmallest(1, columns=metric).copy()
                                 )
                         if max_metrics is not None:
-                            export_template[metric] = pd.to_numeric(
-                                export_template[metric], errors="coerce"
-                            )
                             for metric in max_metrics:
                                 extra_mods.append(
                                     one_model.nlargest(1, columns=metric).copy()
@@ -2895,7 +2888,7 @@ class AutoTS(object):
         elif method.lower() in ['only', 'user only', 'user_only', 'import_only']:
             self.initial_template = import_template
         else:
-            return ValueError("method must be 'addon' or 'only'")
+            raise ValueError("method must be 'addon' or 'only'")
 
         if force_validation:
             if self.validate_import is None:
