@@ -249,7 +249,9 @@ class MLEnsemble(ModelObject):
         # Missing/inf actuals (fillna=None, unstable transforms) carry no label; drop rather than impute
         valid_label_mask = np.isfinite(self.y) & (np.abs(self.y) < 1e12)
         if not valid_label_mask.any():
-            raise ValueError("MLEnsemble: no finite target values in validation holdouts")
+            raise ValueError(
+                "MLEnsemble: no finite target values in validation holdouts"
+            )
         self.X = self.X[valid_label_mask]
         self.y = self.y[valid_label_mask]
 
@@ -309,8 +311,12 @@ class MLEnsemble(ModelObject):
             upper, lower = base_model_intervals(
                 point, base_points, base_upper, base_lower
             )
-            upper_forecast = pd.DataFrame(upper, index=test_index, columns=self.df.columns)
-            lower_forecast = pd.DataFrame(lower, index=test_index, columns=self.df.columns)
+            upper_forecast = pd.DataFrame(
+                upper, index=test_index, columns=self.df.columns
+            )
+            lower_forecast = pd.DataFrame(
+                lower, index=test_index, columns=self.df.columns
+            )
         else:
             upper_forecast, lower_forecast = Point_to_Probability(
                 self.df,
@@ -415,7 +421,9 @@ class MLEnsemble(ModelObject):
             "correction_method": correction_method,
             "bias_shape": random.choices(["linear_horizon", "constant"], [0.6, 0.4])[0],
             "bias_shrinkage": random.choices([0.5, 1.0, 2.0], [0.3, 0.4, 0.3])[0],
-            "ridge_lambda": random.choices([0.3, 1.0, 3.0, 10.0], [0.2, 0.4, 0.25, 0.15])[0],
+            "ridge_lambda": random.choices(
+                [0.3, 1.0, 3.0, 10.0], [0.2, 0.4, 0.25, 0.15]
+            )[0],
             "interval_method": random.choices(
                 ["base_models", "inferred_normal"], [0.8, 0.2]
             )[0],

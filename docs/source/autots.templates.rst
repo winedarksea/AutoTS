@@ -11,7 +11,6 @@ autots.templates.general module
    :members:
    :show-inheritance:
    :undoc-members:
-   :exclude-members: general_template
 
 Module contents
 ---------------

@@ -140,7 +140,9 @@ def _safe_log_table(mlflow, df: pd.DataFrame, artifact_file: str):
 def _log_step_series(mlflow, key: str, series: pd.Series):
     """One metric point per generation, batched so long searches don't make 1000s of calls."""
     points = [
-        (int(step), _safe_float(value)) for step, value in series.items() if pd.notna(step)
+        (int(step), _safe_float(value))
+        for step, value in series.items()
+        if pd.notna(step)
     ]
     points = [(step, value) for step, value in points if value is not None]
     if not points:
@@ -200,9 +202,7 @@ def log_ensemble_routing(mlflow, autots_obj):
     if autots_obj.best_model_ensemble < 1:
         return
     leaves = ensemble_leaf_models(autots_obj.best_model_params)
-    _safe_mlflow_set_tag(
-        mlflow, "best.ensemble_families", sorted(set(leaves.values()))
-    )
+    _safe_mlflow_set_tag(mlflow, "best.ensemble_families", sorted(set(leaves.values())))
     _safe_mlflow_log_metric(mlflow, "best.ensemble_model_count", len(leaves))
     if autots_obj.best_model_ensemble != 2:
         return
@@ -215,9 +215,7 @@ def log_ensemble_routing(mlflow, autots_obj):
     if "mosaic" in str(autots_obj.best_model_params.get("model_name", "")).lower():
         try:
             mosaic = autots_obj.mosaic_to_df().rename_axis("ForecastStep")
-            _safe_log_table(
-                mlflow, mosaic.reset_index(), "autots/mosaic_routing.json"
-            )
+            _safe_log_table(mlflow, mosaic.reset_index(), "autots/mosaic_routing.json")
         except Exception:
             pass
 

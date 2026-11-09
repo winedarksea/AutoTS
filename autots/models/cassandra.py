@@ -807,7 +807,9 @@ class Cassandra(ModelObject):
                 self.x_array[col] = c_x
                 # ADDING RECENCY WEIGHTING AND RIDGE PARAMS
                 self.params[col] = fit_linear_model(
-                    c_x[fit_rows], self.df[col].to_frame()[fit_rows], params=self.linear_model
+                    c_x[fit_rows],
+                    self.df[col].to_frame()[fit_rows],
+                    params=self.linear_model,
                 )
                 if self.ar_level:
                     ar_coef_flat[series_idx, keep_lag] = self.params[col][
@@ -887,7 +889,9 @@ class Cassandra(ModelObject):
                 trend_residuals, index=self.df.index, columns=self.df.columns
             )
         if self.ar_residual:
-            residual_slope = self._fit_residual_ar(trend_residuals, smooth=trend_posterior)
+            residual_slope = self._fit_residual_ar(
+                trend_residuals, smooth=trend_posterior
+            )
             if residual_slope is not None:
                 slope = residual_slope
 
@@ -964,16 +968,22 @@ class Cassandra(ModelObject):
         """Split linear-model residuals into a smooth trend and a stationary part u."""
         if smooth is None:
             smooth, slope, _ = self.rolling_trend(
-                np.asarray(trend_residuals), np.array(self.create_t(trend_residuals.index))
+                np.asarray(trend_residuals),
+                np.array(self.create_t(trend_residuals.index)),
             )
         else:
             slope = None
         smooth = pd.DataFrame(
             np.asarray(smooth), index=trend_residuals.index, columns=self.df.columns
         )
-        u = pd.DataFrame(
-            np.asarray(trend_residuals), index=trend_residuals.index, columns=self.df.columns
-        ) - smooth
+        u = (
+            pd.DataFrame(
+                np.asarray(trend_residuals),
+                index=trend_residuals.index,
+                columns=self.df.columns,
+            )
+            - smooth
+        )
         return smooth, u, slope
 
     def _fit_residual_ar(self, trend_residuals, smooth=None):
@@ -1119,9 +1129,7 @@ class Cassandra(ModelObject):
             )
         elif self.multivariate_feature == "group_average":
             multivar_df = (
-                trs_df.T.groupby(self.categorical_groups)  # axis=1
-                .mean()
-                .transpose()
+                trs_df.T.groupby(self.categorical_groups).mean().transpose()  # axis=1
             )
             multivar_df.index = history_df.index
             return multivar_df.rename(columns=lambda x: "multivar_" + str(x))
@@ -1132,7 +1140,9 @@ class Cassandra(ModelObject):
     def _multivariate_features(self, history_df):
         """Lag-1 multivariate summary columns for history dates plus the next date."""
         full_idx = history_df.index.union(
-            self.create_forecast_index(forecast_length=1, last_date=history_df.index[-1])
+            self.create_forecast_index(
+                forecast_length=1, last_date=history_df.index[-1]
+            )
         )
         # includes backfill
         lag_1_indx = np.concatenate([[0], np.arange(len(history_df))])
@@ -1605,7 +1615,9 @@ class Cassandra(ModelObject):
                         ]
                     )
                     next_row = self._multivariate_summary(history_ext).iloc[-1]
-                    x_array.loc[date, multivar_cols] = next_row[multivar_cols].to_numpy()
+                    x_array.loc[date, multivar_cols] = next_row[
+                        multivar_cols
+                    ].to_numpy()
                 return np.asarray(
                     self._linear_from_x(x_array.loc[[date]], **linear_kwargs)
                 )[0]
@@ -1635,7 +1647,12 @@ class Cassandra(ModelObject):
         return ar_future, interval_scale
 
     def _assemble_prediction(
-        self, dates, trend_component, linear_pred, ar_component=None, interval_scale=None
+        self,
+        dates,
+        trend_component,
+        linear_pred,
+        ar_component=None,
+        interval_scale=None,
     ):
         """Combine trend, linear and AR terms and intervals once for all dates (scaled space)."""
         # Note this is scaled and doesn't account for impacts

@@ -77,7 +77,9 @@ def bayesian_online_changepoint_probabilities(data, hazard_rate=0.01, lag=5):
         return mu_new, kappa_new, beta_new
 
     # Run-length hypotheses r = 1..t (observations in the current run incl. x_t).
-    mu, kappa, beta = update(np.array([mu0]), np.array([kappa0]), np.array([beta0]), x[0])
+    mu, kappa, beta = update(
+        np.array([mu0]), np.array([kappa0]), np.array([beta0]), x[0]
+    )
     log_run = np.array([0.0])
 
     for t in range(1, n):

@@ -71,7 +71,9 @@ def lag_history_tail(df, max_lag, frequency=None, fill_value=None):
     tail = df.reindex(grid)
     if tail.shape[0] < max_lag:
         # history shorter than the longest lag: pad the oldest end with NaN
-        pad = pd.DataFrame(np.nan, index=range(max_lag - tail.shape[0]), columns=df.columns)
+        pad = pd.DataFrame(
+            np.nan, index=range(max_lag - tail.shape[0]), columns=df.columns
+        )
         tail = pd.concat([pad, tail.reset_index(drop=True)])
     if fill_value is not None:
         tail = tail.fillna(fill_value)
@@ -172,9 +174,9 @@ def fit_ar_batched(design, target, lam=1.0, recency_weighting=None):
     lam = 1e-8 if lam is None or lam <= 0 else float(lam)
     xtx = xtx + lam * np.eye(K)[None, :, :]
     coef = np.linalg.solve(xtx, xty[..., None])[..., 0]
-    fitted = np.matmul(
-        np.nan_to_num(design).transpose(1, 0, 2), coef[..., None]
-    )[..., 0].T
+    fitted = np.matmul(np.nan_to_num(design).transpose(1, 0, 2), coef[..., None])[
+        ..., 0
+    ].T
     resid = np.where(valid, target - fitted, np.nan)
     count = valid.sum(axis=0)
     innovation_std = np.sqrt(np.nansum(resid**2, axis=0) / np.maximum(count - K, 1))
@@ -250,7 +252,11 @@ def ar_recursive_forecast(
     else:
         gamma = ar_gamma(coef, season_matrix_future, H)
     max_lag = int(lags.max()) if lags.size else 0
-    hist = np.asarray(history_tail, dtype=float)[-max_lag:] if max_lag else np.zeros((0, N))
+    hist = (
+        np.asarray(history_tail, dtype=float)[-max_lag:]
+        if max_lag
+        else np.zeros((0, N))
+    )
     ext = np.vstack([hist, np.zeros((H, N))])
     steps = np.arange(H)
     contribution = np.zeros((H, N))

@@ -44,6 +44,14 @@ autots.tools.changepoints module
    :show-inheritance:
    :undoc-members:
 
+autots.tools.changepoints\_probabilistic module
+-----------------------------------------------
+
+.. automodule:: autots.tools.changepoints_probabilistic
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
 autots.tools.cointegration module
 ---------------------------------
 
@@ -64,6 +72,14 @@ autots.tools.cpu\_count module
 ------------------------------
 
 .. automodule:: autots.tools.cpu_count
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+autots.tools.easter module
+--------------------------
+
+.. automodule:: autots.tools.easter
    :members:
    :show-inheritance:
    :undoc-members:
@@ -124,6 +140,14 @@ autots.tools.holiday module
    :show-inheritance:
    :undoc-members:
 
+autots.tools.holiday\_anomaly module
+------------------------------------
+
+.. automodule:: autots.tools.holiday_anomaly
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
 autots.tools.impute module
 --------------------------
 
@@ -136,6 +160,46 @@ autots.tools.kalman module
 --------------------------
 
 .. automodule:: autots.tools.kalman
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+autots.tools.level\_shift module
+--------------------------------
+
+.. automodule:: autots.tools.level_shift
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+autots.tools.level\_shift\_seasonality module
+---------------------------------------------
+
+.. automodule:: autots.tools.level_shift_seasonality
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+autots.tools.level\_shift\_selection module
+-------------------------------------------
+
+.. automodule:: autots.tools.level_shift_selection
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+autots.tools.level\_shift\_sizing module
+----------------------------------------
+
+.. automodule:: autots.tools.level_shift_sizing
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+autots.tools.linear module
+--------------------------
+
+.. automodule:: autots.tools.linear
    :members:
    :show-inheritance:
    :undoc-members:
@@ -160,6 +224,14 @@ autots.tools.mlflow\_insights module
 ------------------------------------
 
 .. automodule:: autots.tools.mlflow_insights
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+autots.tools.mlflow\_pyfunc module
+----------------------------------
+
+.. automodule:: autots.tools.mlflow_pyfunc
    :members:
    :show-inheritance:
    :undoc-members:

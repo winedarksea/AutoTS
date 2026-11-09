@@ -340,7 +340,8 @@ class TimeSeriesFeatureDetector(
         self.smoothing_window = smoothing_window
         self.standardize = standardize
         self.global_holiday_anomaly_suppression = (
-            None if global_holiday_anomaly_suppression is None
+            None
+            if global_holiday_anomaly_suppression is None
             else bool(global_holiday_anomaly_suppression)
         )
         # Extended anomaly detection is opt-in: pass a truthy dict to enable it.

@@ -553,9 +553,7 @@ def nonparametric_multivariate(df, output, method_params, n_jobs=1):
                 columns=["anomaly_score"],
             )
             res = pd.DataFrame(
-                np.where(
-                    df.index.isin(df.index[np.asarray(i_anom, dtype=int)]), -1, 1
-                ),
+                np.where(df.index.isin(df.index[np.asarray(i_anom, dtype=int)]), -1, 1),
                 index=df.index,
                 columns=["anomaly"],
             )
@@ -833,18 +831,14 @@ def anomaly_new_params(method='random'):
             'tol': random.choices([1e-3, 1e-4, 1e-5], [0.5, 0.3, 0.2])[0],
             'reg_covar': random.choices([1e-6, 1e-5, 1e-4], [0.3, 0.4, 0.3])[0],
             'max_iter': random.choices([100, 200, 300], [0.3, 0.4, 0.3])[0],
-            'alpha': random.choices([0.005, 0.01, 0.02, 0.05], [0.2, 0.3, 0.3, 0.2])[
-                0
-            ],
+            'alpha': random.choices([0.005, 0.01, 0.02, 0.05], [0.2, 0.3, 0.3, 0.2])[0],
         }
     elif method_choice == "GaussianMixtureBase":
         method_params = {
             'n_components': random.choices([2, 3, 4, 5], [0.2, 0.3, 0.3, 0.2])[0],
             'tol': random.choices([1e-3, 1e-4, 1e-5], [0.5, 0.3, 0.2])[0],
             'max_iter': random.choices([50, 100, 200], [0.3, 0.5, 0.2])[0],
-            'alpha': random.choices([0.005, 0.01, 0.02, 0.05], [0.2, 0.3, 0.3, 0.2])[
-                0
-            ],
+            'alpha': random.choices([0.005, 0.01, 0.02, 0.05], [0.2, 0.3, 0.3, 0.2])[0],
         }
     elif method_choice == "zscore":
         method_params = {
@@ -1423,10 +1417,13 @@ def dates_to_holidays(
                 # handle the different holiday calendars
                 if "easter_offset" in holiday_df.columns:
                     populated_holidays = (
-                        easter_offsets(dates).rename_axis('date').reset_index()
+                        easter_offsets(dates)
+                        .rename_axis('date')
+                        .reset_index()
                         .merge(
                             holiday_df.drop(columns=drop_colz, errors='ignore'),
-                            on='easter_offset', how='left',
+                            on='easter_offset',
+                            how='left',
                         )
                     )
                 elif "lunar_month" in holiday_df.columns:

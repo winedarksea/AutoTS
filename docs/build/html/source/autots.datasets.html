@@ -14,11 +14,11 @@
         gtag('config', 'G-P2KLF8302E');
     </script>
     
-    <title>autots.datasets package &#8212; AutoTS 1.0.4 documentation</title>
+    <title>autots.datasets package &#8212; AutoTS 1.0.5 documentation</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=ec641305" />
-    <script src="../_static/documentation_options.js?v=71272d9f"></script>
+    <script src="../_static/documentation_options.js?v=d55fa986"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../genindex.html" />
@@ -1456,7 +1456,8 @@ PRCP, SNOW, TMAX, TMIN, TAVG, AWND, WSF1, WSF2, WSF5, WSFG</p></li>
 <li><p><strong>london_species</strong> (<em>str</em>) – what measurement to pull from London Air. Not all stations have all metrics.</p></li>
 <li><p><strong>earthquake_min_magnitude</strong> (<em>int</em>) – smallest earthquake magnitude to pull from earthquake.usgs.gov. Set None to skip this.</p></li>
 <li><p><strong>gsa_key</strong> (<em>str</em>) – api key from <a class="reference external" href="https://open.gsa.gov/api/dap/">https://open.gsa.gov/api/dap/</a></p></li>
-<li><p><strong>nasa_api_key</strong> (<em>str</em>) – API key for <a class="reference external" href="https://api.nasa.gov/">https://api.nasa.gov/</a>. Set to None to skip NASA DONKI data.</p></li>
+<li><p><strong>nasa_api_key</strong> (<em>str</em>) – Set to None to skip NASA DONKI data. Retained for compatibility;
+the public CCMC DONKI API does not require an API key.</p></li>
 <li><p><strong>gov_domain_list</strong> (<em>list</em>) – dist of government run domains to get traffic data for. Can be very slow, so fewer is better.
 some examples: [‘usps.com’, ‘ncbi.nlm.nih.gov’, ‘cdc.gov’, ‘weather.gov’, ‘irs.gov’, “usajobs.gov”, “studentaid.gov”, ‘nasa.gov’, “uk.usembassy.gov”, “tsunami.gov”]</p></li>
 <li><p><strong>gov_domain_limit</strong> (<em>int</em>) – max number of records. Smaller will be faster. Max is currently 10000.</p></li>

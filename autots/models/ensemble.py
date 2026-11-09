@@ -1562,7 +1562,9 @@ def n_limited_horz(per_series, K, safety_model=False):
             if remaining.shape[1] == 0:
                 break
             best_per_series = remaining.idxmin()
-            tr_df = pd.concat([tr_df, pd.DataFrame(best_per_series).transpose()], axis=0)
+            tr_df = pd.concat(
+                [tr_df, pd.DataFrame(best_per_series).transpose()], axis=0
+            )
             models_pos.extend(best_per_series.tolist())
             per_series_des[per_series_des == per_series_des.min()] = np.nan
         cur_mods = pd.Series(models_pos).value_counts()

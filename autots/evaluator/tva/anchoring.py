@@ -106,9 +106,7 @@ def origin_anchor_adjustment(
         bound = float(max_ratio)
         if not bound >= 1.0:
             raise ValueError(f"max_ratio must be >= 1 or None, got {max_ratio!r}")
-        out_of_bounds = multiplicative & (
-            (ratio > bound) | (ratio < 1.0 / bound)
-        )
+        out_of_bounds = multiplicative & ((ratio > bound) | (ratio < 1.0 / bound))
         multiplicative = multiplicative & ~out_of_bounds
         ratio[out_of_bounds] = 1.0
     additive = usable & ~multiplicative
@@ -119,6 +117,4 @@ def origin_anchor_adjustment(
 def apply_origin_anchor(forecast: np.ndarray, adjustment: dict) -> np.ndarray:
     """(H, N) forecast scaled and shifted by an :func:`origin_anchor_adjustment`."""
     fc = np.asarray(forecast, dtype=float)
-    return (
-        fc * adjustment['ratio'][np.newaxis, :] + adjustment['offset'][np.newaxis, :]
-    )
+    return fc * adjustment['ratio'][np.newaxis, :] + adjustment['offset'][np.newaxis, :]

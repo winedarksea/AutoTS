@@ -61,7 +61,8 @@ def gregorian_to_christian_lunar(datetime_index):
         datetime_input = datetime_index.sort_values()
     expanded_dates = pd.date_range(
         datetime_input[0].replace(month=1, day=1) - pd.DateOffset(years=1),
-        datetime_input[-1], freq='D'
+        datetime_input[-1],
+        freq='D',
     )
     min_year = np.min(expanded_dates.year)
     moon_df = _calendar_moon_phases(expanded_dates, epoch=2444238.5)
@@ -91,7 +92,8 @@ def gregorian_to_chinese(datetime_index, epoch=2444238.5):
         datetime_input = datetime_index.sort_values()
     expanded_dates = pd.date_range(
         datetime_input[0].replace(month=1, day=1) - pd.DateOffset(years=1),
-        datetime_input[-1], freq='D'
+        datetime_input[-1],
+        freq='D',
     )
     min_year = np.min(expanded_dates.year)
     moon_df = _calendar_moon_phases(expanded_dates, epoch=epoch)
@@ -279,7 +281,8 @@ def gregorian_to_hindu(datetime_index, method: str = "lunar"):
     # Include the full prior year so scalar and ranged calls share year anchors.
     expanded_dates = pd.date_range(
         datetime_input[0].replace(month=1, day=1) - pd.DateOffset(years=1),
-        datetime_input[-1], freq='D'
+        datetime_input[-1],
+        freq='D',
     )
 
     # Calculate the Hindu year offset from the minimum Gregorian year
@@ -339,7 +342,8 @@ def gregorian_to_hindu(datetime_index, method: str = "lunar"):
         # Start with the original date range index
         date_range_index = pd.date_range(
             datetime_input[0].replace(month=1, day=1) - pd.DateOffset(years=1),
-            datetime_input[-1], freq='D'
+            datetime_input[-1],
+            freq='D',
         )
         full_moon_combined = pd.Series(0, index=date_range_index)
 

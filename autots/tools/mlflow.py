@@ -252,7 +252,17 @@ def _build_model_as_code_payload(model_obj, extra: dict | None = None):
 # machine-specific (n_jobs is resolved to a core count, current_model_file is a local
 # path) or not serializable (custom_metric); the loader uses AutoTS defaults instead
 _AUTOTS_INIT_PARAMS_EXCLUDED = {"self", "n_jobs", "current_model_file", "custom_metric"}
-_JSON_ROUNDTRIP_TYPES = (str, int, float, bool, type(None), dict, list, tuple, np.generic)
+_JSON_ROUNDTRIP_TYPES = (
+    str,
+    int,
+    float,
+    bool,
+    type(None),
+    dict,
+    list,
+    tuple,
+    np.generic,
+)
 
 
 def _extract_autots_init_params(autots_obj) -> dict:

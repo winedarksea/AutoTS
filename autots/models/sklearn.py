@@ -2077,7 +2077,9 @@ class RollingRegression(ModelObject):
                     neginf=0.0,
                 )
                 arr[bad] = np.broadcast_to(fill, arr.shape)[bad]
-                rf_pred = pd.DataFrame(arr, index=rf_pred.index, columns=rf_pred.columns)
+                rf_pred = pd.DataFrame(
+                    arr, index=rf_pred.index, columns=rf_pred.columns
+                )
             forecasts.append(rf_pred.copy())
             history = pd.concat([history, rf_pred], axis=0)
 

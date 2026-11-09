@@ -20,7 +20,8 @@ class AnomalyMixin:
         params.pop('holiday_dates', None)
         if holiday_dates:
             params['holiday_dates'] = (
-                copy.deepcopy(holiday_dates) if isinstance(holiday_dates, Mapping)
+                copy.deepcopy(holiday_dates)
+                if isinstance(holiday_dates, Mapping)
                 else list(holiday_dates)
             )
             params.setdefault('holiday_proximity_days', 2)

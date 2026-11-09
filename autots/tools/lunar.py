@@ -304,9 +304,7 @@ def moon_phase_df_alternative(datetime_index, epoch=None):
     """
     if epoch is not None:
         # Use the approximate method for backward compatibility
-        moon = pd.Series(
-            moon_phase(datetime_index, epoch=epoch), index=datetime_index
-        )
+        moon = pd.Series(moon_phase(datetime_index, epoch=epoch), index=datetime_index)
     else:
         # Use the new accurate method
         moon = pd.Series(moon_phase_alternative(datetime_index), index=datetime_index)

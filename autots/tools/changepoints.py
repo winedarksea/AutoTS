@@ -552,7 +552,9 @@ def _collapse_adjacent_runs(positions, scores):
         return positions
     scores = np.asarray(scores, dtype=float)
     run_starts = np.flatnonzero(np.concatenate(([True], np.diff(positions) > 1)))
-    run_ids = np.repeat(np.arange(run_starts.size), np.diff(np.r_[run_starts, positions.size]))
+    run_ids = np.repeat(
+        np.arange(run_starts.size), np.diff(np.r_[run_starts, positions.size])
+    )
     # Sort by (run, -score) so the first entry of each run is its peak.
     order = np.lexsort((-scores, run_ids))
     first_in_run = np.concatenate(([True], np.diff(run_ids[order]) != 0))
@@ -1996,8 +1998,12 @@ def _cusum_changepoints_core(
             t - segment_start, 1
         )
         deviation = matrix[:, t] - reference
-        g_pos = np.where(active, np.maximum(0.0, g_pos + deviation - effective_drift), 0.0)
-        g_neg = np.where(active, np.minimum(0.0, g_neg + deviation + effective_drift), 0.0)
+        g_pos = np.where(
+            active, np.maximum(0.0, g_pos + deviation - effective_drift), 0.0
+        )
+        g_neg = np.where(
+            active, np.minimum(0.0, g_neg + deviation + effective_drift), 0.0
+        )
         last_zero_pos = np.where(g_pos == 0.0, t, last_zero_pos)
         last_zero_neg = np.where(g_neg == 0.0, t, last_zero_neg)
 
@@ -2531,9 +2537,7 @@ def _extract_changepoints_from_trend_batch(
 
         threshold = thresholds[idx]
         above = np.flatnonzero(differences[idx] > threshold)
-        candidates = _collapse_adjacent_runs(
-            above + offset, differences[idx, above]
-        )
+        candidates = _collapse_adjacent_runs(above + offset, differences[idx, above])
         candidates = candidates[(candidates > order) & (candidates < n - max(2, order))]
 
         if candidates.size == 0:
@@ -3820,7 +3824,12 @@ class ChangepointDetector(object):
 
         # Preflight must match the minimum the method actually enforces, else a
         # method_params override smaller than the detector default skips series.
-        if method in ('pelt', 'l1_fused_lasso', 'l1_total_variation', 'l0_trend_filter'):
+        if method in (
+            'pelt',
+            'l1_fused_lasso',
+            'l1_total_variation',
+            'l0_trend_filter',
+        ):
             effective_min_segment_length = params.get(
                 'min_segment_length', self.min_segment_length
             )
@@ -3862,7 +3871,9 @@ class ChangepointDetector(object):
                 irls_iterations=params.get('irls_iterations', 4),
                 threshold_mode=params.get('threshold_mode', 'relative'),
                 threshold_multiplier=params.get('threshold_multiplier', 1.0),
-                segment_length=params.get('min_segment_length', self.min_segment_length),
+                segment_length=params.get(
+                    'min_segment_length', self.min_segment_length
+                ),
             )
 
         elif method == 'l0_trend_filter':
@@ -4836,7 +4847,9 @@ class ChangepointDetector(object):
                 bootstrap_data = residual_block_bootstrap(
                     fitted, residuals, block_length, rng
                 )
-                bootstrap_changepoints.extend(self._detect_bootstrap_base(bootstrap_data))
+                bootstrap_changepoints.extend(
+                    self._detect_bootstrap_base(bootstrap_data)
+                )
 
             # Convert to probabilities
             changepoint_probs = np.zeros(n)

@@ -405,8 +405,11 @@ class HolidayDetector(object):
         easter_table = None
         if getattr(self, 'use_easter_holidays', False):
             easter_table = extract_easter_holidays(
-                anomalies, threshold, self.min_occurrences,
-                actuals=actuals, anomaly_scores=anomaly_scores,
+                anomalies,
+                threshold,
+                self.min_occurrences,
+                actuals=actuals,
+                anomaly_scores=anomaly_scores,
             )
         return tables + (easter_table,)
 
@@ -442,7 +445,9 @@ class HolidayDetector(object):
     def _calendar_rule_mask(calendar_name, row, dates_df):
         try:
             if calendar_name == "easter_holidays":
-                return easter_offsets(dates_df.index).eq(row['easter_offset']).to_numpy()
+                return (
+                    easter_offsets(dates_df.index).eq(row['easter_offset']).to_numpy()
+                )
             if calendar_name == "day_holidays":
                 if pd.isna(row.get("month")) or pd.isna(row.get("day")):
                     return None

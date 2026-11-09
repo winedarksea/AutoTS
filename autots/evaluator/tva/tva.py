@@ -75,7 +75,6 @@ except Exception:
 RECONCILIATION_COVARIANCE_AUTO = 'structural'
 
 
-
 def resolve_fit_horizon(
     trend_network: str, forecast_horizon: int, fit_horizon, n_periods: int
 ) -> int:
@@ -91,6 +90,7 @@ def resolve_fit_horizon(
     if fit_horizon:
         return max(int(fit_horizon), 1)
     return max(min(int(forecast_horizon), max(28, int(n_periods) // 4)), 1)
+
 
 class TVA:
     """Time Variant Architecture — end-to-end coherent forecasting graph.

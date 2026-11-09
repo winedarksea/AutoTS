@@ -28,6 +28,14 @@ autots.evaluator.feature\_detector.components.holidays module
    :show-inheritance:
    :undoc-members:
 
+autots.evaluator.feature\_detector.components.joint\_trend module
+-----------------------------------------------------------------
+
+.. automodule:: autots.evaluator.feature_detector.components.joint_trend
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
 autots.evaluator.feature\_detector.components.seasonality module
 ----------------------------------------------------------------
 

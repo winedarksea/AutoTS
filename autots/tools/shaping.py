@@ -43,7 +43,9 @@ def _infer_two_point_frequency(first_date, second_date):
     read as calendar months. Offset objects supply freqstr so the alias matches
     the installed pandas ('M' vs 'ME').
     """
-    first_date, second_date = sorted([pd.Timestamp(first_date), pd.Timestamp(second_date)])
+    first_date, second_date = sorted(
+        [pd.Timestamp(first_date), pd.Timestamp(second_date)]
+    )
     month_gap = (second_date.year - first_date.year) * 12 + (
         second_date.month - first_date.month
     )

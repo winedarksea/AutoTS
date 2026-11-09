@@ -282,7 +282,8 @@ class HolidayMixin:
                     ['series', 'holiday_name']
                 ):
                     targets = (
-                        residual_df.columns if self.detection_mode == 'univariate'
+                        residual_df.columns
+                        if self.detection_mode == 'univariate'
                         else [series_name]
                     )
                     for column in targets:
@@ -296,7 +297,8 @@ class HolidayMixin:
                     shared = residual_df.index.isin(holiday_occurrences['date'])
                     holiday_flags = pd.DataFrame(
                         np.repeat(shared[:, None], residual_df.shape[1], axis=1),
-                        index=residual_df.index, columns=residual_df.columns,
+                        index=residual_df.index,
+                        columns=residual_df.columns,
                     )
         except Exception:
             holiday_flags = pd.DataFrame(

@@ -3667,9 +3667,13 @@ class AnomalyRemoval(EmptyTransformer):
             if observed is None:
                 observed = self.df_anomaly.notna()
             suppress = named_holiday_suppression_mask(
-                self.anomalies, self._normalized_strengths(), observed,
-                self.holiday_dates, self.holiday_proximity_days,
-                self.holiday_override_strength, shared=self.output == 'univariate',
+                self.anomalies,
+                self._normalized_strengths(),
+                observed,
+                self.holiday_dates,
+                self.holiday_proximity_days,
+                self.holiday_override_strength,
+                shared=self.output == 'univariate',
                 residuals=self.df_anomaly,
             )
             self.anomalies = self.anomalies.mask(suppress & self.anomalies.eq(-1), 1)
