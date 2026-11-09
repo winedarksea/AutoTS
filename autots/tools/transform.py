@@ -1,10 +1,22 @@
 """Preprocessing data methods."""
 
+import copy
 import random
 import warnings
+from collections.abc import Mapping
 import numpy as np
 import pandas as pd
 from autots.tools.impute import FillNA, df_interpolate
+from autots.tools.level_shift import (
+    detect_multiscale,
+    detect_multiscale_shared,
+    tail_scan as level_shift_tail_scan,
+)
+from autots.tools.level_shift_seasonality import (
+    deseasonalize as level_shift_deseasonalize,
+)
+from autots.tools.level_shift_selection import select_run_peaks
+from autots.tools.level_shift_sizing import additive_shift, ratio_shift, size_breaks
 from autots.tools.seasonal import (
     date_part,
     seasonal_int,
@@ -39,6 +51,7 @@ from autots.tools.fast_kalman import KalmanFilter
 from autots.tools.fast_kalman_params import new_kalman_params
 from autots.tools.shaping import infer_frequency
 from autots.tools.holiday import holiday_flag
+from autots.tools.holiday_anomaly import named_holiday_suppression_mask
 from autots.tools.fft import FFT as fft_class
 from autots.tools.percentile import nan_quantile
 from autots.tools.fir_filter import (
@@ -184,14 +197,16 @@ def simple_context_slicer(df, method: str = "None", forecast_length: int = 30):
     Args:
         df (pandas.DataFrame): training data frame to slice
         method (str): Option to slice dataframe
-            'None' - return unaltered dataframe
-            'HalfMax' - return half of dataframe
-            'ForecastLength' - return dataframe equal to length of forecast
-            '2ForecastLength' - return dataframe equal to twice length of forecast
-                (also takes 4, 6, 8, 10 in addition to 2)
-            'n' - any integer length to slice by
-            '-n' - full length less this amount
-            "0.n" - this percent of the full data
+
+            - 'None' - return unaltered dataframe
+            - 'HalfMax' - return half of dataframe
+            - 'ForecastLength' - return dataframe equal to length of forecast
+            - '2ForecastLength' - return dataframe equal to twice length of forecast
+              (also takes 4, 6, 8, 10 in addition to 2)
+            - 'n' - any integer length to slice by
+            - '-n' - full length less this amount
+            - "0.n" - this percent of the full data
+
     """
     if method in [None, "None"]:
         return df
@@ -356,6 +371,8 @@ class Detrend(EmptyTransformer):
                         log=False, center_one=True, squared=False
                     )
                     Y = pd.DataFrame(self.trnd_trans.fit_transform(df)).to_numpy()
+                    if self.window is not None:
+                        Y = Y[-self.window :]
                 X = X.reshape((-1, 1))
                 self.trained_model.fit(X, Y)
         self.shape = df.shape
@@ -711,6 +728,8 @@ class SinTrend(EmptyTransformer):
 
         tt = np.array(tt)
         yy = np.array(yy)
+        if len(tt) < 4:
+            return {"amp": 0.0, "omega": 0.0, "phase": 0.0, "offset": np.mean(yy)}
         ff = np.fft.fftfreq(len(tt), (tt[1] - tt[0]))  # assume uniform spacing
         Fyy = abs(np.fft.fft(yy))
         guess_freq = abs(
@@ -753,6 +772,7 @@ class SinTrend(EmptyTransformer):
         X = pd.to_numeric(df.index, errors="coerce", downcast="integer").values
         # make this faster (250 columns in 2.5 seconds isn't bad, though)
         cols = df.columns.tolist()
+        parallel = True
         if self.n_jobs in [0, 1] or len(cols) < 100:
             parallel = False
         # joblib multiprocessing to loop through series
@@ -851,7 +871,7 @@ class PositiveShift(EmptyTransformer):
     Args:
         log (bool): whether to include a log transform.
         center_one (bool): whether to shift to 1 instead of 0.
-        squared (bool): whether to square (**2) values after shift.
+        squared (bool): whether to square (``**2``) values after shift.
     """
 
     def __init__(
@@ -1238,6 +1258,9 @@ class SeasonalDifference(EmptyTransformer):
             N = self.lag_1
             span = self.method
             num_slices = arr.shape[0] // N
+            if num_slices < 1:
+                arr = np.tile(arr, (int(np.ceil(N / arr.shape[0])), 1))[-N:]
+                num_slices = 1
             # (slices, lag size, num seriesd)
             arr_3d = arr[-(num_slices * N) :].reshape(num_slices, N, -1)
             alpha = 2 / (span + 1)
@@ -1360,7 +1383,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
                     "RandomForest": 0.2,
                     "ExtraTrees": 0.25,
                     "SVM": 0.1,
-                    "RadiusRegressor": 0.1,
+                    "RadiusNeighbors": 0.1,
                     'MultioutputGPR': 0.0001,
                     "ElasticNetwork": 0.05,
                 }
@@ -1606,8 +1629,8 @@ class DatepartRegressionTransformer(EmptyTransformer):
         transform_dict entries such as ReconciliationTransformer append aggregate
         series, so the fitted targets can be wider than df.
         """
-        # RadiusNeighbors returns NaN where no neighbor falls in radius, and the
-        # result is added to / subtracted from df, so a single NaN would spread
+        # the result is added to / subtracted from df, so one non-finite
+        # prediction (corrupt input rows, a diverging model) would spread
         # across the whole forecast. Zero leaves those cells untouched.
         pred = np.nan_to_num(
             np.asarray(pred, dtype=float), nan=0.0, posinf=0.0, neginf=0.0
@@ -1712,7 +1735,7 @@ class DifferencedTransformer:
         """
         differenced = df.diff(self.lag)
         if self.fill == 'bfill':
-            return differenced.bfill()
+            return differenced.bfill().fillna(0)
         elif self.fill == 'zero':
             return differenced.fillna(0)
         elif self.fill == 'one':
@@ -2551,9 +2574,10 @@ class ScipyFilter(EmptyTransformer):
                 mysize = self.method_args.get("mysize", 3)
                 if isinstance(mysize, int):
                     mysize = (mysize, 1)
-            return pd.DataFrame(
-                wiener(df.values, mysize=mysize), columns=df.columns, index=df.index
-            )
+            filtered = wiener(df.values, mysize=mysize)
+            # constant windows give 0/0 in scipy's wiener; raw is exact there
+            filtered = np.where(np.isfinite(filtered), filtered, df.values)
+            return pd.DataFrame(filtered, columns=df.columns, index=df.index)
         elif self.method == "savgol_filter":
             # args = [5, 2]
             return pd.DataFrame(
@@ -2717,7 +2741,7 @@ class FastICA(EmptyTransformer):
             "fun": random.choice(["logcosh", "exp", "cube"]),
             "max_iter": random.choices([100, 250, 500], [0.7, 0.2, 0.1])[0],
             "whiten": random.choices(
-                ['unit-variance', 'arbitrary-variance', False], [0.9, 0.1, 0.1]
+                ['unit-variance', 'arbitrary-variance'], [0.9, 0.1]
             )[0],
         }
 
@@ -2743,7 +2767,11 @@ class PCA(EmptyTransformer):
 
         self.columns = df.columns
         self.index = df.index
-        self.transformer = PCA(**self.kwargs)
+        kwargs = dict(self.kwargs)
+        n_comp = kwargs.get("n_components")
+        if isinstance(n_comp, int) and not isinstance(n_comp, bool):
+            kwargs["n_components"] = min(n_comp, min(df.shape))
+        self.transformer = PCA(**kwargs)
         return_df = self.transformer.fit_transform(df)
         if isinstance(return_df, pd.DataFrame):
             if return_df.shape[1] == len(self.columns):
@@ -3408,6 +3436,8 @@ class AlignLastValue(EmptyTransformer):
 
     @staticmethod
     def find_centerpoint(df, rows, lag, mean_type="arithmetic"):
+        # a lag longer than the history indexes off the front of the frame
+        lag = min(lag, df.shape[0])
         if rows <= 1:
             if lag > 1:
                 center = df.iloc[-lag, :]
@@ -3554,12 +3584,16 @@ class AnomalyRemoval(EmptyTransformer):
             method_params (dict): parameters specific to the method, use `.get_new_params()` to see potential models
             fillna (str): how to fill anomaly values removed
             isolated_only (bool): if True, only removal standalone anomalies
-            holiday_dates (set or None): Optional set/list of known holiday dates.
-                Anomalies near these dates can be un-flagged.
+            holiday_dates (set, dict or None): Known holiday dates, or
+                {series: {holiday_name: dates}} for per-series annual comparisons.
+                Named holidays retain anomalies with fewer than two other peer years.
             holiday_proximity_days (int): +/- day window around holiday dates.
             holiday_override_strength (float or None): anomalies this many times
                 stronger than the other flagged points in the holiday windows
                 survive suppression. None restores unconditional suppression.
+                Named input compares the same holiday and day offset in other years;
+                exceptional residual magnitudes also survive because rolling scores
+                can hide amplitude differences. Flat dates retain pooled comparisons.
             two_pass (bool): if True, run liberal candidate detection then local validation.
             liberal_alpha_multiplier (float): alpha multiplier for first-pass detection.
             n_jobs (int): multiprocessing jobs, used by some methods
@@ -3613,11 +3647,13 @@ class AnomalyRemoval(EmptyTransformer):
             self.anomalies[mask_replace] = 1
 
         if self.holiday_dates is not None:
-            self._filter_holiday_proximate_anomalies()
+            self._filter_holiday_proximate_anomalies(
+                observed=df.notna() if isinstance(self.holiday_dates, Mapping) else None
+            )
 
         return self
 
-    def _filter_holiday_proximate_anomalies(self):
+    def _filter_holiday_proximate_anomalies(self, observed=None):
         """Clear anomaly flags that occur near known holiday dates.
 
         Holiday-driven spikes are expected behaviour, not anomalies, so flags in
@@ -3627,6 +3663,21 @@ class AnomalyRemoval(EmptyTransformer):
         ``holiday_override_strength`` times stronger than the other flagged
         points in the holiday windows are therefore kept.
         """
+        if isinstance(self.holiday_dates, Mapping):
+            if observed is None:
+                observed = self.df_anomaly.notna()
+            suppress = named_holiday_suppression_mask(
+                self.anomalies,
+                self._normalized_strengths(),
+                observed,
+                self.holiday_dates,
+                self.holiday_proximity_days,
+                self.holiday_override_strength,
+                shared=self.output == 'univariate',
+                residuals=self.df_anomaly,
+            )
+            self.anomalies = self.anomalies.mask(suppress & self.anomalies.eq(-1), 1)
+            return
         holiday_set = {pd.Timestamp(d) for d in self.holiday_dates}
         if not holiday_set:
             return
@@ -3743,14 +3794,25 @@ class AnomalyRemoval(EmptyTransformer):
         return validated
 
     def transform(self, df):
+        anomaly_mask = self.anomalies == -1
+        if anomaly_mask.shape[1] == 1 and not anomaly_mask.columns.equals(df.columns):
+            # univariate output is one shared flag column; label alignment would
+            # otherwise match no data columns and silently remove nothing
+            anomaly_mask = pd.DataFrame(
+                np.repeat(anomaly_mask.to_numpy(), df.shape[1], axis=1),
+                index=anomaly_mask.index,
+                columns=df.columns,
+            )
+        anomaly_mask = anomaly_mask.reindex(
+            index=df.index, columns=df.columns, fill_value=False
+        )
         if self.fillna is not None:
             # Set anomalies to NaN, then fill them
-            df2 = df.copy()
-            df2[self.anomalies == -1] = np.nan
+            df2 = df.mask(anomaly_mask)
             df2 = FillNA(df2, method=self.fillna, window=10)
         else:
-            # Remove anomaly rows only if no fillna method specified
-            df2 = df[self.anomalies != -1]
+            # No fill method: anomalies are left as NaN
+            df2 = df.mask(anomaly_mask)
         return df2
 
     def fit_transform(self, df):
@@ -3864,14 +3926,17 @@ class HolidayTransformer(EmptyTransformer):
     def dates_to_holidays(
         self, dates, style="flag", holiday_impacts=False, max_features=365
     ):
-        """
-        dates (pd.DatetimeIndex): list of dates
-        style (str): option for how to return information
-            "long" - return date, name, series for all holidays in a long style dataframe
-            "impact" - returns dates, series with values of sum of impacts (if given) or joined string of holiday names
-            'flag' - return dates, holidays flag, (is not 0-1 but rather sum of input series impacted for that holiday and day)
-            'prophet' - return format required for prophet. Will need to be filtered on `series` for multivariate case
-            'series_flag' - dates, series 0/1 for if holiday occurred in any calendar
+        """Convert dates to holidays.
+
+        Args:
+            dates (pd.DatetimeIndex): list of dates
+            style (str): option for how to return information
+
+                - "long" - return date, name, series for all holidays in a long style dataframe
+                - "impact" - returns dates, series with values of sum of impacts (if given) or joined string of holiday names
+                - 'flag' - return dates, holidays flag, (is not 0-1 but rather sum of input series impacted for that holiday and day)
+                - 'prophet' - return format required for prophet. Will need to be filtered on `series` for multivariate case
+                - 'series_flag' - dates, series 0/1 for if holiday occurred in any calendar
         """
         if self.df_cols is None:
             return ValueError("HolidayTransformer has not yet been .fit()")
@@ -4079,6 +4144,7 @@ class LocalLinearTrend(EmptyTransformer):
             raise ValueError(f"rolling_window {self.rolling_window} arg is not valid")
         elif self.rolling_window < 1:
             self.rolling_window = int(self.rolling_window * len(self.dates))
+        self.rolling_window = int(min(max(self.rolling_window, 2), len(self.dates)))
 
         """
         if self.n_tails <= 0:
@@ -4577,18 +4643,34 @@ class LevelShiftMagic(EmptyTransformer):
 
     May look small, but is probably one of my most important contributions to time series tooling (so say I, Colin)
 
+    A moving-sum (MOSUM) changepoint detector: compare means of a back and a
+    forward window, threshold, and take one peak per group.
+
     Args:
-        window_size (int): size of rolling window for detection
-        alpha (float): threshold multiplier for standard deviation
+        window_size (int): size of rolling window for detection (legacy methods;
+            "linear_gap" uses ``scales``)
+        alpha (float): detection threshold. Its scale depends on window_method:
+            legacy methods multiply the standard deviation of the window score
+            (typically 1-4); "linear_gap" thresholds a robust z score before its
+            multiscale penalty (typically 3-6, 3.5-4 a good start). Values are not
+            interchangeable between the two.
         grouping_forward_limit (int): number of periods to group nearby shifts
-        max_level_shifts (int): maximum number of level shifts to detect
-        alignment (str): method for aligning level shift magnitudes
+            (legacy methods only)
+        max_level_shifts (int): maximum number of level shifts to detect per series
+        alignment (str): method for sizing level shift magnitudes, None for the
+            method default ("average" legacy, "linear_robust" for "linear_gap").
+            Legacy methods: "average", "last_value", "rolling_diff",
+            "rolling_diff_3nn", "rolling_diff_5nn", "median", "linear_robust".
+            "linear_gap": "linear_robust" (Huber-detrended window levels),
+            "median" (difference of window medians) or "gap" (the detector's own
+            detrended gap); anything else raises.
         output (str): 'multivariate' (default, each series independent) or 'univariate'
-            (detect shared level shifts across series)
+            (detect shared level shift dates across series, sized and applied per series)
         remove_at_shift (bool): if True, remove data points at detected level shifts and fill gaps
         shift_remove_window (int): number of points to remove on each side of shift point (0, 1, or 2)
         shift_fillna (str): fillna method to use for gaps created by shift removal
         window_method (str): method for comparing forward and backward rolling windows
+
             - "overlap" (default): both windows include current point i, then subtract means
               backward=[i-N+1 to i], forward=[i to i+N-1], compare: rolling - rolling_forward
             - "exclusive": windows exclude current point with 1-point gap, then subtract means
@@ -4596,7 +4678,33 @@ class LevelShiftMagic(EmptyTransformer):
             - "diff_overlap": diff data first, then overlapping windows, detect when BOTH exceed threshold
               Apply diff first, then backward=[i-N+1 to i], forward=[i to i+N-1]
               Point i is a shift if BOTH rolling and rolling_forward independently exceed threshold in same direction
+            - "linear_gap": detrended pooled-slope gap between [i-N, i) and [i, i+N),
+              robust z-scored, multiscale, with a bump test rejecting spikes. Unlike the
+              others it neither fires on steady trends nor misses steps against the trend.
+        scales (list): window sizes for "linear_gap", None uses [14, 30, 60].
+            Several scales catch both close opposite steps and long subtle ones.
+        deseasonalize (bool or int): "linear_gap" only, remove a median seasonal profile
+            before detection; True infers the season length, an int fixes it
+        anomaly_window (int): longest bump treated as an anomaly rather than a shift by
+            "linear_gap", and the minimum post-shift length for tail_scan
+        tail_scan (bool): "linear_gap" only (default on), also look for shifts in
+            the last anomaly_window to 20 points, which window detection cannot see
+        correction_mode (str): "additive" or "auto" (ratio correction for non-negative
+            series that the additive correction would push below zero)
     """
+
+    legacy_window_methods = ['overlap', 'exclusive', 'diff_overlap']
+    window_methods = legacy_window_methods + ['linear_gap']
+    rolling_diff_alignments = ['rolling_diff', 'rolling_diff_3nn', 'rolling_diff_5nn']
+    robust_alignments = ['median', 'linear_robust']
+    legacy_alignments = [
+        'average',
+        'last_value',
+        *rolling_diff_alignments,
+        *robust_alignments,
+    ]
+    linear_gap_alignments = ['linear_robust', 'median', 'gap']
+    default_linear_gap_scales = [14, 30, 60]
 
     def __init__(
         self,
@@ -4604,12 +4712,17 @@ class LevelShiftMagic(EmptyTransformer):
         alpha: float = 2.5,
         grouping_forward_limit: int = 3,
         max_level_shifts: int = 20,
-        alignment: str = "average",
+        alignment: str = None,
         output: str = "multivariate",
         remove_at_shift: bool = False,
         shift_remove_window: int = 0,
         shift_fillna: str = "linear",
         window_method: str = "overlap",
+        scales: list = None,
+        deseasonalize=False,
+        anomaly_window: int = 10,
+        tail_scan: bool = True,
+        correction_mode: str = "additive",
         **kwargs,
     ):
         super().__init__(name="LevelShiftMagic")
@@ -4623,6 +4736,11 @@ class LevelShiftMagic(EmptyTransformer):
         self.shift_remove_window = shift_remove_window
         self.shift_fillna = shift_fillna
         self.window_method = window_method
+        self.scales = scales
+        self.deseasonalize = deseasonalize
+        self.anomaly_window = anomaly_window
+        self.tail_scan = tail_scan
+        self.correction_mode = correction_mode
 
         if output not in ['multivariate', 'univariate']:
             raise ValueError(
@@ -4632,14 +4750,37 @@ class LevelShiftMagic(EmptyTransformer):
             raise ValueError(
                 f"shift_remove_window must be 0, 1, or 2, got {shift_remove_window}"
             )
-        if window_method not in ['overlap', 'exclusive', 'diff_overlap']:
+        if window_method not in self.window_methods:
             raise ValueError(
-                f"window_method must be 'overlap', 'exclusive', or 'diff_overlap', got '{window_method}'"
+                f"window_method must be one of {self.window_methods}, got '{window_method}'"
             )
+        if alignment is None:
+            alignment = "linear_robust" if window_method == "linear_gap" else "average"
+        valid_alignments = self.valid_alignments(window_method)
+        if alignment not in valid_alignments:
+            raise ValueError(
+                f"alignment for window_method '{window_method}' must be one of "
+                f"{valid_alignments}, got '{alignment}'"
+            )
+        self.alignment = alignment
+        if correction_mode not in ['additive', 'auto']:
+            raise ValueError(
+                f"correction_mode must be 'additive' or 'auto', got '{correction_mode}'"
+            )
+
+    @classmethod
+    def valid_alignments(cls, window_method):
+        if window_method == "linear_gap":
+            return cls.linear_gap_alignments
+        return cls.legacy_alignments
 
     @staticmethod
     def get_new_params(method: str = "random"):
-        return {
+        window_method = random.choices(
+            ["overlap", "exclusive", "diff_overlap", "linear_gap"],
+            [0.6, 0.2, 0.2, 0.15],
+        )[0]
+        params = {
             "window_size": random.choices(
                 [3, 4, 7, 14, 30, 70, 90, 120, 364],
                 [0.03, 0.05, 0.1, 0.05, 0.4, 0.05, 0.4, 0.05, 0.1],
@@ -4661,8 +4802,10 @@ class LevelShiftMagic(EmptyTransformer):
                     "rolling_diff",
                     "rolling_diff_3nn",
                     "rolling_diff_5nn",
+                    "median",
+                    "linear_robust",
                 ],
-                [0.5, 0.2, 0.15, 0.25, 0.05],
+                [0.5, 0.2, 0.15, 0.25, 0.05, 0.05, 0.1],
             )[0],
             "output": random.choices(['multivariate', 'univariate'], [0.8, 0.2])[0],
             "remove_at_shift": random.choices([True, False], [0.4, 0.6])[0],
@@ -4671,10 +4814,26 @@ class LevelShiftMagic(EmptyTransformer):
                 ['linear', 'ffill', 'mean', 'cubic', 'quadratic', "seasonal_linear"],
                 [0.4, 0.2, 0.1, 0.2, 0.1, 0.01],
             )[0],
-            "window_method": random.choices(
-                ["overlap", "exclusive", "diff_overlap"], [0.6, 0.2, 0.2]
-            )[0],
+            "window_method": window_method,
+            "correction_mode": random.choices(["additive", "auto"], [0.8, 0.2])[0],
         }
+        if window_method == "linear_gap":
+            # window_size/grouping_forward_limit are unused by linear_gap
+            del params["window_size"], params["grouping_forward_limit"]
+            # robust-z scale: thresholds well above the legacy std multipliers
+            params["alpha"] = random.choices(
+                [3.0, 3.5, 4.0, 5.0, 6.0], [0.1, 0.25, 0.35, 0.2, 0.1]
+            )[0]
+            # single scales miss close opposite steps (benchmark recall ~0.7 vs ~0.95)
+            params["scales"] = random.choices(
+                [None, [7, 14, 30, 60], [30], [60]], [0.45, 0.35, 0.1, 0.1]
+            )[0]
+            params["alignment"] = random.choices(
+                ["linear_robust", "median", "gap"], [0.6, 0.25, 0.15]
+            )[0]
+            params["tail_scan"] = random.choices([True, False], [0.8, 0.2])[0]
+            params["anomaly_window"] = random.choices([7, 10, 14], [0.2, 0.6, 0.2])[0]
+        return params
 
     def fit(self, df):
         """Learn behavior of data to change.
@@ -4682,508 +4841,295 @@ class LevelShiftMagic(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        if self.output == 'univariate':
+        if self.window_method == "linear_gap":
+            self._fit_linear_gap(df)
+        elif self.output == 'univariate':
             self._fit_univariate(df)
         else:
             self._fit_multivariate(df)
         return self
 
+    def _legacy_scores(self, df):
+        """Window score, bridged candidate mask and threshold mask for legacy methods.
+
+        Returns ``(diff, candidate_mask, threshold_mask)`` as numpy arrays in the
+        last-pre-shift-row convention: ``diff`` at row f is the signed
+        ``pre - post`` level estimate, so ``-diff`` is the shift size.
+        """
+        N = int(self.window_size)
+        # windows shorter than this make 1-point edge means that the interior std
+        # threshold can't calibrate, flagging edges and leaking into forecasts
+        min_periods = min(N, max(3, N // 3))
+        source = df.diff() if self.window_method == "diff_overlap" else df
+        if self.window_method == "exclusive":
+            backward_source, forward_source = source.shift(1), source.shift(-1)
+        else:
+            backward_source, forward_source = source, source
+        rolling = backward_source.rolling(N, min_periods=min_periods).mean()
+        try:
+            indexer = pd.api.indexers.FixedForwardWindowIndexer(window_size=N)
+            rolling_forward = forward_source.rolling(
+                window=indexer, min_periods=min_periods
+            ).mean()
+        except Exception:
+            rolling_forward = (
+                forward_source.loc[::-1]
+                .rolling(N, min_periods=min_periods)
+                .mean()[::-1]
+            )
+        if self.window_method == "diff_overlap":
+            # mean of first differences telescopes to step/N, so both windows only
+            # agree at the first post-shift row; thresholds stay on the raw means
+            threshold_back = (rolling.std() * self.alpha).to_numpy()
+            threshold_fwd = (rolling_forward.std() * self.alpha).to_numpy()
+            back, fwd = rolling.to_numpy(), rolling_forward.to_numpy()
+            with np.errstate(invalid="ignore"):
+                mask = ((back > threshold_back) & (fwd > threshold_fwd)) | (
+                    (back < -threshold_back) & (fwd < -threshold_fwd)
+                )
+            diff = -N * (back + fwd) / 2
+            # move from first post-shift row to last pre-shift row
+            diff = np.vstack([diff[1:], np.full((1, diff.shape[1]), np.nan)])
+            mask = np.vstack([mask[1:], np.zeros((1, mask.shape[1]), dtype=bool)])
+            return diff, mask, mask
+        diff = (rolling - rolling_forward).to_numpy()
+        with warnings.catch_warnings():
+            # all-NaN columns (missing series, short history) simply never flag
+            warnings.simplefilter("ignore", RuntimeWarning)
+            threshold = np.nanstd(diff, axis=0, ddof=1) * self.alpha
+            mask = np.abs(diff) > threshold
+        return diff, self._bridge(mask), mask
+
+    def _bridge(self, mask):
+        """Extend each candidate run forward by grouping_forward_limit rows to merge nearby groups."""
+        bridged = (
+            pd.DataFrame(np.where(mask, 1.0, np.nan))
+            .ffill(limit=self.grouping_forward_limit)
+            .notna()
+            .to_numpy()
+        )
+        return bridged
+
+    def _legacy_tie_tolerance(self):
+        # window means fall by ~peak/N per row away from a clean step, so rows
+        # within that are statistically tied
+        if self.window_method == "diff_overlap":
+            return 1e-12
+        return 1.0 / max(int(self.window_size), 1)
+
     def _fit_multivariate(self, df):
         """Fit multivariate mode - each series analyzed independently."""
-        if self.window_method == "diff_overlap":
-            # Diff overlap mode: diff data first, then check if BOTH rolling windows exceed threshold
-            # the idea is that average of diffs over a window will exclude short anomalies (up and down cancel out) leaving level shifts, shorter windows generally here
-            # works best on level shifts that occur suddenly on a single period, and after anomaly removal
-            df_diff = df.diff()
-            # Overlap windows on the diffed data: both include current point i
-            rolling = df_diff.rolling(
-                self.window_size, center=False, min_periods=1
-            ).mean()
-            try:
-                indexer = pd.api.indexers.FixedForwardWindowIndexer(
-                    window_size=self.window_size
-                )
-                rolling_forward = df_diff.rolling(window=indexer, min_periods=1).mean()
-            except Exception:
-                rolling_forward = (
-                    df_diff.loc[::-1]
-                    .rolling(self.window_size, center=False, min_periods=1)
-                    .mean()[::-1]
-                )
-            # Calculate thresholds for both rolling windows independently
-            # could consider adjusting this with degrees of freedom accounting for the window size
-            threshold_back = rolling.std() * self.alpha
-            threshold_fwd = rolling_forward.std() * self.alpha
-
-            # Check if both exceed threshold in the same direction (both positive or both negative)
-            back_exceeds_pos = rolling > threshold_back
-            fwd_exceeds_pos = rolling_forward > threshold_fwd
-            back_exceeds_neg = rolling < -threshold_back
-            fwd_exceeds_neg = rolling_forward < -threshold_fwd
-
-            # Point is a shift if BOTH windows exceed threshold in same direction
-            diff_mask_0 = (back_exceeds_pos & fwd_exceeds_pos) | (
-                back_exceeds_neg & fwd_exceeds_neg
-            )
-
-            # For alignment calculation later, use the average of the two rolling means
-            diff = (rolling + rolling_forward) / 2
-            diff_abs = diff.abs()
-        elif self.window_method == "exclusive":
-            # Exclusive mode: backward window ends at i-1, forward starts at i+1
-            # backward window: [i-N to i-1], forward window: [i+1 to i+N]
-            rolling = (
-                df.shift(1)
-                .rolling(self.window_size, center=False, min_periods=1)
-                .mean()
-            )
-            try:
-                indexer = pd.api.indexers.FixedForwardWindowIndexer(
-                    window_size=self.window_size
-                )
-                rolling_forward = (
-                    df.shift(-1).rolling(window=indexer, min_periods=1).mean()
-                )
-            except Exception:
-                rolling_forward = (
-                    df.shift(-1)
-                    .loc[::-1]
-                    .rolling(self.window_size, center=False, min_periods=1)
-                    .mean()[::-1]
-                )
-            # compare rolling forward and backwards diffs
-            diff = rolling - rolling_forward
-            threshold = diff.std() * self.alpha
-            diff_abs = diff.abs()
-            diff_mask_0 = diff_abs > threshold  #  | (diff < -threshold)
-        else:  # "overlap" (default)
-            # Overlap mode: both windows include current point i
-            # backward window: [i-N+1 to i], forward window: [i to i+N-1]
-            rolling = df.rolling(self.window_size, center=False, min_periods=1).mean()
-            # pandas 1.1.0 introduction, or thereabouts
-            try:
-                indexer = pd.api.indexers.FixedForwardWindowIndexer(
-                    window_size=self.window_size
-                )
-                rolling_forward = df.rolling(window=indexer, min_periods=1).mean()
-            except Exception:
-                rolling_forward = (
-                    df.loc[::-1]
-                    .rolling(self.window_size, center=False, min_periods=1)
-                    .mean()[::-1]
-                )
-            # compare rolling forward and backwards diffs
-            diff = rolling - rolling_forward
-            threshold = diff.std() * self.alpha
-            diff_abs = diff.abs()
-            diff_mask_0 = diff_abs > threshold  #  | (diff < -threshold)
-
-        # merge nearby groups
-        diff_smoothed = diff_abs.where(diff_mask_0, np.nan).ffill(
-            limit=self.grouping_forward_limit
+        diff, candidate_mask, _ = self._legacy_scores(df)
+        forward_step = np.abs(df.diff().shift(-1).to_numpy())
+        rows_f, cols, _ = select_run_peaks(
+            np.abs(diff),
+            candidate_mask,
+            forward_step,
+            self.max_level_shifts,
+            self._legacy_tie_tolerance(),
         )
-        # For diff_overlap, we use the mask directly; for others, apply threshold to smoothed values
-        if self.window_method == "diff_overlap":
-            diff_mask = diff_mask_0  # Already a boolean mask
-        else:
-            diff_mask = (diff_smoothed > threshold) | (diff_smoothed < -threshold)
-        # the max of each changepoint group is the chosen changepoint of the level shift
-        # doesn't handle identical maxes although that is unlikely with these floating point averages
-        maxes = diff_abs.where(diff_mask, np.nan).max()
-        # group ids are needed so that we can progressively remove
-        range_arr = pd.DataFrame(
-            np.mgrid[0 : df.shape[0] : 1, 0 : df.shape[1]][0],
-            index=df.index,
-            columns=df.columns,
-        )
-        group_ids = range_arr[~diff_mask].ffill()  # [diff_mask]
-        max_mask = diff_abs == maxes
-
-        # Progressively identify level shifts up to max_level_shifts
-        group_ids_np = group_ids.to_numpy()
-        diff_abs_np = diff_abs.to_numpy()
-        diff_mask_np = diff_mask.to_numpy()
-        max_mask_np = max_mask.to_numpy()
-
-        # Initialize curr_diff_np
-        used_groups_np = np.where(max_mask_np, group_ids_np, np.nan)
-        used_groups_flat = used_groups_np[~np.isnan(used_groups_np)]
-        used_groups_unique = np.unique(used_groups_flat)
-        curr_diff_np = np.where(
-            (~np.isin(group_ids_np, used_groups_unique)) & diff_mask_np,
-            diff_abs_np,
-            np.nan,
-        )
-        curr_diff_sum = np.nansum(curr_diff_np)
-        count = 0
-
-        while curr_diff_sum != 0 and count < self.max_level_shifts:
-            curr_maxes_np = np.nanmax(np.nan_to_num(curr_diff_np), axis=0)
-            mask = curr_diff_np == curr_maxes_np
-            max_mask_np |= mask
-            used_groups_np = np.where(mask, group_ids_np, np.nan)
-            used_groups_flat = used_groups_np[~np.isnan(used_groups_np)]
-            used_groups_unique = np.unique(used_groups_flat)
-            mask_to_update = np.isin(group_ids_np, used_groups_unique) & diff_mask_np
-            curr_diff_np = np.where(~mask_to_update, curr_diff_np, np.nan)
-            curr_diff_sum = np.sum(~np.isnan(curr_diff_np))
-            count += 1
-
-        # Convert back to DataFrame for shift mask storage
-        max_mask = pd.DataFrame(max_mask_np, index=df.index, columns=df.columns)
-
-        # Store the shift mask for later use in transform
-        self.shift_mask_ = max_mask.copy()
-
-        # If remove_at_shift is enabled, create an expanded mask and apply fillna
-        if self.remove_at_shift:
-            # Expand the mask to include neighboring points
-            expanded_mask = max_mask.copy()
-            if self.shift_remove_window >= 1:
-                expanded_mask = expanded_mask | max_mask.shift(1).fillna(False).astype(
-                    bool
-                )
-                expanded_mask = expanded_mask | max_mask.shift(-1).fillna(False).astype(
-                    bool
-                )
-            if self.shift_remove_window >= 2:
-                expanded_mask = expanded_mask | max_mask.shift(2).fillna(False).astype(
-                    bool
-                )
-                expanded_mask = expanded_mask | max_mask.shift(-2).fillna(False).astype(
-                    bool
-                )
-
-            # Create a copy of df with NaN at shift points
-            df_with_gaps = df.copy()
-            df_with_gaps[expanded_mask] = np.nan
-
-            # Fill the gaps using FillNA
-            df_filled = FillNA(df_with_gaps, method=self.shift_fillna, window=10)
-
-            # Use the filled data for alignment calculation
-            df_for_alignment = df_filled
-        else:
-            df_for_alignment = df
-
-        # alignment is tricky, especially when level shifts are a mix of gradual and instantaneous
-        if self.alignment == "last_value":
-            self.lvlshft = (
-                (
-                    df_for_alignment[max_mask]
-                    - df_for_alignment[max_mask.shift(1)].shift(-1)
-                )
-                .fillna(0)
-                .loc[::-1]
-                .cumsum()[::-1]
-            )
-        elif self.alignment == "average":
-            # average the two other approaches
-            lvlshft1 = (
-                (
-                    df_for_alignment[max_mask]
-                    - df_for_alignment[max_mask.shift(1)].shift(-1)
-                )
-                .fillna(0)
-                .loc[::-1]
-                .cumsum()[::-1]
-            )
-            lvlshft2 = diff[max_mask].fillna(0).loc[::-1].cumsum()[::-1]
-            self.lvlshft = (lvlshft1 + lvlshft2) / 2
-        elif self.alignment == "rolling_diff_3nn":
-            self.lvlshft = (
-                (
-                    (
-                        diff[max_mask.shift(1)].shift(-1).fillna(0)
-                        + diff[max_mask]
-                        + diff[max_mask.shift(-1)].shift(1).fillna(0)
-                    )
-                    / 3
-                )
-                .fillna(0)
-                .loc[::-1]
-                .cumsum()[::-1]
-            )
-        elif self.alignment == "rolling_diff_5nn":
-            self.lvlshft = (
-                (
-                    (
-                        diff[max_mask.shift(2)].shift(-2).fillna(0)
-                        + diff[max_mask.shift(1)].shift(-1).fillna(0)
-                        + diff[max_mask]
-                        + diff[max_mask.shift(-1)].shift(1).fillna(0)
-                        + diff[max_mask.shift(-2)].shift(2).fillna(0)
-                    )
-                    / 5
-                )
-                .fillna(0)
-                .loc[::-1]
-                .cumsum()[::-1]
-            )
-        else:
-            self.lvlshft = diff[max_mask].fillna(0).loc[::-1].cumsum()[::-1]
+        self._finish_legacy_fit(df, diff, rows_f, cols)
 
     def _fit_univariate(self, df):
         """Fit univariate mode - detect level shifts common across series.
 
-        Strategy: Scale all series to comparable ranges, detect shifts on the
-        average signal, then apply shifts back to original scales.
+        Shared dates come from the mean of per-series squared standardised scores,
+        so opposite-sign shifts in different series reinforce rather than cancel.
+        Each series is then sized with its own score and corrected only where it
+        individually exceeds the threshold.
         """
-        # Store original data info for unscaling
         self.series_mean_ = df.mean(axis=0)
         self.series_std_ = df.std(axis=0).replace(0, 1)  # Avoid division by zero
-
-        # Standardize each series to make them comparable
-        df_scaled = (df - self.series_mean_) / self.series_std_
-
-        # Create aggregate signal (mean across all standardized series)
-        agg_signal = df_scaled.mean(axis=1)
-
-        # Convert to DataFrame for rolling operations
-        agg_df = pd.DataFrame(agg_signal, columns=['aggregate'], index=df.index)
-
-        # Detect level shifts on the aggregate signal
+        diff, _, threshold_mask = self._legacy_scores(df)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            score_std = np.nanstd(diff, axis=0, ddof=1)
+            z_squared = (diff / np.where(score_std > 0, score_std, np.nan)) ** 2
         if self.window_method == "diff_overlap":
-            # Diff overlap mode: diff data first, then check if BOTH rolling windows exceed threshold
-            agg_df_diff = agg_df.diff()
-            # Overlap windows on the diffed data
-            rolling = agg_df_diff.rolling(
-                self.window_size, center=False, min_periods=1
-            ).mean()
-            try:
-                indexer = pd.api.indexers.FixedForwardWindowIndexer(
-                    window_size=self.window_size
-                )
-                rolling_forward = agg_df_diff.rolling(
-                    window=indexer, min_periods=1
-                ).mean()
-            except Exception:
-                rolling_forward = (
-                    agg_df_diff.loc[::-1]
-                    .rolling(self.window_size, center=False, min_periods=1)
-                    .mean()[::-1]
-                )
-            # Calculate thresholds for both rolling windows independently
-            threshold_back = rolling.std() * self.alpha
-            threshold_fwd = rolling_forward.std() * self.alpha
-
-            # Check if both exceed threshold in the same direction
-            back_exceeds_pos = rolling > threshold_back
-            fwd_exceeds_pos = rolling_forward > threshold_fwd
-            back_exceeds_neg = rolling < -threshold_back
-            fwd_exceeds_neg = rolling_forward < -threshold_fwd
-
-            # Point is a shift if BOTH windows exceed threshold in same direction
-            diff_mask_0 = (back_exceeds_pos & fwd_exceeds_pos) | (
-                back_exceeds_neg & fwd_exceeds_neg
-            )
-
-            # For alignment calculation later, use the average of the two rolling means
-            diff = (rolling + rolling_forward) / 2
-            diff_abs = diff.abs()
-        elif self.window_method == "exclusive":
-            # Exclusive mode: backward window ends at i-1, forward starts at i+1
-            rolling = (
-                agg_df.shift(1)
-                .rolling(self.window_size, center=False, min_periods=1)
-                .mean()
-            )
-            try:
-                indexer = pd.api.indexers.FixedForwardWindowIndexer(
-                    window_size=self.window_size
-                )
-                rolling_forward = (
-                    agg_df.shift(-1).rolling(window=indexer, min_periods=1).mean()
-                )
-            except Exception:
-                rolling_forward = (
-                    agg_df.shift(-1)
-                    .loc[::-1]
-                    .rolling(self.window_size, center=False, min_periods=1)
-                    .mean()[::-1]
-                )
-            diff = rolling - rolling_forward
-            threshold = diff.std() * self.alpha
-            diff_abs = diff.abs()
-            diff_mask_0 = diff_abs > threshold
-        else:  # "overlap" (default)
-            # Overlap mode: both windows include current point
-            rolling = agg_df.rolling(
-                self.window_size, center=False, min_periods=1
-            ).mean()
-            try:
-                indexer = pd.api.indexers.FixedForwardWindowIndexer(
-                    window_size=self.window_size
-                )
-                rolling_forward = agg_df.rolling(window=indexer, min_periods=1).mean()
-            except Exception:
-                rolling_forward = (
-                    agg_df.loc[::-1]
-                    .rolling(self.window_size, center=False, min_periods=1)
-                    .mean()[::-1]
-                )
-            diff = rolling - rolling_forward
-            threshold = diff.std() * self.alpha
-            diff_abs = diff.abs()
-            diff_mask_0 = diff_abs > threshold
-
-        # Merge nearby groups
-        diff_smoothed = diff_abs.where(diff_mask_0, np.nan).ffill(
-            limit=self.grouping_forward_limit
+            z_squared = np.where(threshold_mask, z_squared, 0.0)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            combined = np.sqrt(np.nanmean(z_squared, axis=1, keepdims=True))
+        combined_mask = np.nan_to_num(combined) > self.alpha
+        if self.window_method != "diff_overlap":
+            combined_mask = self._bridge(combined_mask)
+        forward_step = (
+            np.abs(df.diff().shift(-1).to_numpy()) / self.series_std_.to_numpy()
         )
-        # For diff_overlap, we use the mask directly; for others, apply threshold to smoothed values
-        if self.window_method == "diff_overlap":
-            diff_mask = diff_mask_0  # Already a boolean mask
-        else:
-            diff_mask = (diff_smoothed > threshold) | (diff_smoothed < -threshold)
-
-        # Find max of each group
-        maxes = diff_abs.where(diff_mask, np.nan).max()
-        range_arr = pd.DataFrame(
-            np.arange(len(agg_df)),
-            index=agg_df.index,
-            columns=agg_df.columns,
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            forward_step = np.nanmean(forward_step, axis=1, keepdims=True)
+        dates, _, _ = select_run_peaks(
+            combined,
+            combined_mask,
+            forward_step,
+            self.max_level_shifts,
+            self._legacy_tie_tolerance(),
         )
-        group_ids = range_arr[~diff_mask].ffill()
-        max_mask = diff_abs == maxes
-
-        # Progressively identify level shifts
-        max_mask_np = max_mask.to_numpy()
-        group_ids_np = group_ids.to_numpy()
-        diff_abs_np = diff_abs.to_numpy()
-        diff_mask_np = diff_mask.to_numpy()
-
-        used_groups_np = np.where(max_mask_np, group_ids_np, np.nan)
-        used_groups_flat = used_groups_np[~np.isnan(used_groups_np)]
-        used_groups_unique = np.unique(used_groups_flat)
-        curr_diff_np = np.where(
-            (~np.isin(group_ids_np, used_groups_unique)) & diff_mask_np,
-            diff_abs_np,
-            np.nan,
+        C = df.shape[1]
+        rows_f = np.repeat(dates, C)
+        cols = np.tile(np.arange(C), dates.size)
+        individually_significant = threshold_mask[rows_f, cols]
+        self._finish_legacy_fit(
+            df, diff, rows_f[individually_significant], cols[individually_significant]
         )
-        curr_diff_sum = np.nansum(curr_diff_np)
-        count = 0
-
-        while curr_diff_sum != 0 and count < self.max_level_shifts:
-            curr_maxes_np = np.nanmax(np.nan_to_num(curr_diff_np), axis=0)
-            mask = curr_diff_np == curr_maxes_np
-            max_mask_np |= mask
-            used_groups_np = np.where(mask, group_ids_np, np.nan)
-            used_groups_flat = used_groups_np[~np.isnan(used_groups_np)]
-            used_groups_unique = np.unique(used_groups_flat)
-            mask_to_update = np.isin(group_ids_np, used_groups_unique) & diff_mask_np
-            curr_diff_np = np.where(~mask_to_update, curr_diff_np, np.nan)
-            curr_diff_sum = np.sum(~np.isnan(curr_diff_np))
-            count += 1
-
-        # Convert back to DataFrame mask
-        max_mask = pd.DataFrame(max_mask_np, index=agg_df.index, columns=agg_df.columns)
-
-        # Store the shift mask - broadcast to all series in univariate mode
-        self.shift_mask_ = pd.DataFrame(
-            np.broadcast_to(max_mask.values, (len(df), len(df.columns))),
-            index=df.index,
-            columns=df.columns,
-        )
-
-        # If remove_at_shift is enabled, create an expanded mask and apply fillna
-        if self.remove_at_shift:
-            # Expand the mask to include neighboring points
-            expanded_mask = max_mask.copy()
-            if self.shift_remove_window >= 1:
-                expanded_mask = expanded_mask | max_mask.shift(1).fillna(False).astype(
-                    bool
-                )
-                expanded_mask = expanded_mask | max_mask.shift(-1).fillna(False).astype(
-                    bool
-                )
-            if self.shift_remove_window >= 2:
-                expanded_mask = expanded_mask | max_mask.shift(2).fillna(False).astype(
-                    bool
-                )
-                expanded_mask = expanded_mask | max_mask.shift(-2).fillna(False).astype(
-                    bool
-                )
-
-            # Create a copy of agg_df with NaN at shift points
-            agg_df_with_gaps = agg_df.copy()
-            agg_df_with_gaps[expanded_mask] = np.nan
-
-            # Fill the gaps using FillNA
-            agg_df_filled = FillNA(
-                agg_df_with_gaps, method=self.shift_fillna, window=10
-            )
-
-            # Use the filled data for alignment calculation
-            agg_df_for_alignment = agg_df_filled
-        else:
-            agg_df_for_alignment = agg_df
-
-        # Calculate level shift magnitudes on aggregate
-        if self.alignment == "last_value":
-            agg_lvlshft = (
-                (
-                    agg_df_for_alignment[max_mask]
-                    - agg_df_for_alignment[max_mask.shift(1)].shift(-1)
-                )
-                .fillna(0)
-                .loc[::-1]
-                .cumsum()[::-1]
-            )
-        elif self.alignment == "average":
-            lvlshft1 = (
-                (
-                    agg_df_for_alignment[max_mask]
-                    - agg_df_for_alignment[max_mask.shift(1)].shift(-1)
-                )
-                .fillna(0)
-                .loc[::-1]
-                .cumsum()[::-1]
-            )
-            lvlshft2 = diff[max_mask].fillna(0).loc[::-1].cumsum()[::-1]
-            agg_lvlshft = (lvlshft1 + lvlshft2) / 2
-        elif self.alignment == "rolling_diff_3nn":
-            agg_lvlshft = (
-                (
-                    (
-                        diff[max_mask.shift(1)].shift(-1).fillna(0)
-                        + diff[max_mask]
-                        + diff[max_mask.shift(-1)].shift(1).fillna(0)
-                    )
-                    / 3
-                )
-                .fillna(0)
-                .loc[::-1]
-                .cumsum()[::-1]
-            )
-        elif self.alignment == "rolling_diff_5nn":
-            agg_lvlshft = (
-                (
-                    (
-                        diff[max_mask.shift(2)].shift(-2).fillna(0)
-                        + diff[max_mask.shift(1)].shift(-1).fillna(0)
-                        + diff[max_mask]
-                        + diff[max_mask.shift(-1)].shift(1).fillna(0)
-                        + diff[max_mask.shift(-2)].shift(2).fillna(0)
-                    )
-                    / 5
-                )
-                .fillna(0)
-                .loc[::-1]
-                .cumsum()[::-1]
-            )
-        else:
-            agg_lvlshft = diff[max_mask].fillna(0).loc[::-1].cumsum()[::-1]
-
-        # Apply the same shift pattern to all series, scaled appropriately
-        # The shift magnitudes are in standardized units, convert back to original scale for each series
-        self.lvlshft = pd.DataFrame(index=df.index, columns=df.columns, dtype=float)
-
-        for col in df.columns:
-            # Scale the aggregate shift by this series' std deviation
-            self.lvlshft[col] = agg_lvlshft['aggregate'] * self.series_std_[col]
-
         return self
+
+    def _legacy_increments(self, values, diff, rows_f, cols):
+        """Per-break increment (``pre - post``, the lvlshft convention) by alignment."""
+        T = values.shape[0]
+
+        def at(array, offset):
+            r = rows_f + offset
+            inside = (r >= 0) & (r < T)
+            out = np.zeros(r.shape)
+            out[inside] = array[r[inside], cols[inside]]
+            return out
+
+        last_value = np.nan_to_num(at(values, 0) - at(values, 1))
+        centre = np.nan_to_num(at(diff, 0))
+        if self.alignment == "last_value":
+            return last_value
+        if self.alignment == "average":
+            return (last_value + centre) / 2
+        if self.alignment in ("rolling_diff_3nn", "rolling_diff_5nn"):
+            reach = 1 if self.alignment == "rolling_diff_3nn" else 2
+            neighbours = [
+                np.nan_to_num(at(diff, k)) for k in range(-reach, reach + 1) if k
+            ]
+            # a NaN centre zeroed the whole legacy sum
+            total = np.where(np.isnan(at(diff, 0)), 0.0, centre + sum(neighbours))
+            return total / (2 * reach + 1)
+        return centre
+
+    def _finish_legacy_fit(self, df, diff, rows_f, cols):
+        values = df.to_numpy(dtype=float)
+        if self.alignment in self.robust_alignments:
+            sizes, pre_levels = size_breaks(
+                values, rows_f, cols, int(self.window_size), method=self.alignment
+            )
+        else:
+            sizes = -self._legacy_increments(values, diff, rows_f, cols)
+            pre_levels = None
+        self._store_shifts(df, values, rows_f, cols, sizes, pre_levels)
+
+    def _linear_gap_scales(self):
+        if self.scales is None:
+            return list(self.default_linear_gap_scales)
+        if np.isscalar(self.scales):
+            return [int(self.scales)]
+        return [int(scale) for scale in self.scales]
+
+    def _fit_linear_gap(self, df):
+        values = df.to_numpy(dtype=float)
+        detect_values = values
+        if self.deseasonalize:
+            detect_values, self.season_length_ = level_shift_deseasonalize(
+                values, self.deseasonalize
+            )
+        scales = self._linear_gap_scales()
+        anomaly_window = int(self.anomaly_window)
+        if self.output == 'univariate':
+            self.series_mean_ = df.mean(axis=0)
+            self.series_std_ = df.std(axis=0).replace(0, 1)
+            detector = detect_multiscale_shared
+        else:
+            detector = detect_multiscale
+        rows_f, cols, _, gaps, used = detector(
+            detect_values,
+            scales,
+            self.alpha,
+            self.max_level_shifts,
+            anomaly_window=anomaly_window,
+        )
+        alignment = self.alignment
+        if alignment == "gap":
+            sizes = gaps
+            pre_levels = None
+        else:
+            sizes, pre_levels = size_breaks(
+                detect_values, rows_f, cols, used, method=alignment
+            )
+        if self.tail_scan and self.max_level_shifts > 0:
+            last_break = np.full(values.shape[1], -1)
+            np.maximum.at(last_break, cols, rows_f)
+            tail_rows, tail_cols, tail_gaps = level_shift_tail_scan(
+                detect_values,
+                self.alpha,
+                min_post=anomaly_window,
+                max_post=max(20, anomaly_window),
+                last_break_rows=last_break,
+            )
+            # max_level_shifts is per series: tail breaks only fill free slots
+            shifts_per_column = np.bincount(cols, minlength=values.shape[1])
+            has_slot = shifts_per_column[tail_cols] < self.max_level_shifts
+            tail_rows, tail_cols, tail_gaps = (
+                tail_rows[has_slot],
+                tail_cols[has_slot],
+                tail_gaps[has_slot],
+            )
+            rows_f = np.concatenate([rows_f, tail_rows])
+            cols = np.concatenate([cols, tail_cols])
+            sizes = np.concatenate([sizes, tail_gaps])
+            if pre_levels is not None:
+                _, tail_levels = size_breaks(
+                    detect_values, tail_rows, tail_cols, max(scales), method="median"
+                )
+                pre_levels = np.concatenate([pre_levels, tail_levels])
+        self._store_shifts(df, values, rows_f, cols, sizes, pre_levels)
+
+    def _store_shifts(self, df, values, rows_f, cols, sizes, pre_levels):
+        """Build lvlshft (reverse cumsum of -size) plus optional safe ratio frame."""
+        rows_f = np.asarray(rows_f, dtype=int)
+        cols = np.asarray(cols, dtype=int)
+        sizes = np.asarray(sizes, dtype=float)
+        shift = additive_shift(values.shape, rows_f, cols, sizes)
+        self.lvlshft = pd.DataFrame(shift, index=df.index, columns=df.columns)
+        mask = np.zeros(values.shape, dtype=bool)
+        mask[rows_f, cols] = True
+        self.shift_mask_ = pd.DataFrame(mask, index=df.index, columns=df.columns)
+        self.lvlshft_ratio_ = None
+        if self.correction_mode == "auto" and rows_f.size:
+            if pre_levels is None:
+                sizing_window = (
+                    max(self._linear_gap_scales())
+                    if self.window_method == "linear_gap"
+                    else int(self.window_size)
+                )
+                _, pre_levels = size_breaks(
+                    values, rows_f, cols, sizing_window, method="median"
+                )
+            ratio_frame, ratio_columns = ratio_shift(
+                values, rows_f, cols, sizes, pre_levels, shift
+            )
+            if ratio_columns.any():
+                self.lvlshft_ratio_ = pd.DataFrame(
+                    ratio_frame, index=df.index, columns=df.columns
+                )
+                # ratio columns are corrected multiplicatively only
+                self._additive_lvlshft = self.lvlshft.copy()
+                self._additive_lvlshft.loc[:, ratio_columns] = 0.0
+        if self.lvlshft_ratio_ is None:
+            self._additive_lvlshft = self.lvlshft
+
+    def _expanded_shift_mask(self, df):
+        """Shift points plus shift_remove_window neighbours, aligned to df."""
+        base = (
+            self.shift_mask_.reindex(index=df.index, columns=df.columns)
+            .fillna(False)
+            .astype(bool)
+        )
+        expanded = base.copy()
+        for offset in range(1, self.shift_remove_window + 1):
+            expanded |= base.shift(offset, fill_value=False)
+            expanded |= base.shift(-offset, fill_value=False)
+        return expanded
+
+    def _aligned_shift(self, frame, df, fill_value):
+        # future dates get the latest regime's value: 0 additive, 1 ratio
+        return (
+            frame.reindex(index=df.index, columns=df.columns).bfill().fillna(fill_value)
+        )
 
     def transform(self, df):
         """Return changed data.
@@ -5191,39 +5137,20 @@ class LevelShiftMagic(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        # Apply shift removal and filling if enabled
         if self.remove_at_shift and hasattr(self, 'shift_mask_'):
-            # Expand the mask to include neighboring points
-            expanded_mask = (
-                self.shift_mask_.reindex(index=df.index, columns=df.columns)
-                .fillna(False)
-                .astype(bool)
-            )
-            if self.shift_remove_window >= 1:
-                expanded_mask = expanded_mask | self.shift_mask_.reindex(
-                    index=df.index, columns=df.columns
-                ).shift(1).fillna(False).astype(bool)
-                expanded_mask = expanded_mask | self.shift_mask_.reindex(
-                    index=df.index, columns=df.columns
-                ).shift(-1).fillna(False).astype(bool)
-            if self.shift_remove_window >= 2:
-                expanded_mask = expanded_mask | self.shift_mask_.reindex(
-                    index=df.index, columns=df.columns
-                ).shift(2).fillna(False).astype(bool)
-                expanded_mask = expanded_mask | self.shift_mask_.reindex(
-                    index=df.index, columns=df.columns
-                ).shift(-2).fillna(False).astype(bool)
+            expanded_mask = self._expanded_shift_mask(df)
+            filled = FillNA(df.mask(expanded_mask), method=self.shift_fillna, window=10)
+            # only the removed points take filled values; unrelated gaps are left alone
+            df = df.where(~expanded_mask, filled)
 
-            # Create a copy of df with NaN at shift points
-            df_with_gaps = df.copy()
-            df_with_gaps[expanded_mask] = np.nan
+        result = df - self._aligned_shift(self._additive_frame(), df, 0)
+        if getattr(self, 'lvlshft_ratio_', None) is not None:
+            result = result / self._aligned_shift(self.lvlshft_ratio_, df, 1)
+        return result
 
-            # Fill the gaps using FillNA
-            df = FillNA(df_with_gaps, method=self.shift_fillna, window=10)
-
-        return df - self.lvlshft.reindex(
-            index=df.index, columns=df.columns
-        ).bfill().fillna(0)
+    def _additive_frame(self):
+        # templates pickled before correction_mode existed only carry lvlshft
+        return getattr(self, '_additive_lvlshft', self.lvlshft)
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
         """Return data to original *or* forecast form.
@@ -5231,9 +5158,9 @@ class LevelShiftMagic(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        return df + self.lvlshft.reindex(
-            index=df.index, columns=df.columns
-        ).bfill().fillna(0)
+        if getattr(self, 'lvlshft_ratio_', None) is not None:
+            df = df * self._aligned_shift(self.lvlshft_ratio_, df, 1)
+        return df + self._aligned_shift(self._additive_frame(), df, 0)
 
     def fit_transform(self, df):
         """Fits and Returns *Magical* DataFrame.
@@ -6759,6 +6686,9 @@ class FIRFilter(EmptyTransformer):
         selection = random.choices([True, False], [0.8, 0.2])[0]
         params = generate_random_fir_params(method=method)
         params["sampling_frequency"] = seasonal_int(include_one=False)
+        nyquist = params["sampling_frequency"] / 2
+        if params.get("cutoff_hz", 0) >= nyquist:
+            params["cutoff_hz"] = round(nyquist * 0.9, 6)
         params["on_transform"] = selection
         params["on_inverse"] = not selection
         if not selection:
@@ -7623,7 +7553,7 @@ class ReconciliationTransformer(EmptyTransformer):
         if no hierarchy_map is provided.
     hierarchy_map : dict or None
         If provided, describes aggregator sums for top/middle levels. E.g.,
-          { "TOP": ["A","B","C","D"], "MID1":["A","B"], "MID2":["C","D"] }.
+        ``{ "TOP": ["A","B","C","D"], "MID1":["A","B"], "MID2":["C","D"] }``.
         If None, automatically creates groups of size group_size plus a single "TOP".
     reconciliation_params : dict
         Dict of parameters for reconciliation. Structure:
@@ -8239,7 +8169,7 @@ class GeneralTransformer(object):
                 * by default 'forecast' is expected, 'original' can be set in trans_method
 
     Args:
-        fillNA (str): - method to fill NA, passed through to FillNA()
+        fillNA (str): method to fill NA, passed through to FillNA()
             'ffill' - fill most recent non-na value forward until another non-na value is reached
             'zero' - fill with zero. Useful for sales and other data where NA does usually mean $0.
             'mean' - fill all missing values with the series' overall average value
@@ -8251,7 +8181,7 @@ class GeneralTransformer(object):
             'IterativeImputer' - sklearn iterative imputer
             most of the interpolate methods from pandas.interpolate
 
-        transformations (dict): - transformations to apply {0: "MinMaxScaler", 1: "Detrend", ...}
+        transformations (dict): transformations to apply {0: "MinMaxScaler", 1: "Detrend", ...}
             'None'
             'MinMaxScaler' - Sklearn MinMaxScaler
             'PowerTransformer' - Sklearn PowerTransformer
@@ -8340,7 +8270,9 @@ class GeneralTransformer(object):
         if transformation_params is None or not transformation_params:
             keys = transformations.keys()
             transformation_params = {x: {} for x in keys}
-        self.transformation_params = transformation_params
+        # some transformers resolve params in place; the caller's dict is the model's
+        # identity (hashed into its ID) so it must not change
+        self.transformation_params = copy.deepcopy(transformation_params)
 
         self.grouping = grouping
         self.reconciliation = reconciliation
@@ -8483,8 +8415,9 @@ class GeneralTransformer(object):
                 quants = int(df.shape[0] / 10)
             else:
                 quants = quants if df.shape[0] > quants else int(df.shape[0] / 3)
-            param["n_quantiles"] = quants
-            return QuantileTransformer(copy=True, **param)
+            return QuantileTransformer(
+                copy=True, **{**param, "n_quantiles": max(1, quants)}
+            )
 
         elif transformation == "StandardScaler":
             try:
@@ -8515,15 +8448,13 @@ class GeneralTransformer(object):
             )
 
         elif transformation == "FastICA":
-            from sklearn.decomposition import FastICA
-
             if df.shape[1] > 5000:
                 raise ValueError("FastICA fails with > 5000 series for speed reasons")
-            return FastICA(
-                n_components=df.shape[1],
-                random_state=random_seed,
-                **param,
-            )
+            # the module's wrapper class (not the raw sklearn estimator): sklearn
+            # silently caps n_components at n_samples, and the raw estimator then
+            # returns fewer columns than _fit_one rebuilds with. Same reason the
+            # PCA branch above was retired.
+            return FastICA(**{"random_state": random_seed, **(param or {})})
 
         elif transformation in ["RollingMean", "FixedRollingMean"]:
             param = 10 if param is None else param
@@ -8815,7 +8746,7 @@ transformer_dict = {
     "LevelShiftTransformer": 0.03,
     "CenterSplit": 0.01,
     "FFTFilter": 0.01,
-    "FFTDecomposition": 0.01,
+    "FFTDecomposition": 0.005,  # slow: ~3.9s median vs ~0.01s typical
     "ReplaceConstant": 0.02,
     "AlignLastDiff": 0.01,
     "DiffSmoother": 0.005,

@@ -196,12 +196,19 @@ class ARCH(ModelObject):
                         show_warning=self.verbose_bool,
                         options={'maxiter': self.maxiter},
                     )
+                    fcst_x = pd.DataFrame(args['future_regressor'])
+                    x_names = list(getattr(res.model, "_x_names", []) or [])
+                    if len(x_names) != fcst_x.shape[1]:
+                        x_names = list(fcst_x.columns)
                     forecasts = res.forecast(
                         horizon=args['forecast_length'],
                         method='simulation',
                         reindex=False,
                         simulations=self.simulations,
-                        x=args['future_regressor'].to_dict(orient="list"),
+                        x={
+                            name: fcst_x.iloc[:, i].tolist()
+                            for i, name in enumerate(x_names)
+                        },
                         random_state=self.random_seed,
                     )
                 else:

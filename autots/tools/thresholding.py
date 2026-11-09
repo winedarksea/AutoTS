@@ -169,9 +169,11 @@ class NonparametricThreshold:
         """
         Find the anomaly threshold that maximizes function representing
         tradeoff between:
+
             a) number of anomalies and anomalous ranges
             b) the reduction in mean and st dev if anomalous points are removed
-            from errors
+               from errors
+
         (see https://arxiv.org/pdf/1802.04431.pdf)
 
         Args:

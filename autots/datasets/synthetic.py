@@ -3022,7 +3022,7 @@ class SyntheticDailyGenerator:
               response delays in days; 0 means "no true edge"
             - ``edges``: same structure as a list of
               ``{'source', 'target', 'lag'}`` dicts (only positive delays)
-            - ``dominant_factor``: {series_name: int} index of the largest-|w| factor
+            - ``dominant_factor``: {series_name: int} index of the largest ``|w|`` factor
             - ``observation_mask``: DataFrame (date x series) of bools, True where observed
             - ``responder``: {series_name: bool}, True for short-history cohorts
             - ``level_shifts`` / ``shared_events``: truth from ``get_level_shifts()``

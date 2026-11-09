@@ -36,6 +36,14 @@ autots.models.cassandra module
    :show-inheritance:
    :undoc-members:
 
+autots.models.cassandra\_ar module
+----------------------------------
+
+.. automodule:: autots.models.cassandra_ar
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
 autots.models.composite module
 ------------------------------
 
@@ -68,6 +76,14 @@ autots.models.ensemble module
    :show-inheritance:
    :undoc-members:
 
+autots.models.forecast\_correction module
+-----------------------------------------
+
+.. automodule:: autots.models.forecast_correction
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
 autots.models.gluonts module
 ----------------------------
 
@@ -88,6 +104,14 @@ autots.models.mlensemble module
 -------------------------------
 
 .. automodule:: autots.models.mlensemble
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+autots.models.mlensemble\_features module
+-----------------------------------------
+
+.. automodule:: autots.models.mlensemble_features
    :members:
    :show-inheritance:
    :undoc-members:

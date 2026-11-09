@@ -5,6 +5,7 @@ Tests for Feature Detector
 @author: Colin
 """
 
+import importlib.util
 import unittest
 from unittest.mock import patch
 import ast
@@ -258,11 +259,15 @@ class TestFeatureDetector(unittest.TestCase):
 
         # The step-1 band must be on the order of the residual sigma (the noise
         # component), not a degenerate ~0 band and not the seasonal amplitude.
+        # At h=1 future slope changes contribute nothing; level shifts add rate*E[s^2].
         z = 1.6448536269514722  # norm.ppf(0.95)
+        n_obs = len(self.data)
         for col in self.data.columns:
             sigma = float(np.nanstd(detector.components[col]['noise'], ddof=1))
             m = detector._last_trend_segment_length(col)
-            expected_h1 = 2 * z * sigma * np.sqrt(1.0 + 1.0 / m)
+            shifts = np.array([ls[1] for ls in detector.level_shifts[col]], dtype=float)
+            shift_var = float(np.sum(shifts**2)) / n_obs
+            expected_h1 = 2 * z * np.sqrt(sigma**2 * (1.0 + 1.0 / m) + shift_var)
             actual_h1 = float((upper[col] - lower[col]).iloc[0])
             self.assertGreater(actual_h1, 0.5 * sigma)  # clearly non-degenerate
             self.assertAlmostEqual(actual_h1, expected_h1, delta=0.05 * expected_h1)
@@ -2342,6 +2347,10 @@ class TestFeatureDetectorCalendarHolidayFusion(unittest.TestCase):
         )
         self.assertGreater(np.abs(holiday_component[july_fourth_mask]).sum(), 0.0)
 
+    @unittest.skipUnless(
+        importlib.util.find_spec('holidays') is not None,
+        "non-US calendars need the optional 'holidays' package",
+    )
     def test_per_series_country_mapping_uses_distinct_calendar_dates(self):
         df = self._make_calendar_spike_df()
         detector = TimeSeriesFeatureDetector(
@@ -2379,6 +2388,45 @@ class TestFeatureDetectorCalendarHolidayFusion(unittest.TestCase):
         )
         self.assertFalse(detector.rough_seasonality_params['holiday_countries_used'])
         self.assertFalse(detector.seasonality_params['holiday_countries_used'])
+
+
+
+class TestSeasonalityTrendPriorOption(unittest.TestCase):
+    """``seasonality_trend_prior`` switches the pre-seasonality trend removal."""
+
+    @staticmethod
+    def _df():
+        idx = pd.date_range('2021-01-01', periods=400, freq='D')
+        t = np.arange(len(idx), dtype=float)
+        rng = np.random.default_rng(0)
+        return pd.DataFrame(
+            {'a': 0.05 * t + np.sin(2 * np.pi * t / 7) + rng.normal(0, 0.2, len(t))},
+            index=idx,
+        )
+
+    def test_off_skips_the_prior_estimate(self):
+        from autots.evaluator.feature_detector.components.seasonality import (
+            SeasonalityMixin,
+        )
+
+        def fail(*args, **kwargs):
+            raise AssertionError("trend prior estimated while disabled")
+
+        with patch.object(
+            SeasonalityMixin, '_estimate_seasonality_adjusted_trend', staticmethod(fail)
+        ):
+            TimeSeriesFeatureDetector(seasonality_trend_prior=False).fit(self._df())
+            with self.assertRaises(AssertionError):
+                TimeSeriesFeatureDetector().fit(self._df())
+
+    def test_template_round_trip(self):
+        detector = TimeSeriesFeatureDetector()
+        self.assertTrue(detector.seasonality_trend_prior)
+        detector._apply_detector_params({'seasonality_trend_prior': False})
+        self.assertFalse(detector.seasonality_trend_prior)
+        self.assertIn(
+            'seasonality_trend_prior', TimeSeriesFeatureDetector.get_new_params()
+        )
 
 
 if __name__ == '__main__':

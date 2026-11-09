@@ -14,16 +14,16 @@
         gtag('config', 'G-P2KLF8302E');
     </script>
     
-    <title>Tutorial &#8212; AutoTS 1.0.4 documentation</title>
+    <title>Tutorial &#8212; AutoTS 1.0.5 documentation</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=ec641305" />
-    <script src="../_static/documentation_options.js?v=71272d9f"></script>
+    <script src="../_static/documentation_options.js?v=d55fa986"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="autots" href="modules.html" />
+    <link rel="next" title="AutoTS Metric Weighting" href="../metric_weighting_guide.html" />
     <link rel="prev" title="Intro" href="intro.html" />
    
   <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
@@ -228,6 +228,53 @@ One thing to note is that, as AutoTS is still under development, template format
 <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Overwrite template is: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">initial_template</span><span class="p">)))</span>
 </pre></div>
 </div>
+<section id="mlflow-tracking-and-template-registry">
+<h3>MLflow Tracking and Template Registry<a class="headerlink" href="#mlflow-tracking-and-template-registry" title="Link to this heading">¶</a></h3>
+<p>With <code class="docutils literal notranslate"><span class="pre">mlflow</span></code> installed, the template file above can live in the MLflow Model Registry instead, so every exported template is versioned and an alias picks which one a run uses.
+<code class="docutils literal notranslate"><span class="pre">mlflow_autolog()</span></code> logs each <code class="docutils literal notranslate"><span class="pre">fit</span></code> as an MLflow run, and <code class="docutils literal notranslate"><span class="pre">mlflow_log_template</span></code> registers the fitted model’s top templates as a new version of a registered model.
+Any <code class="docutils literal notranslate"><span class="pre">models:/name&#64;alias</span></code> URI works wherever a template filename does (<code class="docutils literal notranslate"><span class="pre">import_template</span></code>, <code class="docutils literal notranslate"><span class="pre">import_best_model</span></code>).</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">mlflow</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">autots</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoTS</span><span class="p">,</span> <span class="n">mlflow_autolog</span><span class="p">,</span> <span class="n">mlflow_log_template</span><span class="p">,</span> <span class="n">mlflow_load_model</span>
+
+<span class="n">mlflow</span><span class="o">.</span><span class="n">set_experiment</span><span class="p">(</span><span class="s2">&quot;weekly_demand_forecast&quot;</span><span class="p">)</span>
+<span class="n">mlflow_autolog</span><span class="p">()</span>
+
+<span class="c1"># evolving mode: seed each search with the last templates, then register the new ones</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoTS</span><span class="p">(</span><span class="n">forecast_length</span><span class="o">=</span><span class="mi">14</span><span class="p">,</span> <span class="n">frequency</span><span class="o">=</span><span class="s2">&quot;D&quot;</span><span class="p">,</span> <span class="n">ensemble</span><span class="o">=</span><span class="s2">&quot;horizontal-max&quot;</span><span class="p">,</span> <span class="n">max_generations</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">model</span><span class="o">.</span><span class="n">import_template</span><span class="p">(</span><span class="s2">&quot;models:/demand_seed@rolling&quot;</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s2">&quot;addon&quot;</span><span class="p">,</span> <span class="n">force_validation</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">except</span> <span class="ne">FileNotFoundError</span><span class="p">:</span>
+    <span class="k">pass</span>  <span class="c1"># first run: no registered template yet</span>
+<span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+<span class="n">mlflow_log_template</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="s2">&quot;demand_seed&quot;</span><span class="p">,</span> <span class="n">alias</span><span class="o">=</span><span class="s2">&quot;rolling&quot;</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span> <span class="n">max_per_model_class</span><span class="o">=</span><span class="mi">6</span><span class="p">)</span>
+<span class="n">prediction</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">()</span>
+
+<span class="c1"># frozen mode: refit only the approved winner, no search</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">mlflow_load_model</span><span class="p">(</span><span class="s2">&quot;models:/demand_seed@approved&quot;</span><span class="p">)</span>
+<span class="n">model</span><span class="o">.</span><span class="n">fit_data</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+<span class="n">prediction</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>If a run’s template goes bad (a holiday anomaly corrupting the search, for example), point the <code class="docutils literal notranslate"><span class="pre">rolling</span></code> alias back at an earlier version in the MLflow UI and the next run seeds from that.
+Leave <code class="docutils literal notranslate"><span class="pre">alias=None</span></code> in <code class="docutils literal notranslate"><span class="pre">mlflow_log_template</span></code> to register versions without moving any alias, then set <code class="docutils literal notranslate"><span class="pre">approved</span></code> by hand after review.</p>
+<p>Registered templates are also MLflow pyfunc models, so they can be served behind MLflow model serving or batch scoring.
+A fitted AutoTS isn’t saved, so <code class="docutils literal notranslate"><span class="pre">predict</span></code> refits the winning model on the history it is given (no search) and returns the forecast. Future regressors are not supported here.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">served</span> <span class="o">=</span> <span class="n">mlflow</span><span class="o">.</span><span class="n">pyfunc</span><span class="o">.</span><span class="n">load_model</span><span class="p">(</span><span class="s2">&quot;models:/demand_seed@approved&quot;</span><span class="p">)</span>
+<span class="n">forecast_long</span> <span class="o">=</span> <span class="n">served</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;forecast_length&quot;</span><span class="p">:</span> <span class="mi">14</span><span class="p">})</span>  <span class="c1"># long format with upper/lower</span>
+<span class="c1"># for JSON/REST input without a datetime index, name the date column</span>
+<span class="n">forecast_wide</span> <span class="o">=</span> <span class="n">served</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">df_with_date_column</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;date_col&quot;</span><span class="p">:</span> <span class="s2">&quot;date&quot;</span><span class="p">,</span> <span class="s2">&quot;output&quot;</span><span class="p">:</span> <span class="s2">&quot;forecast&quot;</span><span class="p">})</span>
+</pre></div>
+</div>
+<p>Besides parameters, the best model, and results tables, each autologged <code class="docutils literal notranslate"><span class="pre">fit</span></code> run records:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">autots.generation_best_score</span></code> per generation (step = generation): a flat line early means <code class="docutils literal notranslate"><span class="pre">max_generations</span></code> could be lower, still falling means it could be higher. Scores are relative to that run’s models, so compare runs by shape, not level.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">autots/per_series_best.json</span></code>: the winner’s error per series, as an overall good score can hide one bad series. Also <code class="docutils literal notranslate"><span class="pre">best.worst_series_mape</span></code> and <code class="docutils literal notranslate"><span class="pre">best.worst_series</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">autots/ensemble_routing.json</span></code> (and <code class="docutils literal notranslate"><span class="pre">autots/mosaic_routing.json</span></code> for mosaics): which model serves each series. The <code class="docutils literal notranslate"><span class="pre">best.ensemble_families</span></code> tag lists the model types in the winner, so runs can be searched by model type.</p></li>
+<li><p>Seed drift, when the search was seeded: <code class="docutils literal notranslate"><span class="pre">drift.winner_origin</span></code> (seed, new, or mixed), and from <code class="docutils literal notranslate"><span class="pre">mlflow_log_template</span></code>, <code class="docutils literal notranslate"><span class="pre">drift.seed_survival_rate</span></code>, the share of incoming template models kept in the new template. Every search finds some new models, so this is below 1 even on unchanged data; a sudden drop compared with previous runs suggests the data has changed.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">autots/forecast.csv</span></code> on each <code class="docutils literal notranslate"><span class="pre">predict</span></code> run.</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">mlflow_autolog(log_insights=False)</span></code> turns off the per-generation, per-series, routing, and drift logging.</p>
+</section>
 <section id="id5">
 <h3>Running Just One Model<a class="headerlink" href="#id5" title="Link to this heading">¶</a></h3>
 <p>While the above version of deployment, with  evolving templates and cross_validation on every run, is the recommended deployment, it is also possible to run a single fixed model.</p>
@@ -315,6 +362,8 @@ This is similar to but faster than MDA (mean directional accuracy) as contour ev
 <p>If a metric is entirely NaN in the initial results, likely that holdout was entirely NaN in actuals.</p>
 <p>It may be worth viewing something like: <code class="docutils literal notranslate"><span class="pre">model.score_breakdown[model.score_breakdown.index</span> <span class="pre">==</span> <span class="pre">model.best_model_id].iloc[0]</span></code> to see if any one score is skewing selection.
 Generally you would want the numbers here to follow the balance requested in the <code class="docutils literal notranslate"><span class="pre">metric_weighting</span></code>.</p>
+<section id="plots">
+<h4>Plots<a class="headerlink" href="#plots" title="Link to this heading">¶</a></h4>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
 
 <span class="n">model</span> <span class="o">=</span> <span class="n">AutoTS</span><span class="p">()</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
@@ -354,6 +403,7 @@ Generally you would want the numbers here to follow the balance requested in the
     <span class="n">model</span><span class="o">.</span><span class="n">plot_backforecast</span><span class="p">(</span><span class="n">n_splits</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="n">start_date</span><span class="o">=</span><span class="s2">&quot;2019-01-01&quot;</span><span class="p">)</span>
 </pre></div>
 </div>
+</section>
 </section>
 <section id="hierarchial-and-grouped-forecasts">
 <h3>Hierarchial and Grouped Forecasts<a class="headerlink" href="#hierarchial-and-grouped-forecasts" title="Link to this heading">¶</a></h3>
@@ -1422,6 +1472,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <li class="toctree-l2"><a class="reference internal" href="#id9">Models</a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="../metric_weighting_guide.html">AutoTS Metric Weighting</a></li>
 </ul>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="modules.html">autots</a></li>
@@ -1432,7 +1483,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <ul>
   <li><a href="../index.html">Documentation overview</a><ul>
       <li>Previous: <a href="intro.html" title="previous chapter">Intro</a></li>
-      <li>Next: <a href="modules.html" title="next chapter">autots</a></li>
+      <li>Next: <a href="../metric_weighting_guide.html" title="next chapter">AutoTS Metric Weighting</a></li>
   </ul></li>
 </ul>
 </div>

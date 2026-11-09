@@ -5,6 +5,7 @@ import copy
 import numpy as np
 import pandas as pd
 import warnings
+from collections.abc import Mapping
 from autots.tools.transform import AnomalyRemoval
 from autots.tools.anomaly_utils import anomaly_scores_to_strength
 
@@ -18,7 +19,11 @@ class AnomalyMixin:
         params['output'] = self.detection_mode
         params.pop('holiday_dates', None)
         if holiday_dates:
-            params['holiday_dates'] = list(holiday_dates)
+            params['holiday_dates'] = (
+                copy.deepcopy(holiday_dates)
+                if isinstance(holiday_dates, Mapping)
+                else list(holiday_dates)
+            )
             params.setdefault('holiday_proximity_days', 2)
         return params
 
@@ -245,17 +250,34 @@ class AnomalyMixin:
                     extended_devs[0] > anomaly_mag * 0.3
                     and extended_devs[-1] < extended_devs[0] * 0.5
                 ):
-                    try:
-                        decay_slope = np.polyfit(
-                            np.arange(len(extended_devs)), extended_devs, 1
-                        )[0]
-                    except np.linalg.LinAlgError:
-                        decay_slope = 0
+                    # NaN (e.g. business-day gaps) makes polyfit raise ValueError /
+                    # SystemError rather than LinAlgError, so fit finite points only.
+                    finite = np.isfinite(extended_devs)
+                    decay_slope = 0
+                    if finite.sum() >= 3:
+                        try:
+                            decay_slope = np.polyfit(
+                                np.arange(len(extended_devs))[finite],
+                                extended_devs[finite],
+                                1,
+                            )[0]
+                        except (np.linalg.LinAlgError, ValueError):
+                            decay_slope = 0
                     if decay_slope < 0 and abs(decay_slope) < anomaly_mag * 0.05:
                         return 'slope_reversion'
 
         # Default: point outlier
         return 'point_outlier'
+
+    def _remove_anomalies_in_residual_space(self, df, baseline):
+        """Apply the fitted anomaly mask/fill to ``df - baseline``, then add the baseline back.
+
+        The mask was learned on a residual; filling raw values (e.g. ffill) would
+        copy a neighbouring day's seasonality into the anomaly point.
+        """
+        baseline = baseline.reindex(index=df.index, columns=df.columns).fillna(0.0)
+        cleaned_residual = self.anomaly_detector.transform(df - baseline)
+        return baseline + cleaned_residual.reindex(index=df.index, columns=df.columns)
 
     def _analyze_noise(
         self,
@@ -273,16 +295,17 @@ class AnomalyMixin:
         tuple
             (noise_component, anomaly_component)
         """
-        # Use the same anomaly transform path used during seasonality fitting so
-        # anomaly removal is internally consistent across pipeline stages.
+        reconstructed_scaled = (
+            trend_scaled + level_shift_scaled + seasonality_scaled + holiday_scaled
+        )
+        # Fill anomalies on the structural residual, as during seasonality fitting,
+        # so the anomaly component excludes day-over-day seasonal change.
         df_without_anomalies_scaled = df_work.copy()
         if self.anomaly_detector is not None:
             try:
-                transformed = self.anomaly_detector.transform(df_work)
-                if transformed is not None:
-                    df_without_anomalies_scaled = transformed.reindex(
-                        index=df_work.index, columns=df_work.columns
-                    ).astype(float)
+                df_without_anomalies_scaled = self._remove_anomalies_in_residual_space(
+                    df_work, reconstructed_scaled
+                ).astype(float)
             except Exception as exc:
                 warnings.warn(
                     f"Anomaly transform failed during noise analysis; using fallback interpolation. {exc}",
@@ -301,22 +324,20 @@ class AnomalyMixin:
                         continue
                     try:
                         idx = df_work.index.get_loc(date)
+                        residual_col = df_work[col] - reconstructed_scaled[col]
                         neighbors = []
                         if idx > 0:
-                            neighbors.append(df_work[col].iloc[idx - 1])
+                            neighbors.append(residual_col.iloc[idx - 1])
                         if idx < len(df_work) - 1:
-                            neighbors.append(df_work[col].iloc[idx + 1])
+                            neighbors.append(residual_col.iloc[idx + 1])
                         if neighbors:
-                            df_without_anomalies_scaled.loc[date, col] = np.nanmedian(
-                                neighbors
+                            df_without_anomalies_scaled.loc[date, col] = (
+                                reconstructed_scaled[col].iloc[idx]
+                                + np.nanmedian(neighbors)
                             )
                     except Exception:
                         continue
 
-        # Reconstruct signal without anomalies
-        reconstructed_scaled = (
-            trend_scaled + level_shift_scaled + seasonality_scaled + holiday_scaled
-        )
         noise_component_scaled = df_without_anomalies_scaled - reconstructed_scaled
         anomaly_component_scaled = df_work - df_without_anomalies_scaled
 

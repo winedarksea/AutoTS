@@ -340,8 +340,7 @@ def date_part(
         # hourly
         # if seasonal_ratio < 0.001:  # 0.00011 to 0.00023
         if seasonal_ratio < 0.75:  # 0.00011 to 0.00023
-            t = DTindex - pd.Timestamp(origin_ts)
-            t = (t.days * 24) + (t.components['minutes'] / 60)
+            t = (DTindex - pd.Timestamp(origin_ts)) / pd.Timedelta(hours=1)
             # add hourly, weekly, yearly
             seasonal_list.append(fourier_series(t, p=8766, n=10))
             seasonal_list.append(fourier_series(t, p=24, n=3))
@@ -503,13 +502,13 @@ def date_part(
         if expansion_flag:
             date_part_df = date_part_df.reindex(requested_index)
     if holiday_country is not None and holiday_countries_used:
+        holidays = holiday_flag(
+            output_index, country=holiday_country, encode_holiday_type=True
+        )
+        if not set_index and len(holidays) == len(date_part_df):
+            holidays.index = date_part_df.index
         date_part_df = pd.concat(
-            [
-                date_part_df,
-                holiday_flag(
-                    output_index, country=holiday_country, encode_holiday_type=True
-                ),
-            ],
+            [date_part_df, holidays],
             axis=1,
             ignore_index=not set_index,
         )
@@ -530,7 +529,7 @@ def date_part(
                 forward_lags=None,
                 set_index=False,
             ).rename(columns=lambda x: str(x) + f"_lag{laggy}")
-            add_X.index = output_index
+            add_X.index = date_part_df.index
             date_part_df = pd.concat([date_part_df, add_X], axis=1)
     if forward_lags is not None:
         frequency = infer_frequency(output_index)
@@ -550,7 +549,7 @@ def date_part(
                 forward_lags=None,
                 set_index=False,
             ).rename(columns=lambda x: str(x) + f"_flag{laggy}")
-            add_X.index = output_index
+            add_X.index = date_part_df.index
             date_part_df = pd.concat([date_part_df, add_X], axis=1)
     return date_part_df
 
@@ -841,7 +840,9 @@ def fourier_df(DTindex, seasonality, order=10, t=None, history_days=None):
     )
 
 
-def build_adaptive_fourier_features(DTindex, detected_periods, max_order=12):
+def build_adaptive_fourier_features(
+    DTindex, detected_periods, max_order=12, n_obs=None
+):
     """Build Fourier features using FFT-detected dominant periods.
 
     Parameters
@@ -852,6 +853,10 @@ def build_adaptive_fourier_features(DTindex, detected_periods, max_order=12):
         Sequence of `(period, strength)` tuples from `FFT.detect_dominant_periods()`.
     max_order : int
         Upper bound for harmonics generated per detected period.
+    n_obs : int, optional
+        Number of observations used to size the harmonic order. Pass the
+        training length when building features for a forecast index so the
+        columns match those used at fit time. Defaults to ``len(DTindex)``.
 
     Returns
     -------
@@ -865,9 +870,11 @@ def build_adaptive_fourier_features(DTindex, detected_periods, max_order=12):
     t_arr = np.asarray(t, dtype=float)
     seasonal_list = []
     period_labels = []
+    if n_obs is None:
+        n_obs = len(DTindex)
 
     for period, _strength in detected_periods[:5]:
-        n_order = min(max_order, max(2, int(len(DTindex) / period / 2)))
+        n_order = min(max_order, max(2, int(n_obs / period / 2)))
         fs = fourier_series(t_arr, p=period, n=n_order)
         seasonal_list.append(fs)
         for k in range(1, n_order + 1):

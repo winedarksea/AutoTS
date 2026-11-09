@@ -47,12 +47,23 @@ class TrendMixin:
             residual_for_level_shifts = self.general_transformer.fit_transform(
                 residual_for_level_shifts
             )
+            # Row-dropping transformers (e.g. Slice) would misalign every trend
+            # design with date_index; refill dropped rows from the untransformed residual.
+            if not residual_for_level_shifts.index.equals(final_residual.index):
+                residual_for_level_shifts = residual_for_level_shifts.reindex(
+                    final_residual.index
+                ).combine_first(final_residual)
         if self.smoothing_window and self.smoothing_window > 1:
             residual_for_level_shifts = residual_for_level_shifts.rolling(
                 window=int(self.smoothing_window),
                 center=True,
                 min_periods=1,
             ).mean()
+
+        if self._uses_joint_trend():
+            return self._detect_joint_trend_and_shifts(
+                final_residual, residual_for_level_shifts
+            )
 
         # Level shift detection on: original - anomalies - seasonality - holidays
         (
@@ -70,8 +81,15 @@ class TrendMixin:
 
         # Trend changepoint detection on: original - anomalies - seasonality - holidays - level_shifts
         trend_input = residual_for_level_shifts - level_shift_component_valid_scaled
-        changepoints, trend_component_scaled = self._detect_trend_changepoints(
-            trend_input
+        (
+            changepoints,
+            trend_component_scaled,
+            level_shift_component_valid_scaled,
+        ) = self._detect_trend_changepoints(
+            trend_input,
+            trend_and_shift_target=residual_for_level_shifts,
+            validated_level_shifts=validated_level_shifts,
+            level_shift_component=level_shift_component_valid_scaled,
         )
         slope_info = self._compute_trend_slopes(trend_component_scaled, changepoints)
 
@@ -82,6 +100,35 @@ class TrendMixin:
             changepoints,
             slope_info,
         )
+
+    @staticmethod
+    def _validate_prelim_level_shift(value):
+        if value == 'auto':
+            return 'auto'
+        return bool(value)
+
+    def _use_prelim_level_shift(self):
+        setting = getattr(self, 'prelim_level_shift', False)
+        if setting == 'auto':
+            return self.level_shift_params.get('window_method') == 'linear_gap'
+        return bool(setting)
+
+    def _preliminary_level_shift_dates(self, df_work, rough_seasonality):
+        """Level shift dates from anomaly-removed data, before final seasonality.
+
+        Fed to the final seasonality fit as trend-prior steps so the seasonal
+        regression can't absorb part of each step first.
+        """
+        df_without_anomalies = self._remove_anomalies_in_residual_space(
+            df_work, rough_seasonality
+        )
+        detector = LevelShiftMagic(**self.level_shift_params).fit(df_without_anomalies)
+        candidates = detector.extract_level_shift_dates(df_without_anomalies)
+        return {
+            col: [entry['date'] for entry in entries]
+            for col, entries in candidates.items()
+            if entries
+        }
 
     def _detect_level_shifts(self, residual_df):
         self.level_shift_detector = LevelShiftMagic(**self.level_shift_params)
@@ -95,11 +142,17 @@ class TrendMixin:
 
     def _validate_level_shifts(self, residual_df, lvlshft, candidates):
         params = self.level_shift_validation
+        if params.get('method') == 't_test':
+            return self._validate_level_shifts_t_test(residual_df, lvlshft, candidates)
         window = int(params.get('window', 14))
         pad = int(params.get('pad', 2))
-        rel_thresh = float(params.get('relative_threshold', 0.1))
-        abs_thresh = float(params.get('absolute_threshold', 0.5))
+        # None = adaptive (tightened to each series' noise); explicit values are honored.
+        rel_thresh = params.get('relative_threshold')
+        abs_thresh = params.get('absolute_threshold')
 
+        # LevelShiftMagic.lvlshft is a reverse cumsum (non-zero before a shift, zero
+        # after), and candidate dates are the first post-shift date. Removing a shift
+        # therefore adjusts the points before it.
         validated_component = lvlshft.copy()
         validated = {}
 
@@ -108,12 +161,18 @@ class TrendMixin:
             series_std = float(series.std()) or 1e-9
             series_iqr = float(series.quantile(0.75) - series.quantile(0.25)) or 1e-9
             series_median = float(np.nanmedian(series.to_numpy(dtype=float)))
-            adaptive_abs_thresh = min(abs_thresh, series_std * 0.3)
             # Guard against near-zero medians which can explode relative thresholds.
             robust_scale = max(abs(series_median), series_iqr, series_std, 1e-6)
-            dynamic_rel = 0.05 + 0.5 * (series_iqr / robust_scale)
-            dynamic_rel = float(np.clip(dynamic_rel, 0.05, 0.75))
-            adaptive_rel_thresh = min(rel_thresh, dynamic_rel)
+            if abs_thresh is None:
+                adaptive_abs_thresh = min(0.5, series_std * 0.3)
+            else:
+                adaptive_abs_thresh = float(abs_thresh)
+            if rel_thresh is None:
+                dynamic_rel = 0.05 + 0.5 * (series_iqr / robust_scale)
+                dynamic_rel = float(np.clip(dynamic_rel, 0.05, 0.75))
+                adaptive_rel_thresh = min(0.1, dynamic_rel)
+            else:
+                adaptive_rel_thresh = float(rel_thresh)
             entries = []
             for candidate in candidates.get(col, []):
                 date = candidate['date']
@@ -131,14 +190,18 @@ class TrendMixin:
                 right_window = series.iloc[right_start:right_end]
 
                 if left_window.empty or right_window.empty:
-                    validated_component.loc[date:, col] -= magnitude
+                    validated_component.loc[
+                        validated_component.index < date, col
+                    ] += magnitude
                     continue
 
                 before = float(np.nanmedian(left_window))
                 after = float(np.nanmedian(right_window))
                 change = after - before
                 abs_change = abs(change)
-                rel_change = abs_change / max(abs(before), 1e-9)
+                # The residual is roughly zero-centred, so dividing by the local level
+                # alone makes nearly every change "relatively" large.
+                rel_change = abs_change / max(abs(before), robust_scale)
 
                 if (
                     abs_change >= adaptive_abs_thresh
@@ -153,11 +216,28 @@ class TrendMixin:
                         }
                     )
                 else:
-                    validated_component.loc[date:, col] -= magnitude
+                    validated_component.loc[
+                        validated_component.index < date, col
+                    ] += magnitude
             validated[col] = entries
         return validated_component, validated
 
-    def _detect_trend_changepoints(self, trend_input):
+    def _detect_trend_changepoints(
+        self,
+        trend_input,
+        trend_and_shift_target=None,
+        validated_level_shifts=None,
+        level_shift_component=None,
+    ):
+        """Detect trend changepoints on ``trend_input`` and fit the trend.
+
+        When validated level shifts are given, step magnitudes are re-estimated
+        jointly with the hinge trend on ``trend_and_shift_target`` (the residual
+        before level-shift removal). LevelShiftMagic's own magnitudes come from
+        long rolling windows, so any slope over that window leaks into them.
+        Returns (changepoints, trend_component, level_shift_component); entries in
+        ``validated_level_shifts`` get their 'magnitude' updated in place.
+        """
         detector_params = self.changepoint_params.copy()
         aggregate_method = detector_params.pop('aggregate_method', 'individual')
         method = detector_params.pop('method', 'pelt')
@@ -199,96 +279,95 @@ class TrendMixin:
             changepoint_indices = {col: np.array([], dtype=int) for col in series_names}
             changepoints = {col: [] for col in series_names}
 
-        max_segments = 1
-        if changepoint_indices:
-            max_segments = (
-                max((len(idx) + 1) for idx in changepoint_indices.values()) or 1
-            )
-
-        segment_starts = np.zeros((max_segments, n_series), dtype=int)
-        segment_ends = np.zeros((max_segments, n_series), dtype=int)
-        valid_mask = np.zeros((max_segments, n_series), dtype=bool)
-
-        for j, col in enumerate(series_names):
-            indices = changepoint_indices.get(col, np.array([], dtype=int))
-            if indices.size:
-                indices = indices[(indices > 0) & (indices < n_samples)]
-                if indices.size:
-                    indices = np.unique(indices)
-            breaks = np.concatenate(([0], indices, [n_samples]))
-            seg_len = len(breaks) - 1
-            segment_starts[:seg_len, j] = breaks[:-1]
-            segment_ends[:seg_len, j] = breaks[1:]
-            valid_mask[:seg_len, j] = True
-
-        values = safe_df.to_numpy(dtype=float, copy=False)
+        validated_level_shifts = validated_level_shifts or {}
+        joint_shift_fit = trend_and_shift_target is not None and any(
+            validated_level_shifts.get(col) for col in series_names
+        )
+        fit_df = (
+            trend_and_shift_target.reindex(columns=series_names).ffill().bfill()
+            if joint_shift_fit
+            else safe_df
+        )
+        values = fit_df.to_numpy(dtype=float, copy=False)
         time_index = np.arange(n_samples, dtype=float)
-
-        prefix_y = np.vstack([np.zeros((1, n_series)), np.cumsum(values, axis=0)])
-        prefix_ty = np.vstack(
-            [np.zeros((1, n_series)), np.cumsum(values * time_index[:, None], axis=0)]
-        )
-        prefix_t = np.concatenate(([0.0], np.cumsum(time_index)))
-        prefix_t2 = np.concatenate(([0.0], np.cumsum(time_index**2)))
-
-        prefix_y_T = prefix_y.T
-        sum_y = np.take_along_axis(
-            prefix_y_T, segment_ends.T, axis=1
-        ) - np.take_along_axis(prefix_y_T, segment_starts.T, axis=1)
-        sum_y = sum_y.T
-
-        prefix_ty_T = prefix_ty.T
-        sum_ty = np.take_along_axis(
-            prefix_ty_T, segment_ends.T, axis=1
-        ) - np.take_along_axis(prefix_ty_T, segment_starts.T, axis=1)
-        sum_ty = sum_ty.T
-
-        sum_t = prefix_t[segment_ends] - prefix_t[segment_starts]
-        sum_t2 = prefix_t2[segment_ends] - prefix_t2[segment_starts]
-        lengths = (segment_ends - segment_starts).astype(float)
-
-        sum_y = np.where(valid_mask, sum_y, 0.0)
-        sum_ty = np.where(valid_mask, sum_ty, 0.0)
-        sum_t = np.where(valid_mask, sum_t, 0.0)
-        sum_t2 = np.where(valid_mask, sum_t2, 0.0)
-        lengths = np.where(valid_mask, lengths, 0.0)
-
-        numerator = lengths * sum_ty - sum_t * sum_y
-        denominator = lengths * sum_t2 - sum_t**2
-        slope = np.divide(
-            numerator,
-            denominator,
-            out=np.zeros_like(numerator, dtype=float),
-            where=(denominator != 0) & valid_mask,
-        )
-
-        base_slope = slope[0, :]
-        base_length = lengths[0, :]
-        base_intercept = np.divide(
-            sum_y[0, :] - base_slope * sum_t[0, :],
-            base_length,
-            out=np.zeros_like(base_slope),
-            where=base_length != 0,
-        )
-        zero_length_mask = base_length == 0
-        if np.any(zero_length_mask):
-            base_intercept[zero_length_mask] = values[0, zero_length_mask]
-
-        trend_matrix = base_intercept + base_slope * time_index[:, None]
-
-        if max_segments > 1:
-            slope_changes = slope[1:, :] - slope[:-1, :]
-            slope_changes = np.where(valid_mask[1:, :], slope_changes, 0.0)
-            hinge_positions = segment_starts[1:, :].astype(float)
-            hinge_contrib = np.maximum(
-                0.0, time_index[:, None, None] - hinge_positions[None, :, :]
+        trend_matrix = np.full((n_samples, n_series), np.nan)
+        if level_shift_component is not None:
+            level_shift_matrix = (
+                level_shift_component.reindex(columns=series_names)
+                .to_numpy(dtype=float)
+                .copy()
             )
-            trend_matrix += np.sum(hinge_contrib * slope_changes[None, :, :], axis=1)
+        else:
+            level_shift_matrix = np.zeros((n_samples, n_series))
+
+        # Fit the continuous piecewise-linear (hinge) model jointly. Fitting each
+        # segment's slope separately and chaining them from the first intercept lets
+        # per-segment mismatches accumulate into a growing level error. Series sharing
+        # changepoint and shift positions share a design matrix and are solved together.
+        finite_cols = np.isfinite(values).all(axis=0)
+        groups = {}
+        for j, col in enumerate(series_names):
+            if not finite_cols[j]:
+                continue
+            indices = changepoint_indices.get(col, np.array([], dtype=int))
+            shift_positions = ()
+            if joint_shift_fit:
+                shift_positions = tuple(
+                    sorted(
+                        {
+                            int(p)
+                            for p in self.date_index.searchsorted(
+                                pd.DatetimeIndex(
+                                    [
+                                        entry['date']
+                                        for entry in validated_level_shifts.get(col, [])
+                                    ]
+                                )
+                            )
+                            if 0 < p < n_samples
+                        }
+                    )
+                )
+            cp_key = tuple(int(cp) for cp in indices)
+            groups.setdefault((cp_key, shift_positions), []).append(j)
+        for (cp_key, shift_positions), col_positions in groups.items():
+            hinge_design = np.column_stack(
+                [np.ones(n_samples), time_index]
+                + [np.maximum(0.0, time_index - float(cp)) for cp in cp_key]
+            )
+            # LevelShiftMagic convention: -magnitude before the shift, 0 after.
+            step_design = (
+                np.column_stack(
+                    [-(time_index < p).astype(float) for p in shift_positions]
+                )
+                if shift_positions
+                else np.zeros((n_samples, 0))
+            )
+            design = np.column_stack([hinge_design, step_design])
+            beta, _, _, _ = np.linalg.lstsq(
+                design, values[:, col_positions], rcond=None
+            )
+            n_hinge = hinge_design.shape[1]
+            trend_matrix[:, col_positions] = hinge_design @ beta[:n_hinge]
+            if shift_positions:
+                step_magnitudes = beta[n_hinge:]
+                level_shift_matrix[:, col_positions] = step_design @ step_magnitudes
+                for k, j in enumerate(col_positions):
+                    magnitude_by_position = dict(
+                        zip(shift_positions, step_magnitudes[:, k])
+                    )
+                    for entry in validated_level_shifts.get(series_names[j], []):
+                        position = int(self.date_index.searchsorted(entry['date']))
+                        if position in magnitude_by_position:
+                            entry['magnitude'] = float(magnitude_by_position[position])
 
         trend_component = pd.DataFrame(
             trend_matrix, index=self.date_index, columns=series_names
         )
-        return changepoints, trend_component
+        level_shift_out = pd.DataFrame(
+            level_shift_matrix, index=self.date_index, columns=series_names
+        )
+        return changepoints, trend_component, level_shift_out
 
     def _compute_trend_slopes(self, trend_component, changepoints):
         slopes = {}

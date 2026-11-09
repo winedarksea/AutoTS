@@ -10,6 +10,12 @@ import json
 import time
 import warnings
 
+from .components.joint_trend import (
+    JOINT_TREND_METHOD,
+    mutate_joint_trend_changepoint_params,
+    sample_joint_trend_changepoint_params,
+)
+
 
 def _get_detector_class():
     """Lazy import to avoid circular dependency."""
@@ -140,8 +146,11 @@ class FeatureDetectionOptimizer:
                 detector.general_transformer_params
             ),
             'standardize': detector.standardize,
+            'global_holiday_anomaly_suppression': detector.global_holiday_anomaly_suppression,
             'smoothing_window': detector.smoothing_window,
             'extended_anomaly_params': copy.deepcopy(detector.extended_anomaly_params),
+            'seasonality_trend_prior': detector.seasonality_trend_prior,
+            'prelim_level_shift': getattr(detector, 'prelim_level_shift', 'auto'),
         }
 
     def _record_evaluation(
@@ -382,6 +391,8 @@ class FeatureDetectionOptimizer:
                 'standardize',
                 'smoothing_window',
                 'extended_anomaly_params',
+                'seasonality_trend_prior',
+                'prelim_level_shift',
             ),
         )
 
@@ -1674,6 +1685,8 @@ class FeatureDetectionOptimizer:
 
         if not params or rng.random() < 0.12:
             return ChangepointDetector.get_new_params(method='random')
+        if params.get('method') == JOINT_TREND_METHOD:
+            return mutate_joint_trend_changepoint_params(params, rng)
 
         mutated = copy.deepcopy(params)
         method_params = copy.deepcopy(mutated.get('method_params', {}))
@@ -1797,7 +1810,7 @@ class FeatureDetectionOptimizer:
             ('alpha', 0.8, 5.0, False),
             ('grouping_forward_limit', 1, 10, True),
             ('max_level_shifts', 1, 40, True),
-            ('shift_remove_window', 0, 5, True),
+            ('shift_remove_window', 0, 2, True),
         ]:
             if key in mutated and rng.random() < 0.55:
                 mutated[key] = type(self)._mutate_numeric_value(
@@ -1808,14 +1821,26 @@ class FeatureDetectionOptimizer:
                     maximum=maximum,
                 )
 
-        if 'alignment' in mutated and rng.random() < 0.2:
-            mutated['alignment'] = rng.choice(
-                ['average', 'last_value', 'rolling_diff', 'rolling_diff_3nn']
-            )
         if 'window_method' in mutated and rng.random() < 0.2:
             mutated['window_method'] = rng.choice(
-                ['overlap', 'exclusive', 'diff_overlap']
+                ['overlap', 'exclusive', 'diff_overlap', 'linear_gap']
             )
+        window_method = mutated.get('window_method', 'overlap')
+        valid_alignments = LevelShiftMagic.valid_alignments(window_method)
+        if rng.random() < 0.2 or mutated.get('alignment') not in (
+            None,
+            *valid_alignments,
+        ):
+            mutated['alignment'] = rng.choice(valid_alignments)
+        # linear_gap alpha is a robust z (3-6), legacy alpha a std multiplier
+        if window_method == 'linear_gap':
+            mutated['alpha'] = min(max(float(mutated.get('alpha', 4.0)), 3.0), 6.0)
+            if rng.random() < 0.2:
+                mutated['scales'] = rng.choices(
+                    [None, [7, 14, 30, 60], [30], [60]], [0.45, 0.35, 0.1, 0.1]
+                )[0]
+            if rng.random() < 0.15:
+                mutated['tail_scan'] = not bool(mutated.get('tail_scan', True))
 
         mutated['output'] = 'multivariate'
         return mutated
@@ -1864,9 +1889,10 @@ class FeatureDetectionOptimizer:
         Curriculum Learning (sigma annealing)
             Three stages with decreasing sigma drive the search from coarse to
             fine sensitivity:
-              Stage 1: sigma=14 days — wide window builds initial recall
-              Stage 2: sigma=7 days  — medium window matches ±7-day tolerance
-              Stage 3: sigma=3.5 days — tight window polishes placement precision
+
+            - Stage 1: sigma=14 days — wide window builds initial recall
+            - Stage 2: sigma=7 days  — medium window matches ±7-day tolerance
+            - Stage 3: sigma=3.5 days — tight window polishes placement precision
 
         Parameters
         ----------
@@ -2061,6 +2087,9 @@ class FeatureDetectionOptimizer:
                 'autoencoder',
                 'multiresolution',
             ]
+        # The detector-level joint method is not a ChangepointDetector method,
+        # so it is added here explicitly to be considered by the sweep.
+        all_cp_methods = all_cp_methods + [JOINT_TREND_METHOD]
         diversity_methods = [
             m
             for m in all_cp_methods
@@ -2069,7 +2098,10 @@ class FeatureDetectionOptimizer:
         for sweep_method in diversity_methods:
             sweep_candidate = copy.deepcopy(best_params)
             try:
-                sweep_cp = ChangepointDetector.get_new_params(method='random')
+                if sweep_method == JOINT_TREND_METHOD:
+                    sweep_cp = sample_joint_trend_changepoint_params(rng)
+                else:
+                    sweep_cp = ChangepointDetector.get_new_params(method='random')
                 # Force the method to the sweep target.
                 sweep_cp['method'] = sweep_method
                 sweep_cp['aggregate_method'] = 'individual'
@@ -2129,6 +2161,8 @@ class FeatureDetectionOptimizer:
                 fresh_cp = self._local_mutate_changepoint_params(
                     candidate.get('changepoint_params', {}), rng
                 )
+            elif rng.random() < 0.12:
+                fresh_cp = sample_joint_trend_changepoint_params(rng)
             else:
                 fresh_cp = ChangepointDetector.get_new_params(method='random')
             # If the sampled method is excluded, resample randomly.

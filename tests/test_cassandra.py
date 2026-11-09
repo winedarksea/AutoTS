@@ -82,10 +82,10 @@ class CassandraTest(unittest.TestCase):
                 },
             ]
         }
-        past_impacts = pd.DataFrame(0, index=df_train.index, columns=df_train.columns)
+        past_impacts = pd.DataFrame(0.0, index=df_train.index, columns=df_train.columns)
         past_impacts.iloc[-10:, 0] = np.geomspace(1, 10)[0:10] / 100
         past_impacts.iloc[-30:, -1] = np.linspace(1, 10)[0:30] / -100
-        future_impacts = pd.DataFrame(0, index=df_test.index, columns=df_test.columns)
+        future_impacts = pd.DataFrame(0.0, index=df_test.index, columns=df_test.columns)
         future_impacts.iloc[0:10, 0] = (np.linspace(1, 10)[0:10] + 10) / 100
 
         c_params = Cassandra().get_new_params()

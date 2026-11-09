@@ -27,12 +27,15 @@ def nan_percentile(in_arr, q, method="linear", axis=0, errors="raise"):
     Beware this is only tested for the limited case required here, and will not match np fully.
     Args more limited. If errors="rollover" passes to np.nanpercentile where args are not supported.
     """
+    # no copy here: NaN filling below allocates a new array, so caller data (or a read-only
+    # pandas copy-on-write view) is never written to
+    arr = np.asarray(in_arr)
+    if not np.issubdtype(arr.dtype, np.floating):
+        arr = arr.astype(float)
     flag_2d = False
-    if in_arr.ndim == 2:
-        arr = np.expand_dims(in_arr, 1)
+    if arr.ndim == 2:
+        arr = np.expand_dims(arr, 1)
         flag_2d = True
-    else:
-        arr = in_arr.copy()
     if (
         axis != 0
         or method not in ["linear", "nearest", "lowest", "highest"]
@@ -46,9 +49,9 @@ def nan_percentile(in_arr, q, method="linear", axis=0, errors="raise"):
     valid_obs = np.sum(np.isfinite(arr), axis=0)
     # replace NaN with maximum
     max_val = np.nanmax(arr)
-    arr[np.isnan(arr)] = max_val
-    # sort - former NaNs will move to the end
-    arr = np.sort(arr, axis=0)
+    arr = np.where(np.isnan(arr), max_val, arr)
+    # sort in place on the new array - former NaNs will move to the end
+    arr.sort(axis=0)
 
     # loop over requested quantiles
     if type(q) is list:
@@ -91,7 +94,7 @@ def nan_percentile(in_arr, q, method="linear", axis=0, errors="raise"):
             f_arr = np.floor(k_arr).astype(np.int32)
             quant_arr = _zvalue_from_index(arr=arr, ind=f_arr)
         elif method == 'highest':
-            f_arr = np.ceiling(k_arr).astype(np.int32)
+            f_arr = np.ceil(k_arr).astype(np.int32)
             quant_arr = _zvalue_from_index(arr=arr, ind=f_arr)
         else:
             raise ValueError("interpolation method not supported")
@@ -110,7 +113,12 @@ def nan_quantile(arr, q, method="linear", axis=0, errors="raise"):
     """Same as nan_percentile but accepts q in range [0, 1].
     Args more limited. If errors="rollover" passes to np.nanpercentile where not supported.
     """
-    return nan_percentile(arr, q * 100, method=method, axis=axis, errors=errors)
+    # scale elementwise: `list * 100` would repeat the list, not scale it
+    if np.ndim(q) > 0:
+        q = (np.asarray(q, dtype=float) * 100).tolist()
+    else:
+        q = q * 100
+    return nan_percentile(arr, q, method=method, axis=axis, errors=errors)
 
 
 def trimmed_mean(data, percent, axis=0):

@@ -1,0 +1,214 @@
+"""Profiler numerical equivalence, identity, and failure reporting regressions."""
+
+import unittest
+import warnings
+from unittest.mock import patch
+
+import numpy as np
+import pandas as pd
+
+from autots import AutoTS
+from autots.tools.profile import (
+    ProfileWarning,
+    profile_time_series,
+    profile_time_series_mapping,
+    summarize_series,
+)
+
+
+def legacy_autocorrelation(df):
+    with np.errstate(divide='ignore', invalid='ignore'):
+        correlations = np.corrcoef(df.bfill().T, df.shift(1).bfill().T)
+    return np.diag(correlations[: df.shape[1], df.shape[1] :])
+
+
+class TestProfile(unittest.TestCase):
+    def setUp(self):
+        random = np.random.default_rng(17)
+        self.df = pd.DataFrame(
+            100 + random.normal(size=(400, 8)).cumsum(axis=0),
+            index=pd.date_range('2023-01-01', periods=400),
+            columns=list('hgfedcba'),
+        )
+
+    def assert_legacy_autocorrelation(self, df):
+        original = df.copy(deep=True)
+        expected = legacy_autocorrelation(df)
+        actual = summarize_series(df).loc['autocorr_1'].to_numpy(dtype=float)
+        np.testing.assert_array_equal(np.isnan(actual), np.isnan(expected))
+        np.testing.assert_allclose(actual, expected, rtol=0, atol=1e-12)
+        pd.testing.assert_frame_equal(df, original)
+
+    def test_autocorrelation_numeric_types(self):
+        for dtype in ('float64', 'float32', 'int64'):
+            with self.subTest(dtype=dtype):
+                self.assert_legacy_autocorrelation(self.df.astype(dtype))
+
+    def test_autocorrelation_missing_and_constant_values(self):
+        df = self.df.copy()
+        df.iloc[:80, 0] = np.nan
+        df.iloc[-60:, 1] = np.nan
+        df.iloc[100:130, 2] = np.nan
+        df.iloc[-1, 3] = np.nan
+        df['constant'] = 7.0
+        df['zero'] = 0.0
+        df['all_nan'] = np.nan
+        with np.errstate(divide='ignore', invalid='ignore'):
+            self.assert_legacy_autocorrelation(df)
+
+    def test_profiles_match_legacy_autocorrelation(self):
+        expected = profile_time_series(self.df)
+        with patch(
+            'autots.tools.profile._lag_one_autocorrelation',
+            side_effect=legacy_autocorrelation,
+        ):
+            actual = profile_time_series(self.df)
+        pd.testing.assert_frame_equal(actual, expected)
+
+    def test_named_columns_preserve_identity_and_input(self):
+        expected = profile_time_series(self.df)
+        for name in ('series_id', 'PROFILE', 'SERIES'):
+            df = self.df.rename_axis(name, axis='columns')
+            original = df.copy(deep=True)
+            with self.subTest(name=name):
+                actual = profile_time_series(df)
+                pd.testing.assert_frame_equal(actual, expected)
+                self.assertEqual(actual['SERIES'].tolist(), df.columns.tolist())
+                pd.testing.assert_frame_equal(df, original)
+
+    def test_fit_data_retains_named_pivot_profiles(self):
+        df = self.df.rename_axis('series_id', axis='columns')
+        original = df.copy(deep=True)
+        model = AutoTS(
+            forecast_length=7,
+            model_list=['LastValueNaive'],
+            ensemble=None,
+            max_generations=0,
+            num_validations=0,
+            verbose=-1,
+        )
+        model.fit_data(df)
+        expected = profile_time_series(model.df_wide_numeric).set_index('SERIES')
+        self.assertEqual(model.series_profiles, expected['PROFILE'].to_dict())
+        self.assertEqual(set(model.series_profiles), set(df.columns))
+        pd.testing.assert_frame_equal(df, original)
+
+    def test_multiindex_identifiers_keep_their_existing_output_format(self):
+        df = self.df.iloc[:, :2].copy()
+        expected_profiles = profile_time_series(df)['PROFILE'].to_numpy()
+        labels = [('group_a', 'x'), ('group_b', 'y')]
+        for names in (('group', 'id'), (None, None), ('index', 'id')):
+            with self.subTest(names=names):
+                df.columns = pd.MultiIndex.from_tuples(labels, names=names)
+                original = df.copy(deep=True)
+                identifier_names = [
+                    name if name is not None else f'level_{level}'
+                    for level, name in enumerate(names)
+                ]
+                expected = pd.DataFrame(labels, columns=identifier_names).rename(
+                    columns={'index': 'SERIES'}
+                )
+                expected['PROFILE'] = expected_profiles
+                pd.testing.assert_frame_equal(profile_time_series(df), expected)
+                pd.testing.assert_frame_equal(df, original)
+
+    def test_profile_mapping_preserves_original_labels(self):
+        expected = profile_time_series(self.df)['PROFILE'].tolist()
+        for columns in (
+            self.df.columns,
+            self.df.columns.rename('series_id'),
+            pd.MultiIndex.from_product([['b', 'a'], range(4)], names=['group', 'id']),
+            pd.MultiIndex.from_product([['b', 'a'], range(4)]),
+            pd.MultiIndex.from_product([['b', 'a'], range(4)], names=['SERIES', 'id']),
+            pd.MultiIndex.from_product([['b', 'a'], range(4)], names=['index', 'id']),
+            pd.MultiIndex.from_product([['b', 'a'], [1, 0], ['y', 'x']]),
+        ):
+            with self.subTest(columns=columns):
+                df = self.df.copy()
+                df.columns = columns
+                self.assertEqual(
+                    profile_time_series_mapping(df), dict(zip(columns, expected))
+                )
+
+    def test_fit_data_retains_multiindex_profiles(self):
+        df = self.df.copy()
+        df.columns = pd.MultiIndex.from_product(
+            [['b', 'a'], range(4)], names=['group', 'id']
+        )
+        original = df.copy(deep=True)
+        expected = dict(zip(df.columns, profile_time_series(self.df)['PROFILE']))
+        model = AutoTS(
+            forecast_length=7,
+            model_list=['LastValueNaive'],
+            ensemble=None,
+            max_generations=0,
+            num_validations=0,
+            verbose=-1,
+        )
+        model.fit_data(df)
+        self.assertEqual(model.series_profiles, expected)
+        pd.testing.assert_frame_equal(df, original)
+
+    def test_autocorrelation_failure_warns_and_omits_metric(self):
+        with patch(
+            'autots.tools.profile._lag_one_autocorrelation',
+            side_effect=ValueError('autocorrelation unavailable'),
+        ), self.assertWarnsRegex(ProfileWarning, 'autocorr_1.*ValueError'):
+            summary = summarize_series(self.df)
+        self.assertNotIn('autocorr_1', summary.index)
+        self.assertIn('season_trend_percent', summary.index)
+
+    def test_decomposition_failure_warns_and_preserves_fallbacks(self):
+        with patch(
+            'autots.tools.profile.BasicLinearModel.fit',
+            side_effect=ValueError('decomposition unavailable'),
+        ), self.assertWarnsRegex(ProfileWarning, 'decomposition.*ValueError'):
+            summary = summarize_series(self.df)
+        np.testing.assert_array_equal(summary.loc['season_trend_percent'], 0)
+        pd.testing.assert_series_equal(
+            summary.loc['deseasonalized_mean'],
+            summary.loc['mean'],
+            check_names=False,
+        )
+        expected_cv = (self.df.std() / self.df.abs().mean().replace(0, 1)) ** 2
+        np.testing.assert_allclose(summary.loc['cv_squared'], expected_cv)
+
+    def test_empty_series_labels(self):
+        df = self.df.iloc[:, :1].copy()
+        df['zero'] = 0.0
+        df['all_nan'] = np.nan
+        with np.errstate(divide='ignore', invalid='ignore'):
+            profiles = profile_time_series(df).set_index('SERIES')['PROFILE']
+            summary = summarize_series(df)
+        self.assertEqual(profiles['zero'], 'flat')
+        self.assertEqual(profiles['all_nan'], 'new_product')
+        self.assertEqual(summary.loc['null_percentage', 'zero'], 0)
+        self.assertEqual(summary.loc['null_percentage', 'all_nan'], 1)
+
+    def test_all_nan_series_does_not_zero_seasonality_of_others(self):
+        t = np.arange(400)
+        random = np.random.default_rng(3)
+        seasonal = pd.DataFrame(
+            {
+                f's{i}': 100
+                + 60 * np.sin(2 * np.pi * t / 7)
+                + 40 * np.sin(2 * np.pi * t / 365.25)
+                + random.normal(scale=0.5, size=t.size)
+                for i in range(3)
+            },
+            index=pd.date_range('2022-01-01', periods=t.size),
+        )
+        df = seasonal.copy()
+        df['all_nan'] = np.nan
+        expected = summarize_series(seasonal).loc['season_trend_percent']
+        with warnings.catch_warnings():
+            warnings.simplefilter('error', ProfileWarning)
+            with np.errstate(divide='ignore', invalid='ignore'):
+                summary = summarize_series(df)
+                profiles = profile_time_series(df).set_index('SERIES')['PROFILE']
+        pd.testing.assert_series_equal(
+            summary.loc['season_trend_percent', seasonal.columns], expected
+        )
+        self.assertTrue(np.isnan(summary.loc['season_trend_percent', 'all_nan']))
+        self.assertEqual(profiles[seasonal.columns].tolist(), ['highly_seasonal'] * 3)
+        self.assertEqual(profiles['all_nan'], 'new_product')

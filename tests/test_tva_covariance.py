@@ -341,6 +341,25 @@ class TestForecastCovariance(unittest.TestCase):
         self.assertIsNotNone(long)
         self.assertFalse(np.allclose(short[0], long[0]))
 
+    def test_default_horizon_is_the_forecast_horizon_not_the_capped_fit(self):
+        # factor/none cap _fit_horizon at max(28, T // 4); the default
+        # covariance must still describe the configured forecast_horizon
+        none_long = _fit(self.df, self.meta, trend_network='none', forecast_horizon=200)
+        self.assertLess(none_long._fit_horizon, 200)
+        _sigma, info = none_long.forecast_covariance()
+        self.assertEqual(info['horizon'], 200)
+        self.assertEqual(info['requested_horizon'], 200)
+
+    def test_unestimable_horizon_falls_back_to_fit_horizon(self):
+        # T=520 leaves no rolling origins for the factor residuals at H=200,
+        # so the shorter fit-horizon estimate stands in, and says so
+        factor_long = _fit(
+            self.df, self.meta, trend_network='factor', forecast_horizon=200
+        )
+        _sigma, info = factor_long.forecast_covariance()
+        self.assertEqual(info['horizon'], factor_long._fit_horizon)
+        self.assertEqual(info['requested_horizon'], 200)
+
     def test_unfitted_returns_none(self):
         from autots.evaluator.tva.tva import TVA
 

@@ -116,7 +116,8 @@ def load_live_daily(
         london_species (str): what measurement to pull from London Air. Not all stations have all metrics.
         earthquake_min_magnitude (int): smallest earthquake magnitude to pull from earthquake.usgs.gov. Set None to skip this.
         gsa_key (str): api key from https://open.gsa.gov/api/dap/
-        nasa_api_key (str): API key for https://api.nasa.gov/. Set to None to skip NASA DONKI data.
+        nasa_api_key (str): Set to None to skip NASA DONKI data. Retained for compatibility;
+            the public CCMC DONKI API does not require an API key.
         gov_domain_list (list): dist of government run domains to get traffic data for. Can be very slow, so fewer is better.
             some examples: ['usps.com', 'ncbi.nlm.nih.gov', 'cdc.gov', 'weather.gov', 'irs.gov', "usajobs.gov", "studentaid.gov", 'nasa.gov', "uk.usembassy.gov", "tsunami.gov"]
         gov_domain_limit (int): max number of records. Smaller will be faster. Max is currently 10000.
@@ -537,7 +538,6 @@ def load_live_daily(
     if nasa_api_key is not None:
         _blk = _start_source("NASA space weather")
         try:
-            nasa_key = nasa_api_key if nasa_api_key else "DEMO_KEY"
             # convert observation window to NASA-compatible YYYY-MM-DD strings
             nasa_start_dt = pd.to_datetime(observation_start, errors="coerce")
             nasa_end_dt = pd.to_datetime(current_date, errors="coerce")
@@ -579,11 +579,13 @@ def load_live_daily(
                 filled.index.name = series.index.name
                 return filled
 
-            base_url = "https://api.nasa.gov/DONKI/"
+            # CCMC migrated DONKI on September 30, 2026; the api.nasa.gov
+            # gateway returns upstream 503 errors. The public API needs no key.
+            # https://ccmc.gsfc.nasa.gov/news/major-updates/
+            base_url = "https://ccmc.gsfc.nasa.gov/DONKI-API/get/"
             common_params = {
                 "startDate": nasa_start_str,
                 "endDate": nasa_end_str,
-                "api_key": nasa_key,
             }
 
             # Daily Solar Flare Count

@@ -14,11 +14,11 @@
         gtag('config', 'G-P2KLF8302E');
     </script>
     
-    <title>autots.evaluator.feature_detector package &#8212; AutoTS 1.0.4 documentation</title>
+    <title>autots.evaluator.feature_detector package &#8212; AutoTS 1.0.5 documentation</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=ec641305" />
-    <script src="../_static/documentation_options.js?v=71272d9f"></script>
+    <script src="../_static/documentation_options.js?v=d55fa986"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../genindex.html" />
@@ -60,6 +60,12 @@
 </li>
 <li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.components.html#module-autots.evaluator.feature_detector.components.holidays">autots.evaluator.feature_detector.components.holidays module</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.holidays.HolidayMixin"><code class="docutils literal notranslate"><span class="pre">HolidayMixin</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.components.html#module-autots.evaluator.feature_detector.components.joint_trend">autots.evaluator.feature_detector.components.joint_trend module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.joint_trend.JointTrendMixin"><code class="docutils literal notranslate"><span class="pre">JointTrendMixin</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.joint_trend.mutate_joint_trend_changepoint_params"><code class="docutils literal notranslate"><span class="pre">mutate_joint_trend_changepoint_params()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.joint_trend.sample_joint_trend_changepoint_params"><code class="docutils literal notranslate"><span class="pre">sample_joint_trend_changepoint_params()</span></code></a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.components.html#module-autots.evaluator.feature_detector.components.seasonality">autots.evaluator.feature_detector.components.seasonality module</a><ul>
@@ -122,8 +128,37 @@
 <li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.formatting.FormattingMixin"><code class="docutils literal notranslate"><span class="pre">FormattingMixin</span></code></a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#module-autots.evaluator.feature_detector.utils.joint_trend_selection">autots.evaluator.feature_detector.utils.joint_trend_selection module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.joint_trend_selection.HingeStepCandidates"><code class="docutils literal notranslate"><span class="pre">HingeStepCandidates</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.joint_trend_selection.HingeStepCandidates.column"><code class="docutils literal notranslate"><span class="pre">HingeStepCandidates.column()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.joint_trend_selection.HingeStepCandidates.dots"><code class="docutils literal notranslate"><span class="pre">HingeStepCandidates.dots()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.joint_trend_selection.HingeStepCandidates.norm2"><code class="docutils literal notranslate"><span class="pre">HingeStepCandidates.norm2()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.joint_trend_selection.JointTrendModel"><code class="docutils literal notranslate"><span class="pre">JointTrendModel</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.joint_trend_selection.JointTrendModel.basis_and_residual"><code class="docutils literal notranslate"><span class="pre">JointTrendModel.basis_and_residual()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.joint_trend_selection.JointTrendModel.design"><code class="docutils literal notranslate"><span class="pre">JointTrendModel.design()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.joint_trend_selection.JointTrendModel.term_statistics"><code class="docutils literal notranslate"><span class="pre">JointTrendModel.term_statistics()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.joint_trend_selection.joint_fit"><code class="docutils literal notranslate"><span class="pre">joint_fit()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.joint_trend_selection.profile_likelihood_windows"><code class="docutils literal notranslate"><span class="pre">profile_likelihood_windows()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.joint_trend_selection.select_hinge_step_terms"><code class="docutils literal notranslate"><span class="pre">select_hinge_step_terms()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.joint_trend_selection.split_transient_step_pairs"><code class="docutils literal notranslate"><span class="pre">split_transient_step_pairs()</span></code></a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#module-autots.evaluator.feature_detector.utils.rescaling">autots.evaluator.feature_detector.utils.rescaling module</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.rescaling.RescalingMixin"><code class="docutils literal notranslate"><span class="pre">RescalingMixin</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#module-autots.evaluator.feature_detector.utils.trend_forecast">autots.evaluator.feature_detector.utils.trend_forecast module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.trend_forecast.damped_trend_steps"><code class="docutils literal notranslate"><span class="pre">damped_trend_steps()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.trend_forecast.future_trend_change_variance"><code class="docutils literal notranslate"><span class="pre">future_trend_change_variance()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.trend_forecast.resolve_trend_damping"><code class="docutils literal notranslate"><span class="pre">resolve_trend_damping()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.trend_forecast.segment_sxx"><code class="docutils literal notranslate"><span class="pre">segment_sxx()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.trend_forecast.shrink_last_slope"><code class="docutils literal notranslate"><span class="pre">shrink_last_slope()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.trend_forecast.trend_change_rates"><code class="docutils literal notranslate"><span class="pre">trend_change_rates()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.trend_forecast.validate_trend_damping"><code class="docutils literal notranslate"><span class="pre">validate_trend_damping()</span></code></a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="autots.evaluator.feature_detector.utils.html#module-autots.evaluator.feature_detector.utils">Module contents</a></li>
@@ -142,8 +177,8 @@
 seasonality, trend, holidays, anomalies, rescaling, and formatting.</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.detector.</span></span><span class="sig-name descname"><span class="pre">TimeSeriesFeatureDetector</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seasonality_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rough_seasonality_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anomaly_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">changepoint_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shift_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shift_validation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">general_transformer_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">smoothing_window</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">standardize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">detection_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'multivariate'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">global_holiday_anomaly_suppression</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">extended_anomaly_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">event_dag_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_country</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_countries</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector" title="Link to this definition">¶</a></dt>
-<dd><p>Bases: <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.decomposition.DecompositionMixin" title="autots.evaluator.feature_detector.components.decomposition.DecompositionMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">DecompositionMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.seasonality.SeasonalityMixin" title="autots.evaluator.feature_detector.components.seasonality.SeasonalityMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">SeasonalityMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.trend.TrendMixin" title="autots.evaluator.feature_detector.components.trend.TrendMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">TrendMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.holidays.HolidayMixin" title="autots.evaluator.feature_detector.components.holidays.HolidayMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">HolidayMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.anomalies.AnomalyMixin" title="autots.evaluator.feature_detector.components.anomalies.AnomalyMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">AnomalyMixin</span></code></a>, <a class="reference internal" href="#autots.evaluator.feature_detector.extended_anomaly.ExtendedAnomalyMixin" title="autots.evaluator.feature_detector.extended_anomaly.ExtendedAnomalyMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">ExtendedAnomalyMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.rescaling.RescalingMixin" title="autots.evaluator.feature_detector.utils.rescaling.RescalingMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">RescalingMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.formatting.FormattingMixin" title="autots.evaluator.feature_detector.utils.formatting.FormattingMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">FormattingMixin</span></code></a></p>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.detector.</span></span><span class="sig-name descname"><span class="pre">TimeSeriesFeatureDetector</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seasonality_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rough_seasonality_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anomaly_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">changepoint_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shift_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shift_validation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">general_transformer_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">smoothing_window</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">standardize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">detection_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'multivariate'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">global_holiday_anomaly_suppression</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">extended_anomaly_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">event_dag_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_country</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_countries</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trend_damping</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seasonality_trend_prior</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prelim_level_shift</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.decomposition.DecompositionMixin" title="autots.evaluator.feature_detector.components.decomposition.DecompositionMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">DecompositionMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.seasonality.SeasonalityMixin" title="autots.evaluator.feature_detector.components.seasonality.SeasonalityMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">SeasonalityMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.trend.TrendMixin" title="autots.evaluator.feature_detector.components.trend.TrendMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">TrendMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.joint_trend.JointTrendMixin" title="autots.evaluator.feature_detector.components.joint_trend.JointTrendMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">JointTrendMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.holidays.HolidayMixin" title="autots.evaluator.feature_detector.components.holidays.HolidayMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">HolidayMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.anomalies.AnomalyMixin" title="autots.evaluator.feature_detector.components.anomalies.AnomalyMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">AnomalyMixin</span></code></a>, <a class="reference internal" href="#autots.evaluator.feature_detector.extended_anomaly.ExtendedAnomalyMixin" title="autots.evaluator.feature_detector.extended_anomaly.ExtendedAnomalyMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">ExtendedAnomalyMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.rescaling.RescalingMixin" title="autots.evaluator.feature_detector.utils.rescaling.RescalingMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">RescalingMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.formatting.FormattingMixin" title="autots.evaluator.feature_detector.utils.formatting.FormattingMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">FormattingMixin</span></code></a></p>
 <p>Comprehensive feature detection pipeline for time series.</p>
 <p>TODO: upstream more of this code into the component classes (e.g., HolidayDetector, AnomalyRemoval, ChangepointDetector)
 TODO: Handle multiplicative seasonality
@@ -155,45 +190,62 @@ TODO: Support for modeling the trend with a fast kalman state space approach, id
 TODO: consider also having “deviation from group” type anomaly detection for multivariate series
 TODO: Improve anomaly typing in univariate mode (currently defaults to point_outlier) and incorporate detector scores into type confidence.
 TODO: Detect and expose non-holiday regressor impacts (not just holiday coefficients), and persist them in template/features output.</p>
-<blockquote>
-<div><p>Parameters</p>
-</div></blockquote>
-<dl>
-<dt>rough_seasonality_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for DatepartRegressionTransformer used in initial rough seasonality decomposition (to improve holiday and anomaly detection).</p>
-</dd>
-<dt>holiday_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for HolidayDetector</p>
-</dd>
-<dt>anomaly_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for AnomalyRemoval</p>
-</dd>
-<dt>changepoint_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for ChangepointDetector</p>
-</dd>
-<dt>level_shift_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for LevelShiftMagic</p>
-</dd>
-<dt>level_shift_validation<span class="classifier">dict, optional</span></dt><dd><p>Validation parameters for level shifts</p>
-</dd>
-<dt>general_transformer_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for GeneralTransformer applied before trend detection</p>
-</dd>
-<dt>smoothing_window<span class="classifier">int, optional</span></dt><dd><p>Window size for smoothing before trend detection</p>
-</dd>
-<dt>standardize<span class="classifier">bool, default=True</span></dt><dd><p>Whether to standardize series before processing</p>
-</dd>
-<dt>detection_mode<span class="classifier">str, default=’multivariate’</span></dt><dd><p>Controls whether detections are unique per series (‘multivariate’) or
-shared across all series (‘univariate’).
-- ‘multivariate’: Each series gets unique anomalies, holidays, changepoints, and level shifts
-- ‘univariate’: All series share common anomalies, holidays, changepoints, and level shifts</p>
-<blockquote>
-<div><p>(level shifts are detected on aggregated signal and scaled appropriately per series)</p>
-</div></blockquote>
-</dd>
-<dt>global_holiday_anomaly_suppression<span class="classifier">bool, default=True</span></dt><dd><p>If True, anomaly detection suppresses holiday-proximate flags using a merged holiday
-date set from all series. Set False to disable this suppression.</p>
-</dd>
-<dt>extended_anomaly_params<span class="classifier">dict, default=None</span></dt><dd><p>Opt-in second anomaly pass detecting multi-day/sustained patterns
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>seasonality_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Parameters for DatepartRegressionTransformer used in final seasonality fit</p></li>
+<li><p><strong>rough_seasonality_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Parameters for DatepartRegressionTransformer used in initial rough seasonality decomposition (to improve holiday and anomaly detection).</p></li>
+<li><p><strong>holiday_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Parameters for HolidayDetector</p></li>
+<li><p><strong>anomaly_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Parameters for AnomalyRemoval</p></li>
+<li><p><strong>changepoint_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Parameters for ChangepointDetector. <code class="docutils literal notranslate"><span class="pre">method='joint_hinge_step'</span></code> (opt-in)
+instead selects slope changes and level shifts jointly in one regression
+with a BIC stop; see <code class="docutils literal notranslate"><span class="pre">components.joint_trend.DEFAULT_JOINT_TREND_PARAMS</span></code>
+for its <code class="docutils literal notranslate"><span class="pre">method_params</span></code>.</p></li>
+<li><p><strong>level_shift_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Parameters for LevelShiftMagic</p></li>
+<li><p><strong>level_shift_validation</strong> (<em>dict</em><em>, </em><em>optional</em>) – Validation parameters for level shifts: ‘window’, ‘pad’,
+‘absolute_threshold’, ‘relative_threshold’. Thresholds that are omitted
+adapt to each series’ noise; thresholds that are given are used as-is.
+<code class="docutils literal notranslate"><span class="pre">{'method':</span> <span class="pre">'t_test',</span> <span class="pre">'window_days':</span> <span class="pre">90,</span> <span class="pre">'t_threshold':</span> <span class="pre">4.0}</span></code> (opt-in)
+keeps a candidate only if its step is significant in a local line+step fit.</p></li>
+<li><p><strong>general_transformer_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Parameters for GeneralTransformer applied before trend detection.
+None uses default filters; {} disables the transform.</p></li>
+<li><p><strong>smoothing_window</strong> (<em>int</em><em>, </em><em>optional</em>) – Window size for smoothing before trend detection</p></li>
+<li><p><strong>standardize</strong> (<em>bool</em><em>, </em><em>default=True</em>) – Whether to standardize series before processing</p></li>
+<li><p><strong>detection_mode</strong> (<em>str</em><em>, </em><em>default='multivariate'</em>) – <p>Controls whether detections are unique per series (‘multivariate’) or
+shared across all series (‘univariate’).</p>
+<ul>
+<li><p>’multivariate’: Each series gets unique anomalies, holidays, changepoints, and level shifts</p></li>
+<li><p>’univariate’: All series share common anomalies, holidays, changepoints, and level shifts
+(level shifts are detected on aggregated signal and scaled appropriately per series)</p></li>
+</ul>
+</p></li>
+<li><p><strong>global_holiday_anomaly_suppression</strong> (<em>bool</em><em> or </em><em>None</em><em>, </em><em>default=True</em>) – None scopes suppression per series and compares the same holiday in other
+years, retaining flags with fewer than two peer years. True uses the legacy
+merged dates and pooled strengths across holiday windows. False disables it.</p></li>
+<li><p><strong>extended_anomaly_params</strong> (<em>dict</em><em>, </em><em>default=None</em>) – Opt-in second anomaly pass detecting multi-day/sustained patterns
 (see ExtendedAnomalyDetector). Disabled unless a truthy dict is given;
 <code class="docutils literal notranslate"><span class="pre">default_extended_anomaly_params()</span></code> supplies a usable starting point.
 Off by default: sustained changes are already reported as level shifts
 and trend changepoints, and labelling them as anomalies as well makes
-the anomaly output span most of the timeline on typical data.</p>
+the anomaly output span most of the timeline on typical data.</p></li>
+<li><p><strong>trend_damping</strong> (<em>{'auto'</em><em>, </em><em>float</em><em>, </em><em>None}</em><em>, </em><em>default='auto'</em>) – Per-period damping factor phi in (0, 1] applied to the extrapolated slope
+in <code class="docutils literal notranslate"><span class="pre">forecast()</span></code> (trend increment at step h is slope * phi**h).
+‘auto’ = 0.99 per day, compounded to the data’s period length.
+None or 1.0 = undamped; values outside (0, 1] raise ValueError.</p></li>
+<li><p><strong>seasonality_trend_prior</strong> (<em>bool</em><em>, </em><em>default=True</em>) – Remove a linear trend (plus steps at validated level shifts), fit jointly
+with weekly/yearly Fourier terms, before the final seasonality fit, so
+the seasonal regressors cannot absorb trend as a yearly sawtooth. Joint
+trend mode uses its own prior and ignores this. TVA ‘factor’ mode turns
+it off: there it caused forecast blow-ups (MASE up to ~1e5) on the TVA
+benchmark while helping the detector’s own forecast.</p></li>
+<li><p><strong>prelim_level_shift</strong> (<em>bool</em><em> or </em><em>'auto'</em><em>, </em><em>default='auto'</em>) – Run LevelShiftMagic (with <code class="docutils literal notranslate"><span class="pre">level_shift_params</span></code>) on the anomaly-removed
+data before the final seasonality fit and pass its dates in as steps of
+the seasonality trend prior. Without it the day-of-year seasonality fit
+can absorb a step (notably near a year boundary) before level shifts are
+detected. ‘auto’ enables it only for <code class="docutils literal notranslate"><span class="pre">window_method='linear_gap'</span></code>
+params (the default), whose strict thresholds need it; with loose legacy
+params it mainly adds false positives.</p></li>
+</ul>
 </dd>
 </dl>
 <dl class="py attribute">
@@ -228,9 +280,25 @@ the anomaly output span most of the timeline on typical data.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.forecast">
-<span class="sig-name descname"><span class="pre">forecast</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">forecast_length</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">frequency</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prediction_interval</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.9</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.forecast" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">forecast</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">forecast_length</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">frequency</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prediction_interval</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.9</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trend_change_variance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slope_shrinkage</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slope_recency_days</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">180.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trend_damping</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.detector.TimeSeriesFeatureDetector.forecast" title="Link to this definition">¶</a></dt>
 <dd><p>Generate a simple forward projection similar to BasicLinearModel.
 This detector is not optimized for forecasting; dedicated forecasting models may provide better results.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>trend_change_variance</strong> (<em>bool</em>) – widen intervals for future changepoints
+and level shifts at the rates detected in training.</p></li>
+<li><p><strong>slope_shrinkage</strong> (<em>bool</em>) – shrink the last trend segment’s slope toward a
+recency-weighted average of earlier segment slopes, strongest when
+the last segment is short.</p></li>
+<li><p><strong>slope_recency_days</strong> (<em>float</em>) – e-folding age, in calendar days, of the
+earlier-segment weights used by slope_shrinkage.</p></li>
+<li><p><strong>trend_damping</strong> (<em>float</em><em> or </em><em>'auto'</em>) – per-period damping phi of the
+extrapolated slope; None uses the detector’s <code class="docutils literal notranslate"><span class="pre">trend_damping</span></code>
+(default ‘auto’). Pass 1.0 for undamped.</p></li>
+</ul>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py method">
@@ -442,13 +510,11 @@ Pass 2: Extended/multi-day pattern detection:</p>
 <p>Two-pass anomaly detector combining point detection with multi-day pattern detection.</p>
 <p>Pass 1 produces point-level proposals via AnomalyRemoval (optional if
 <code class="docutils literal notranslate"><span class="pre">pass1_records</span></code> are provided externally).</p>
-<p>Pass 2 runs four independent detection methods on a clean residual:
-- <strong>CUSUM</strong>: cumulative-sum alarm for sustained mean shifts.
-- <strong>Slope-reversion template</strong>: cumulative-sum peak/trough analysis for</p>
-<blockquote>
-<div><p>slow onset → hold → reversion patterns.</p>
-</div></blockquote>
+<p>Pass 2 runs four independent detection methods on a clean residual:</p>
 <ul class="simple">
+<li><p><strong>CUSUM</strong>: cumulative-sum alarm for sustained mean shifts.</p></li>
+<li><p><strong>Slope-reversion template</strong>: cumulative-sum peak/trough analysis for
+slow onset → hold → reversion patterns.</p></li>
 <li><p><strong>Decay extension</strong>: extends pass-1 point detections with exponential or
 linear decay tails.</p></li>
 <li><p><strong>Segmented mean shift</strong>: sliding-window mean comparison against a rolling
@@ -578,7 +644,7 @@ result of this function as <code class="docutils literal notranslate"><span clas
 so the optimizer can zero in on changepoint quality without interference.</p>
 <p>The loss function is a statistical translation of techniques designed for
 neural changepoint training:</p>
-<dl>
+<dl class="simple">
 <dt>Gaussian Label Smoothing</dt><dd><p>Instead of a hard ±tolerance binary label, each true changepoint is
 represented as a Gaussian probability distribution centred on its date
 with standard deviation <code class="docutils literal notranslate"><span class="pre">sigma</span></code>.  This converts the step-function
@@ -594,11 +660,11 @@ changepoints rather than already-correct ones.</p>
 </dd>
 <dt>Curriculum Learning (sigma annealing)</dt><dd><p>Three stages with decreasing sigma drive the search from coarse to
 fine sensitivity:</p>
-<blockquote>
-<div><p>Stage 1: sigma=14 days — wide window builds initial recall
-Stage 2: sigma=7 days  — medium window matches ±7-day tolerance
-Stage 3: sigma=3.5 days — tight window polishes placement precision</p>
-</div></blockquote>
+<ul class="simple">
+<li><p>Stage 1: sigma=14 days — wide window builds initial recall</p></li>
+<li><p>Stage 2: sigma=7 days  — medium window matches ±7-day tolerance</p></li>
+<li><p>Stage 3: sigma=3.5 days — tight window polishes placement precision</p></li>
+</ul>
 </dd>
 </dl>
 <dl class="field-list simple">
@@ -687,13 +753,11 @@ when provided.</p>
 <p>Two-pass anomaly detector combining point detection with multi-day pattern detection.</p>
 <p>Pass 1 produces point-level proposals via AnomalyRemoval (optional if
 <code class="docutils literal notranslate"><span class="pre">pass1_records</span></code> are provided externally).</p>
-<p>Pass 2 runs four independent detection methods on a clean residual:
-- <strong>CUSUM</strong>: cumulative-sum alarm for sustained mean shifts.
-- <strong>Slope-reversion template</strong>: cumulative-sum peak/trough analysis for</p>
-<blockquote>
-<div><p>slow onset → hold → reversion patterns.</p>
-</div></blockquote>
+<p>Pass 2 runs four independent detection methods on a clean residual:</p>
 <ul class="simple">
+<li><p><strong>CUSUM</strong>: cumulative-sum alarm for sustained mean shifts.</p></li>
+<li><p><strong>Slope-reversion template</strong>: cumulative-sum peak/trough analysis for
+slow onset → hold → reversion patterns.</p></li>
 <li><p><strong>Decay extension</strong>: extends pass-1 point detections with exponential or
 linear decay tails.</p></li>
 <li><p><strong>Segmented mean shift</strong>: sliding-window mean comparison against a rolling
@@ -846,7 +910,7 @@ Otherwise return the full dict.</p>
 so the optimizer can zero in on changepoint quality without interference.</p>
 <p>The loss function is a statistical translation of techniques designed for
 neural changepoint training:</p>
-<dl>
+<dl class="simple">
 <dt>Gaussian Label Smoothing</dt><dd><p>Instead of a hard ±tolerance binary label, each true changepoint is
 represented as a Gaussian probability distribution centred on its date
 with standard deviation <code class="docutils literal notranslate"><span class="pre">sigma</span></code>.  This converts the step-function
@@ -862,11 +926,11 @@ changepoints rather than already-correct ones.</p>
 </dd>
 <dt>Curriculum Learning (sigma annealing)</dt><dd><p>Three stages with decreasing sigma drive the search from coarse to
 fine sensitivity:</p>
-<blockquote>
-<div><p>Stage 1: sigma=14 days — wide window builds initial recall
-Stage 2: sigma=7 days  — medium window matches ±7-day tolerance
-Stage 3: sigma=3.5 days — tight window polishes placement precision</p>
-</div></blockquote>
+<ul class="simple">
+<li><p>Stage 1: sigma=14 days — wide window builds initial recall</p></li>
+<li><p>Stage 2: sigma=7 days  — medium window matches ±7-day tolerance</p></li>
+<li><p>Stage 3: sigma=3.5 days — tight window polishes placement precision</p></li>
+</ul>
 </dd>
 </dl>
 <dl class="field-list simple">
@@ -982,8 +1046,8 @@ encouraging variance to be attributed to seasonality, holidays, anomalies, and l
 
 <dl class="py class">
 <dt class="sig sig-object py" id="autots.evaluator.feature_detector.TimeSeriesFeatureDetector">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.</span></span><span class="sig-name descname"><span class="pre">TimeSeriesFeatureDetector</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seasonality_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rough_seasonality_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anomaly_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">changepoint_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shift_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shift_validation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">general_transformer_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">smoothing_window</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">standardize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">detection_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'multivariate'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">global_holiday_anomaly_suppression</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">extended_anomaly_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">event_dag_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_country</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_countries</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector" title="Link to this definition">¶</a></dt>
-<dd><p>Bases: <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.decomposition.DecompositionMixin" title="autots.evaluator.feature_detector.components.decomposition.DecompositionMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">DecompositionMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.seasonality.SeasonalityMixin" title="autots.evaluator.feature_detector.components.seasonality.SeasonalityMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">SeasonalityMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.trend.TrendMixin" title="autots.evaluator.feature_detector.components.trend.TrendMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">TrendMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.holidays.HolidayMixin" title="autots.evaluator.feature_detector.components.holidays.HolidayMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">HolidayMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.anomalies.AnomalyMixin" title="autots.evaluator.feature_detector.components.anomalies.AnomalyMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">AnomalyMixin</span></code></a>, <a class="reference internal" href="#autots.evaluator.feature_detector.extended_anomaly.ExtendedAnomalyMixin" title="autots.evaluator.feature_detector.extended_anomaly.ExtendedAnomalyMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">ExtendedAnomalyMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.rescaling.RescalingMixin" title="autots.evaluator.feature_detector.utils.rescaling.RescalingMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">RescalingMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.formatting.FormattingMixin" title="autots.evaluator.feature_detector.utils.formatting.FormattingMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">FormattingMixin</span></code></a></p>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.</span></span><span class="sig-name descname"><span class="pre">TimeSeriesFeatureDetector</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seasonality_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rough_seasonality_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anomaly_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">changepoint_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shift_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shift_validation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">general_transformer_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">smoothing_window</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">standardize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">detection_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'multivariate'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">global_holiday_anomaly_suppression</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">extended_anomaly_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">event_dag_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_country</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_countries</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trend_damping</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seasonality_trend_prior</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prelim_level_shift</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.decomposition.DecompositionMixin" title="autots.evaluator.feature_detector.components.decomposition.DecompositionMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">DecompositionMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.seasonality.SeasonalityMixin" title="autots.evaluator.feature_detector.components.seasonality.SeasonalityMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">SeasonalityMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.trend.TrendMixin" title="autots.evaluator.feature_detector.components.trend.TrendMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">TrendMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.joint_trend.JointTrendMixin" title="autots.evaluator.feature_detector.components.joint_trend.JointTrendMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">JointTrendMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.holidays.HolidayMixin" title="autots.evaluator.feature_detector.components.holidays.HolidayMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">HolidayMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.components.html#autots.evaluator.feature_detector.components.anomalies.AnomalyMixin" title="autots.evaluator.feature_detector.components.anomalies.AnomalyMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">AnomalyMixin</span></code></a>, <a class="reference internal" href="#autots.evaluator.feature_detector.extended_anomaly.ExtendedAnomalyMixin" title="autots.evaluator.feature_detector.extended_anomaly.ExtendedAnomalyMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">ExtendedAnomalyMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.rescaling.RescalingMixin" title="autots.evaluator.feature_detector.utils.rescaling.RescalingMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">RescalingMixin</span></code></a>, <a class="reference internal" href="autots.evaluator.feature_detector.utils.html#autots.evaluator.feature_detector.utils.formatting.FormattingMixin" title="autots.evaluator.feature_detector.utils.formatting.FormattingMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">FormattingMixin</span></code></a></p>
 <p>Comprehensive feature detection pipeline for time series.</p>
 <p>TODO: upstream more of this code into the component classes (e.g., HolidayDetector, AnomalyRemoval, ChangepointDetector)
 TODO: Handle multiplicative seasonality
@@ -995,45 +1059,62 @@ TODO: Support for modeling the trend with a fast kalman state space approach, id
 TODO: consider also having “deviation from group” type anomaly detection for multivariate series
 TODO: Improve anomaly typing in univariate mode (currently defaults to point_outlier) and incorporate detector scores into type confidence.
 TODO: Detect and expose non-holiday regressor impacts (not just holiday coefficients), and persist them in template/features output.</p>
-<blockquote>
-<div><p>Parameters</p>
-</div></blockquote>
-<dl>
-<dt>rough_seasonality_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for DatepartRegressionTransformer used in initial rough seasonality decomposition (to improve holiday and anomaly detection).</p>
-</dd>
-<dt>holiday_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for HolidayDetector</p>
-</dd>
-<dt>anomaly_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for AnomalyRemoval</p>
-</dd>
-<dt>changepoint_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for ChangepointDetector</p>
-</dd>
-<dt>level_shift_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for LevelShiftMagic</p>
-</dd>
-<dt>level_shift_validation<span class="classifier">dict, optional</span></dt><dd><p>Validation parameters for level shifts</p>
-</dd>
-<dt>general_transformer_params<span class="classifier">dict, optional</span></dt><dd><p>Parameters for GeneralTransformer applied before trend detection</p>
-</dd>
-<dt>smoothing_window<span class="classifier">int, optional</span></dt><dd><p>Window size for smoothing before trend detection</p>
-</dd>
-<dt>standardize<span class="classifier">bool, default=True</span></dt><dd><p>Whether to standardize series before processing</p>
-</dd>
-<dt>detection_mode<span class="classifier">str, default=’multivariate’</span></dt><dd><p>Controls whether detections are unique per series (‘multivariate’) or
-shared across all series (‘univariate’).
-- ‘multivariate’: Each series gets unique anomalies, holidays, changepoints, and level shifts
-- ‘univariate’: All series share common anomalies, holidays, changepoints, and level shifts</p>
-<blockquote>
-<div><p>(level shifts are detected on aggregated signal and scaled appropriately per series)</p>
-</div></blockquote>
-</dd>
-<dt>global_holiday_anomaly_suppression<span class="classifier">bool, default=True</span></dt><dd><p>If True, anomaly detection suppresses holiday-proximate flags using a merged holiday
-date set from all series. Set False to disable this suppression.</p>
-</dd>
-<dt>extended_anomaly_params<span class="classifier">dict, default=None</span></dt><dd><p>Opt-in second anomaly pass detecting multi-day/sustained patterns
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>seasonality_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Parameters for DatepartRegressionTransformer used in final seasonality fit</p></li>
+<li><p><strong>rough_seasonality_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Parameters for DatepartRegressionTransformer used in initial rough seasonality decomposition (to improve holiday and anomaly detection).</p></li>
+<li><p><strong>holiday_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Parameters for HolidayDetector</p></li>
+<li><p><strong>anomaly_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Parameters for AnomalyRemoval</p></li>
+<li><p><strong>changepoint_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Parameters for ChangepointDetector. <code class="docutils literal notranslate"><span class="pre">method='joint_hinge_step'</span></code> (opt-in)
+instead selects slope changes and level shifts jointly in one regression
+with a BIC stop; see <code class="docutils literal notranslate"><span class="pre">components.joint_trend.DEFAULT_JOINT_TREND_PARAMS</span></code>
+for its <code class="docutils literal notranslate"><span class="pre">method_params</span></code>.</p></li>
+<li><p><strong>level_shift_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Parameters for LevelShiftMagic</p></li>
+<li><p><strong>level_shift_validation</strong> (<em>dict</em><em>, </em><em>optional</em>) – Validation parameters for level shifts: ‘window’, ‘pad’,
+‘absolute_threshold’, ‘relative_threshold’. Thresholds that are omitted
+adapt to each series’ noise; thresholds that are given are used as-is.
+<code class="docutils literal notranslate"><span class="pre">{'method':</span> <span class="pre">'t_test',</span> <span class="pre">'window_days':</span> <span class="pre">90,</span> <span class="pre">'t_threshold':</span> <span class="pre">4.0}</span></code> (opt-in)
+keeps a candidate only if its step is significant in a local line+step fit.</p></li>
+<li><p><strong>general_transformer_params</strong> (<em>dict</em><em>, </em><em>optional</em>) – Parameters for GeneralTransformer applied before trend detection.
+None uses default filters; {} disables the transform.</p></li>
+<li><p><strong>smoothing_window</strong> (<em>int</em><em>, </em><em>optional</em>) – Window size for smoothing before trend detection</p></li>
+<li><p><strong>standardize</strong> (<em>bool</em><em>, </em><em>default=True</em>) – Whether to standardize series before processing</p></li>
+<li><p><strong>detection_mode</strong> (<em>str</em><em>, </em><em>default='multivariate'</em>) – <p>Controls whether detections are unique per series (‘multivariate’) or
+shared across all series (‘univariate’).</p>
+<ul>
+<li><p>’multivariate’: Each series gets unique anomalies, holidays, changepoints, and level shifts</p></li>
+<li><p>’univariate’: All series share common anomalies, holidays, changepoints, and level shifts
+(level shifts are detected on aggregated signal and scaled appropriately per series)</p></li>
+</ul>
+</p></li>
+<li><p><strong>global_holiday_anomaly_suppression</strong> (<em>bool</em><em> or </em><em>None</em><em>, </em><em>default=True</em>) – None scopes suppression per series and compares the same holiday in other
+years, retaining flags with fewer than two peer years. True uses the legacy
+merged dates and pooled strengths across holiday windows. False disables it.</p></li>
+<li><p><strong>extended_anomaly_params</strong> (<em>dict</em><em>, </em><em>default=None</em>) – Opt-in second anomaly pass detecting multi-day/sustained patterns
 (see ExtendedAnomalyDetector). Disabled unless a truthy dict is given;
 <code class="docutils literal notranslate"><span class="pre">default_extended_anomaly_params()</span></code> supplies a usable starting point.
 Off by default: sustained changes are already reported as level shifts
 and trend changepoints, and labelling them as anomalies as well makes
-the anomaly output span most of the timeline on typical data.</p>
+the anomaly output span most of the timeline on typical data.</p></li>
+<li><p><strong>trend_damping</strong> (<em>{'auto'</em><em>, </em><em>float</em><em>, </em><em>None}</em><em>, </em><em>default='auto'</em>) – Per-period damping factor phi in (0, 1] applied to the extrapolated slope
+in <code class="docutils literal notranslate"><span class="pre">forecast()</span></code> (trend increment at step h is slope * phi**h).
+‘auto’ = 0.99 per day, compounded to the data’s period length.
+None or 1.0 = undamped; values outside (0, 1] raise ValueError.</p></li>
+<li><p><strong>seasonality_trend_prior</strong> (<em>bool</em><em>, </em><em>default=True</em>) – Remove a linear trend (plus steps at validated level shifts), fit jointly
+with weekly/yearly Fourier terms, before the final seasonality fit, so
+the seasonal regressors cannot absorb trend as a yearly sawtooth. Joint
+trend mode uses its own prior and ignores this. TVA ‘factor’ mode turns
+it off: there it caused forecast blow-ups (MASE up to ~1e5) on the TVA
+benchmark while helping the detector’s own forecast.</p></li>
+<li><p><strong>prelim_level_shift</strong> (<em>bool</em><em> or </em><em>'auto'</em><em>, </em><em>default='auto'</em>) – Run LevelShiftMagic (with <code class="docutils literal notranslate"><span class="pre">level_shift_params</span></code>) on the anomaly-removed
+data before the final seasonality fit and pass its dates in as steps of
+the seasonality trend prior. Without it the day-of-year seasonality fit
+can absorb a step (notably near a year boundary) before level shifts are
+detected. ‘auto’ enables it only for <code class="docutils literal notranslate"><span class="pre">window_method='linear_gap'</span></code>
+params (the default), whose strict thresholds need it; with loose legacy
+params it mainly adds false positives.</p></li>
+</ul>
 </dd>
 </dl>
 <dl class="py attribute">
@@ -1068,9 +1149,25 @@ the anomaly output span most of the timeline on typical data.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.evaluator.feature_detector.TimeSeriesFeatureDetector.forecast">
-<span class="sig-name descname"><span class="pre">forecast</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">forecast_length</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">frequency</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prediction_interval</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.9</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.forecast" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">forecast</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">forecast_length</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">frequency</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prediction_interval</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.9</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trend_change_variance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slope_shrinkage</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slope_recency_days</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">180.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trend_damping</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.TimeSeriesFeatureDetector.forecast" title="Link to this definition">¶</a></dt>
 <dd><p>Generate a simple forward projection similar to BasicLinearModel.
 This detector is not optimized for forecasting; dedicated forecasting models may provide better results.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>trend_change_variance</strong> (<em>bool</em>) – widen intervals for future changepoints
+and level shifts at the rates detected in training.</p></li>
+<li><p><strong>slope_shrinkage</strong> (<em>bool</em>) – shrink the last trend segment’s slope toward a
+recency-weighted average of earlier segment slopes, strongest when
+the last segment is short.</p></li>
+<li><p><strong>slope_recency_days</strong> (<em>float</em>) – e-folding age, in calendar days, of the
+earlier-segment weights used by slope_shrinkage.</p></li>
+<li><p><strong>trend_damping</strong> (<em>float</em><em> or </em><em>'auto'</em>) – per-period damping phi of the
+extrapolated slope; None uses the detector’s <code class="docutils literal notranslate"><span class="pre">trend_damping</span></code>
+(default ‘auto’). Pass 1.0 for undamped.</p></li>
+</ul>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py method">
@@ -1278,6 +1375,7 @@ result of this function as <code class="docutils literal notranslate"><span clas
 <li class="toctree-l1"><a class="reference internal" href="intro.html#autots">AutoTS</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorial.html">Tutorial</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorial.html#extended-tutorial">Extended Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../metric_weighting_guide.html">AutoTS Metric Weighting</a></li>
 </ul>
 <ul class="current">
 <li class="toctree-l1 current"><a class="reference internal" href="modules.html">autots</a><ul class="current">

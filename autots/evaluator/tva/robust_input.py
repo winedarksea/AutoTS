@@ -731,7 +731,7 @@ def compare_inputs(raw, detector_adjusted, robust_adjusted, oracle_trend) -> dic
     detector-adjusted panel, decomposition is the binding constraint.
 
     Scores (all column-wise on mean-removed series, then averaged):
-    ``mean_abs_corr`` -- mean |correlation| with oracle (1 is best);
+    ``mean_abs_corr`` -- mean ``|correlation|`` with oracle (1 is best);
     ``nrmse`` -- RMSE / oracle std (0 is best, 1.0 = no better than flat);
     ``residual_energy_retained`` -- non-trend energy left, as a fraction of
     the raw panel's (raw scores 1.0, oracle 0.0, >1.0 means added noise).

@@ -12,53 +12,54 @@ import pandas as pd
 def load_daily(long: bool = True):
     """Daily sample data.
 
-    ```
-    # most of the wiki data was chosen to show holidays or holiday-like patterns
-    wiki = [
-        'United_States',
-        'Germany',
-        'List_of_highest-grossing_films',
-        'Jesus',
-        'Michael_Jackson',
-        'List_of_United_States_cities_by_population',
-        'Microsoft_Office',
-        'Google_Chrome',
-        'Periodic_table',
-        'Standard_deviation',
-        'Easter',
-        'Christmas',
-        'Chinese_New_Year',
-        'Thanksgiving',
-        'List_of_countries_that_have_gained_independence_from_the_United_Kingdom',
-        'History_of_the_hamburger',
-        'Elizabeth_II',
-        'William_Shakespeare',
-        'George_Washington',
-        'Cleopatra',
-        'all'
-    ]
+    .. code-block:: python
 
-    df2 = load_live_daily(
-        observation_start="2017-01-01", weather_years=7, trends_list=None,
-        gov_domain_list=None, wikipedia_pages=wiki,
-        fred_series=['DGS10', 'T5YIE', 'SP500','DEXUSEU'], sleep_seconds=10,
-        fred_key = "93873d40f10c20fe6f6e75b1ad0aed4d",
-        weather_data_types = ["WSF2", "PRCP"],
-        weather_stations = ["USW00014771"],  # looking for intermittent
-        tickers=None, london_air_stations=None,
-        weather_event_types=None, earthquake_min_magnitude=None,
-    )
-    data_file_name = join("autots", "datasets", 'data', 'holidays.zip')
-    df2.to_csv(
-        data_file_name,
-        index=True,
-        compression={
-            'method': 'zip',
-            'archive_name': 'holidays.csv',
-            'compresslevel': 9  # Maximum compression level (0-9)
-        }
-    )
-    ```
+        # most of the wiki data was chosen to show holidays or holiday-like patterns
+        wiki = [
+            'United_States',
+            'Germany',
+            'List_of_highest-grossing_films',
+            'Jesus',
+            'Michael_Jackson',
+            'List_of_United_States_cities_by_population',
+            'Microsoft_Office',
+            'Google_Chrome',
+            'Periodic_table',
+            'Standard_deviation',
+            'Easter',
+            'Christmas',
+            'Chinese_New_Year',
+            'Thanksgiving',
+            'List_of_countries_that_have_gained_independence_from_the_United_Kingdom',
+            'History_of_the_hamburger',
+            'Elizabeth_II',
+            'William_Shakespeare',
+            'George_Washington',
+            'Cleopatra',
+            'all'
+        ]
+
+        df2 = load_live_daily(
+            observation_start="2017-01-01", weather_years=7, trends_list=None,
+            gov_domain_list=None, wikipedia_pages=wiki,
+            fred_series=['DGS10', 'T5YIE', 'SP500','DEXUSEU'], sleep_seconds=10,
+            fred_key = "93873d40f10c20fe6f6e75b1ad0aed4d",
+            weather_data_types = ["WSF2", "PRCP"],
+            weather_stations = ["USW00014771"],  # looking for intermittent
+            tickers=None, london_air_stations=None,
+            weather_event_types=None, earthquake_min_magnitude=None,
+        )
+        data_file_name = join("autots", "datasets", 'data', 'holidays.zip')
+        df2.to_csv(
+            data_file_name,
+            index=True,
+            compression={
+                'method': 'zip',
+                'archive_name': 'holidays.csv',
+                'compresslevel': 9  # Maximum compression level (0-9)
+            }
+        )
+
 
     Sources: Wikimedia Foundation
 

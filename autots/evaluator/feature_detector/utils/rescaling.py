@@ -79,6 +79,10 @@ class RescalingMixin:
                         'relative_change': float(entry.get('relative_change', 0.0)),
                     }
                 )
+                # Optional fields from t-test validation / joint trend estimation.
+                for key in ('t_stat', 'date_window'):
+                    if key in entry:
+                        converted[-1][key] = entry[key]
             rescaled[series_name] = converted
         return rescaled
 

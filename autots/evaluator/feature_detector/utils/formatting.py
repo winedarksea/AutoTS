@@ -75,6 +75,20 @@ class FormattingMixin:
             holiday_template = holiday_impacts.get(series_name, {})
             holiday_coeff_template = holiday_coefficients.get(series_name, {})
 
+            transient_template = [
+                {
+                    'start_date': pd.Timestamp(item['start_date']).isoformat(),
+                    'end_date': pd.Timestamp(item['end_date']).isoformat(),
+                    'magnitude': self._to_original_value(
+                        item['magnitude'], series_name
+                    ),
+                }
+                for item in (getattr(self, '_joint_trend_details', None) or {})
+                .get(series_name, {})
+                .get('transients', [])
+            ]
+            if transient_template:
+                self.transient_events[series_name] = transient_template
             self.trend_changepoints[series_name] = trend_cp_entries
             self.trend_slopes[series_name] = slope_info.get(series_name, [])
             self.level_shifts[series_name] = level_shift_entries
@@ -148,6 +162,7 @@ class FormattingMixin:
                 {
                     'trend_changepoints': trend_cp_template,
                     'level_shifts': level_shift_template,
+                    'transient_events': transient_template,
                     'anomalies': anomaly_template,
                     'holiday_impacts': holiday_template,
                     'holiday_coefficients': holiday_coeff_template,
@@ -190,6 +205,11 @@ class FormattingMixin:
 
     def _build_trend_label_entries(self, series_name, changepoints, slope_info):
         slopes = slope_info.get(series_name, [])
+        joint_details = (
+            (getattr(self, '_joint_trend_details', None) or {})
+            .get(series_name, {})
+            .get('changepoints', {})
+        )
         if not slopes or len(slopes) < 2:
             return [], []
         entries = []
@@ -206,6 +226,28 @@ class FormattingMixin:
                     'new_slope': new_slope,
                 }
             )
+            # Joint trend mode adds significance and a profile-likelihood date window
+            # so events can be matched to external stories with a tolerance.
+            detail = joint_details.get(pd.Timestamp(cp_date))
+            if detail:
+                record = template_entries[-1]
+                record['type'] = 'slope_change'
+                record['t_stat'] = float(detail['t_stat'])
+                record['date_window'] = [
+                    pd.Timestamp(x).isoformat() for x in detail['date_window']
+                ]
+                # Effect over business horizons (slopes are per period, so days are
+                # converted) lets a story's size be compared to a level shift's.
+                slope_change = float(new_slope) - float(prior_slope)
+                for horizon_days in (28, 90, 365):
+                    record[f'effect_{horizon_days}d'] = slope_change * (
+                        horizon_days / self._days_per_period()
+                    )
+                regime_end = pd.Timestamp(slopes[idx]['end_date'])
+                record['regime_length_days'] = int(
+                    (regime_end - pd.Timestamp(cp_date)).days
+                )
+                record['is_active_regime'] = idx == len(slopes) - 1
         return entries, template_entries
 
     def _build_level_shift_entries(
@@ -225,6 +267,13 @@ class FormattingMixin:
                     'shared': bool(shared),
                 }
             )
+            if 't_stat' in item:
+                template_entries[-1]['type'] = 'level_shift'
+                template_entries[-1]['t_stat'] = float(item['t_stat'])
+            if 'date_window' in item:
+                template_entries[-1]['date_window'] = [
+                    pd.Timestamp(x).isoformat() for x in item['date_window']
+                ]
         return entries, template_entries
 
     def _build_anomaly_entries(self, series_name, anomaly_records, shared=False):
@@ -316,6 +365,9 @@ class FormattingMixin:
             'seasonality_changepoints': labels.get('seasonality_changepoints', []),
             'noise_changepoints': labels.get('noise_changepoints', []),
         }
+        # Only joint trend mode produces transients; keep legacy templates unchanged.
+        if labels.get('transient_events'):
+            label_dict['transient_events'] = labels['transient_events']
 
         return {
             'series_name': series_name,

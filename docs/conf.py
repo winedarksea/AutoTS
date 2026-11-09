@@ -25,7 +25,7 @@ author = 'Colin Catlin'
 # import AutoTS
 # from  AutoTS import __version__
 # release = __version__
-release = "1.0.4"
+release = "1.0.5"
 
 # -- General configuration ---------------------------------------------------
 
@@ -37,6 +37,12 @@ release = "1.0.4"
 extensions = ['sphinx.ext.napoleon', 'sphinx.ext.autodoc', 'm2r2', 'sphinx.ext.githubpages', "sphinxcontrib.googleanalytics"]
 
 source_suffix = ['.rst', '.md']
+
+# Pygments has no 'mermaid' lexer; README.md uses ```mermaid fences for GitHub.
+from pygments.lexers.special import TextLexer  # noqa: E402
+from sphinx.highlighting import lexers  # noqa: E402
+
+lexers['mermaid'] = TextLexer()
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -76,7 +82,9 @@ html_theme_options = {
 # pip install sphinxcontrib-googleanalytics
 googleanalytics_id = "G-P2KLF8302E"
 # this will give a warning but works at least with pydata theme
-html_theme_options["analytics"] = {"google_analytics_id": googleanalytics_id}
+# alabaster does not support an "analytics" theme option (warns on build); the
+# sphinxcontrib-googleanalytics extension above already injects the tag.
+# html_theme_options["analytics"] = {"google_analytics_id": googleanalytics_id}
 # html_theme_options['analytics_id'] = googleanalytics_id
 
 # Output file base name for HTML help builder.

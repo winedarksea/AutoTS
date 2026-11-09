@@ -4,6 +4,14 @@ autots.evaluator.tva package
 Submodules
 ----------
 
+autots.evaluator.tva.anchoring module
+-------------------------------------
+
+.. automodule:: autots.evaluator.tva.anchoring
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
 autots.evaluator.tva.coherence module
 -------------------------------------
 

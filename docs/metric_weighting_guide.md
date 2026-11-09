@@ -1,4 +1,4 @@
-AutoTS Metric Weighting
+# AutoTS Metric Weighting
 
 The purpose of the metric_weighting argument is to guide the selection of a forecasting model
 towards a model that best serves a business needs. It addresses the problem where a forecast

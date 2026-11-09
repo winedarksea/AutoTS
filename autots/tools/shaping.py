@@ -20,6 +20,10 @@ def infer_frequency(df_wide, warn=True, **kwargs):
         raise ValueError(
             "infer_frequency failed due to input not being pandas DF or DT index"
         )
+    if len(DTindex) < 3:
+        if len(DTindex) == 2:
+            return _infer_two_point_frequency(DTindex[0], DTindex[1])
+        return None
     # 'warn' arg removed in pandas 2.0.0
     frequency = pd.infer_freq(DTindex)
     if frequency is None:
@@ -29,6 +33,31 @@ def infer_frequency(df_wide, warn=True, **kwargs):
         # hack to get around data which has a few oddities
         frequency = pd.infer_freq(DTindex[:10])
     return frequency
+
+
+def _infer_two_point_frequency(first_date, second_date):
+    """Frequency from exactly two timestamps (pd.infer_freq needs three).
+
+    A fixed delta like 31D drifts off calendar months (Jan 1 -> Feb 1 -> Mar 4),
+    so midnight month-start/month-end pairs a whole number of months apart are
+    read as calendar months. Offset objects supply freqstr so the alias matches
+    the installed pandas ('M' vs 'ME').
+    """
+    first_date, second_date = sorted(
+        [pd.Timestamp(first_date), pd.Timestamp(second_date)]
+    )
+    month_gap = (second_date.year - first_date.year) * 12 + (
+        second_date.month - first_date.month
+    )
+    both_midnight = first_date == first_date.normalize() and (
+        second_date == second_date.normalize()
+    )
+    if month_gap > 0 and both_midnight:
+        if first_date.is_month_start and second_date.is_month_start:
+            return pd.offsets.MonthBegin(month_gap).freqstr
+        if first_date.is_month_end and second_date.is_month_end:
+            return pd.offsets.MonthEnd(month_gap).freqstr
+    return pd.tseries.frequencies.to_offset(second_date - first_date).freqstr
 
 
 def split_digits_and_non_digits(s):
@@ -168,11 +197,11 @@ def long_to_wide(
     Take long data and convert into wide, cleaner data.
 
     Args:
-        df (pd.DataFrame) - a pandas dataframe having three columns:
-        date_col (str) - the name of the column containing dates, preferrably already in pandas datetime format
-        value_col (str): - the name of the column with the values of the time series (ie sales $)
-        id_col (str): - name of the id column, unique for each time series
-        aggfunc (str): - passed to pd.pivot_table, determines how to aggregate duplicates for series_id and datetime
+        df (pd.DataFrame): a pandas dataframe having three columns:
+        date_col (str): the name of the column containing dates, preferrably already in pandas datetime format
+        value_col (str): the name of the column with the values of the time series (ie sales $)
+        id_col (str): name of the id column, unique for each time series
+        aggfunc (str): passed to pd.pivot_table, determines how to aggregate duplicates for series_id and datetime
             other options include "mean" and other numpy functions, beware data *must* already be input as numeric type for these to work.
             if categorical data is provided, `aggfunc='first'` is recommended
     """
@@ -410,7 +439,7 @@ def simple_train_test_split(
     Args:
         forecast_length (int): number of future periods to predict
 
-        min_allowed_train_percent (float): - forecast length cannot be greater than 1 - this
+        min_allowed_train_percent (float): forecast length cannot be greater than 1 - this
             constrains the forecast length from being much larger than than the training data
             note this includes NaNs in current configuration
             When forecast_length exceeds the available rows, callers that have
@@ -508,8 +537,10 @@ def drop_leading_na_block(
 ) -> pd.DataFrame:
     """
     Drop an initial leading block of rows if:
+
       - Those rows are 'bad' (row NaN proportion > threshold), AND
-      - There are at least `window` consecutive bad rows starting from the top.
+      - There are at least ``window`` consecutive bad rows starting from the top.
+
     Will warn or raise if more than `max_drop_fraction` of rows would be dropped.
 
     Args:

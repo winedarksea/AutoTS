@@ -184,10 +184,11 @@ class EventRiskForecast(object):
     This is a capability somewhat unique to motif models, as most probabilistic models "fan out" rather than creating a mix of quality outcomes.
 
     Upper and lower limits can be one of four types, and may each be different.
+
     1. None (no risk score calculated for this direction)
     2. Float in range [0, 1] historic quantile of series (which is historic min and max at edges) is chosen as limit.
     3. A dictionary of {"model_name": x,  "model_param_dict": y, "model_transform_dict": z, "prediction_interval": 0.9} to generate a forecast as the limits
-        Primarily intended for simple forecasts like SeasonalNaive, but can be used with any AutoTS model
+       Primarily intended for simple forecasts like SeasonalNaive, but can be used with any AutoTS model
     4. a custom input numpy array or pandas DataFrame of shape (forecast_length, num_series)
 
     This can be used to find the "middle" limit too, flip so upper=lower and lower=upper, then abs(U - (1 - L)).
@@ -204,7 +205,7 @@ class EventRiskForecast(object):
     Results are usually a numpy array of shape (forecast_length, num_series)
 
     Args:
-        df_train (pd.DataFrame): `wide style data, pd.DatetimeIndex for index and one series per column
+        df_train (pd.DataFrame): ``wide`` style data, pd.DatetimeIndex for index and one series per column
         forecast_length (int): number of forecast steps to make
         frequency (str): frequency of timesteps
         prediction_interval (float): float or list of floats for probabilistic forecasting
@@ -213,15 +214,16 @@ class EventRiskForecast(object):
         model_name, model_param_dict, model_transform_dict: for model_forecast in generate_result_windows
         future_regressor_train, future_regressor_forecast: regressor arrays if used
 
-    Methods:
-        fit
-        predict
-        predict_historic
-        generate_result_windows
-        generate_risk_array
-        generate_historic_risk_array
-        set_limit
-        plot
+    Methods
+
+    - fit
+    - predict
+    - predict_historic
+    - generate_result_windows
+    - generate_risk_array
+    - generate_historic_risk_array
+    - set_limit
+    - plot
 
     Attributes:
         result_windows, forecast_df, up_forecast_df, low_forecast_df

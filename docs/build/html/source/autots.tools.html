@@ -14,11 +14,11 @@
         gtag('config', 'G-P2KLF8302E');
     </script>
     
-    <title>autots.tools package &#8212; AutoTS 1.0.4 documentation</title>
+    <title>autots.tools package &#8212; AutoTS 1.0.5 documentation</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=ec641305" />
-    <script src="../_static/documentation_options.js?v=71272d9f"></script>
+    <script src="../_static/documentation_options.js?v=d55fa986"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
@@ -104,13 +104,14 @@ polarity for methods missing from the groupings above.</p></li>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="autots.tools.anomaly_utils.dates_to_holidays">
-<span class="sig-prename descclassname"><span class="pre">autots.tools.anomaly_utils.</span></span><span class="sig-name descname"><span class="pre">dates_to_holidays</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dates</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">df_cols</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">style</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'long'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_impacts</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'value'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">day_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wkdom_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wkdeom_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lunar_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lunar_weekday</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">islamic_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hebrew_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hindu_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_features</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.anomaly_utils.dates_to_holidays" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">autots.tools.anomaly_utils.</span></span><span class="sig-name descname"><span class="pre">dates_to_holidays</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dates</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">df_cols</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">style</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'long'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_impacts</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'value'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">day_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wkdom_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wkdeom_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lunar_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lunar_weekday</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">islamic_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hebrew_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hindu_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_features</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">easter_holidays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.anomaly_utils.dates_to_holidays" title="Link to this definition">¶</a></dt>
 <dd><p>Populate date information for a given pd.DatetimeIndex.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>dates</strong> (<em>pd.DatetimeIndex</em>) – list of dates</p></li>
 <li><p><strong>day_holidays</strong> (<em>pd.DataFrame</em>) – list of month/day holidays. Pass None if not available</p></li>
+<li><p><strong>easter_holidays</strong> (<em>pd.DataFrame</em>) – learned rules keyed by easter_offset.</p></li>
 <li><p><strong>style</strong> (<em>str</em>) – option for how to return information
 “long” - return date, name, series for all holidays in a long style dataframe
 “impact” - returns dates, series with values of sum of impacts (if given) or joined string of holiday names
@@ -167,7 +168,7 @@ Using DecisionTree as it can handle nonparametric anomalies.</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="autots.tools.anomaly_utils.gaussian_mixture">
-<span class="sig-prename descclassname"><span class="pre">autots.tools.anomaly_utils.</span></span><span class="sig-name descname"><span class="pre">gaussian_mixture</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_components</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tol</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_iter</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">responsibility_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.05</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.anomaly_utils.gaussian_mixture" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">autots.tools.anomaly_utils.</span></span><span class="sig-name descname"><span class="pre">gaussian_mixture</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_components</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tol</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_iter</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">responsibility_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.anomaly_utils.gaussian_mixture" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py function">
@@ -518,13 +519,13 @@ wide-format time series data, similar to HolidayDetector.</p>
 <dd><p>Generate new random parameters for changepoint detection.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>method</strong> (<em>str</em>) – <p>Method for parameter selection
-- ‘fast’: All methods but with fastest parameter configurations for PELT and composite_fused_lasso
-- Or specify a method name directly: ‘basic’, ‘pelt’, ‘l1_fused_lasso’,</p>
-<blockquote>
-<div><p>’l1_total_variation’, ‘l0_trend_filter’, ‘cusum’, ‘ewma’, ‘kcpd’, ‘bottom_up’,
-‘wbs2’, ‘autoencoder’, ‘composite_fused_lasso’</p>
-</div></blockquote>
+<dd class="field-odd"><p><strong>method</strong> (<em>str</em>) – <p>Method for parameter selection</p>
+<ul class="simple">
+<li><p>’fast’: All methods but with fastest parameter configurations for PELT and composite_fused_lasso</p></li>
+<li><p>Or specify a method name directly: ‘basic’, ‘pelt’, ‘l1_fused_lasso’,
+‘l1_total_variation’, ‘l0_trend_filter’, ‘cusum’, ‘ewma’, ‘kcpd’, ‘bottom_up’,
+‘wbs2’, ‘autoencoder’, ‘composite_fused_lasso’</p></li>
+</ul>
 </p>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -586,19 +587,26 @@ wide-format time series data, similar to HolidayDetector.</p>
 <dt class="sig sig-object py" id="autots.tools.changepoints.create_changepoint_features">
 <span class="sig-prename descclassname"><span class="pre">autots.tools.changepoints.</span></span><span class="sig-name descname"><span class="pre">create_changepoint_features</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">DTindex</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">changepoint_spacing</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">60</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">changepoint_distance_end</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">120</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'basic'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.changepoints.create_changepoint_features" title="Link to this definition">¶</a></dt>
 <dd><p>Creates a feature set for estimating trend changepoints using various algorithms.</p>
-<p>Parameters:
-DTindex (pd.DatetimeIndex): a datetimeindex
-changepoint_spacing (int): Distance between consecutive changepoints (legacy, for basic method).
-changepoint_distance_end (int): Number of rows that belong to the final changepoint (legacy, for basic method).
-method (str): Method for changepoint detection (‘basic’, ‘pelt’, ‘l1_fused_lasso’,</p>
-<blockquote>
-<div><p>‘l1_total_variation’, ‘l0_trend_filter’, ‘cusum’, ‘ewma’, ‘autoencoder’,
-‘kcpd’, ‘bottom_up’, ‘wbs2’)</p>
-</div></blockquote>
-<p>params (dict): Additional parameters for the chosen method
-data (array-like): Time series data (required for advanced methods)</p>
-<p>Returns:
-pd.DataFrame: DataFrame containing changepoint features for linear regression.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>DTindex</strong> (<em>pd.DatetimeIndex</em>) – a datetimeindex</p></li>
+<li><p><strong>changepoint_spacing</strong> (<em>int</em>) – Distance between consecutive changepoints (legacy, for basic method).</p></li>
+<li><p><strong>changepoint_distance_end</strong> (<em>int</em>) – Number of rows that belong to the final changepoint (legacy, for basic method).</p></li>
+<li><p><strong>method</strong> (<em>str</em>) – Method for changepoint detection (‘basic’, ‘pelt’, ‘l1_fused_lasso’,
+‘l1_total_variation’, ‘l0_trend_filter’, ‘cusum’, ‘ewma’, ‘autoencoder’,
+‘kcpd’, ‘bottom_up’, ‘wbs2’)</p></li>
+<li><p><strong>params</strong> (<em>dict</em>) – Additional parameters for the chosen method</p></li>
+<li><p><strong>data</strong> (<em>array-like</em>) – Time series data (required for advanced methods)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>DataFrame containing changepoint features for linear regression.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>pd.DataFrame</p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py function">
@@ -658,7 +666,49 @@ for consistency. Use ChangepointDetector.get_new_params() directly for new code.
 <dl class="py function">
 <dt class="sig sig-object py" id="autots.tools.changepoints.half_yr_spacing">
 <span class="sig-prename descclassname"><span class="pre">autots.tools.changepoints.</span></span><span class="sig-name descname"><span class="pre">half_yr_spacing</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.changepoints.half_yr_spacing" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
+<dd><p>Return rows per half-year, using at least one elapsed year of history.</p>
+</dd></dl>
+
+</section>
+<section id="module-autots.tools.changepoints_probabilistic">
+<span id="autots-tools-changepoints-probabilistic-module"></span><h2>autots.tools.changepoints_probabilistic module<a class="headerlink" href="#module-autots.tools.changepoints_probabilistic" title="Link to this heading">¶</a></h2>
+<p>Probabilistic changepoint helpers: Bayesian online changepoint detection and
+residual block bootstrap resampling. Used by ChangepointDetector when
+probabilistic_output=True.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.changepoints_probabilistic.bayesian_online_changepoint_probabilities">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.changepoints_probabilistic.</span></span><span class="sig-name descname"><span class="pre">bayesian_online_changepoint_probabilities</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hazard_rate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.01</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lag</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.changepoints_probabilistic.bayesian_online_changepoint_probabilities" title="Link to this definition">¶</a></dt>
+<dd><p>Bayesian online changepoint detection (Adams &amp; MacKay 2007).</p>
+<p>Gaussian segments with unknown mean and variance (Normal-Inverse-Gamma
+prior, Student-t predictive), computed in log space so long runs cannot
+underflow the evidence to zero.</p>
+<p>The filtered P(changepoint at t | x_1..t) is identically the hazard rate under
+a constant hazard, so it carries no information. Instead this reports
+P(a segment starts at s | x_1..s+lag-1): the posterior mass on the run that
+began at s, read lag-1 steps later once evidence has accumulated. The last
+positions use the final posterior.</p>
+<p>Parameters:
+data (array-like): 1-D series without NaNs.
+hazard_rate (float): Prior probability of a changepoint at each step.
+lag (int): Observations after s used to judge a change at s.</p>
+<p>Returns:
+np.ndarray: Changepoint probability per position (position 0 is 0).</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.changepoints_probabilistic.piecewise_mean_fit">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.changepoints_probabilistic.</span></span><span class="sig-name descname"><span class="pre">piecewise_mean_fit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">changepoints</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.changepoints_probabilistic.piecewise_mean_fit" title="Link to this definition">¶</a></dt>
+<dd><p>Fitted values holding each segment at its mean.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.changepoints_probabilistic.residual_block_bootstrap">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.changepoints_probabilistic.</span></span><span class="sig-name descname"><span class="pre">residual_block_bootstrap</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fitted</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">residuals</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_length</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rng</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.changepoints_probabilistic.residual_block_bootstrap" title="Link to this definition">¶</a></dt>
+<dd><p>One moving-block bootstrap replicate: fitted + resampled residual blocks.</p>
+<p>Shuffling raw observations destroys the segment structure being estimated;
+resampling contiguous residual blocks around the fitted segmentation keeps
+the structure and the residuals’ short-range autocorrelation.</p>
+</dd></dl>
 
 </section>
 <section id="module-autots.tools.cointegration">
@@ -805,6 +855,22 @@ and order.</p>
 <dd></dd></dl>
 
 </section>
+<section id="module-autots.tools.easter">
+<span id="autots-tools-easter-module"></span><h2>autots.tools.easter module<a class="headerlink" href="#module-autots.tools.easter" title="Link to this heading">¶</a></h2>
+<p>Western Easter offsets and data-driven recurring holiday rules.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.easter.easter_offsets">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.easter.</span></span><span class="sig-name descname"><span class="pre">easter_offsets</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dates</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.easter.easter_offsets" title="Link to this definition">¶</a></dt>
+<dd><p>Return calendar-day offsets from Western Easter in each date’s year.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.easter.extract_easter_holidays">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.easter.</span></span><span class="sig-name descname"><span class="pre">extract_easter_holidays</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">anomalies</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_occurrences</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">actuals</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anomaly_scores</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.easter.extract_easter_holidays" title="Link to this definition">¶</a></dt>
+<dd><p>Select supported offsets independently; a calendar date alone is not a rule.</p>
+</dd></dl>
+
+</section>
 <section id="module-autots.tools.fast_kalman">
 <span id="autots-tools-fast-kalman-module"></span><h2>autots.tools.fast_kalman module<a class="headerlink" href="#module-autots.tools.fast_kalman" title="Link to this heading">¶</a></h2>
 <p>From SIMD KALMAN, (c) 2017 Otto Seiskari (MIT License)</p>
@@ -871,16 +937,14 @@ print(‘mean’)
 print(smoothed.states.mean[1,2,:])</p>
 <p>print(‘covariance’)
 print(smoothed.states.cov[1,2,:,:])</p>
-<blockquote>
-<div><p>mean
-[ 0.29311384 -0.06948961]
-covariance
-[[ 0.19959416 -0.00777587]</p>
-<blockquote>
-<div><p>[-0.00777587  0.02528967]]</p>
 </div></blockquote>
-</div></blockquote>
-</div></blockquote>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">mean</span>
+<span class="p">[</span> <span class="mf">0.29311384</span> <span class="o">-</span><span class="mf">0.06948961</span><span class="p">]</span>
+<span class="n">covariance</span>
+<span class="p">[[</span> <span class="mf">0.19959416</span> <span class="o">-</span><span class="mf">0.00777587</span><span class="p">]</span>
+ <span class="p">[</span><span class="o">-</span><span class="mf">0.00777587</span>  <span class="mf">0.02528967</span><span class="p">]]</span>
+</pre></div>
+</div>
 <p>Predict new data for a single series (1d case)</p>
 <blockquote>
 <div><p>predicted = kf.predict(data[1,:], 123)</p>
@@ -1708,10 +1772,10 @@ G.726-style decision levels optimized for time series.</p></li>
 <dt>ERM (Error or Empirical Risk Minimization) Reconciliation using robust numerical methods:</dt><dd><p>Solve Weighted LS:  min_{y_bottom}  ||y_all - S y_bottom||_W^2
 subject to hierarchical constraints.</p>
 </dd>
-<dt>The closed-form solution for y_bottom^r:</dt><dd><p>y_bottom^r = (S’ W S)^{-1} S’ W y_all</p>
+<dt>The closed-form solution for y_bottom^r:</dt><dd><p>y_bottom^r = (S’ W S)^{-1} S’ W y_all
+=&gt; y_all^r = S y_bottom^r = S (S’ W S)^{-1} S’ W y_all</p>
 </dd>
 </dl>
-<p>=&gt; y_all^r = S y_bottom^r = S (S’ W S)^{-1} S’ W y_all</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -1934,6 +1998,18 @@ also accepts a list of countries, but not a list of subdivisions</p></li>
 </ul>
 </dd>
 </dl>
+</dd></dl>
+
+</section>
+<section id="module-autots.tools.holiday_anomaly">
+<span id="autots-tools-holiday-anomaly-module"></span><h2>autots.tools.holiday_anomaly module<a class="headerlink" href="#module-autots.tools.holiday_anomaly" title="Link to this heading">¶</a></h2>
+<p>Per-series holiday anomaly suppression with comparable annual peers.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.holiday_anomaly.named_holiday_suppression_mask">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.holiday_anomaly.</span></span><span class="sig-name descname"><span class="pre">named_holiday_suppression_mask</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">anomalies</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">strengths</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">observed</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_dates</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">proximity_days</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">override</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shared</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">residuals</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.holiday_anomaly.named_holiday_suppression_mask" title="Link to this definition">¶</a></dt>
+<dd><p>Return suppression eligibility; unknown peers conservatively retain flags.</p>
+<p>Each comparison excludes the candidate’s year. Intraday observations compare
+the same local time, and missing source observations never count as peers.</p>
 </dd></dl>
 
 </section>
@@ -2188,6 +2264,306 @@ are in the original feature space.</p></li>
 <dd></dd></dl>
 
 </section>
+<section id="module-autots.tools.level_shift">
+<span id="autots-tools-level-shift-module"></span><h2>autots.tools.level_shift module<a class="headerlink" href="#module-autots.tools.level_shift" title="Link to this heading">¶</a></h2>
+<p>Vectorized level shift detection: multiscale detrended MOSUM (<code class="docutils literal notranslate"><span class="pre">linear_gap</span></code>).</p>
+<p>Pure numpy functions on <code class="docutils literal notranslate"><span class="pre">(T,</span> <span class="pre">C)</span></code> wide arrays used by <code class="docutils literal notranslate"><span class="pre">LevelShiftMagic</span></code>.
+Index convention: <code class="docutils literal notranslate"><span class="pre">i</span></code> is the first post-shift row, <code class="docutils literal notranslate"><span class="pre">f</span> <span class="pre">=</span> <span class="pre">i</span> <span class="pre">-</span> <span class="pre">1</span></code> the last
+pre-shift row. Detections are returned as sparse <code class="docutils literal notranslate"><span class="pre">(rows_f,</span> <span class="pre">cols)</span></code> arrays.</p>
+<p>The score is a two-intercept, pooled-slope (Chow-style) gap between the back
+window <code class="docutils literal notranslate"><span class="pre">[i-N,</span> <span class="pre">i)</span></code> and the forward window <code class="docutils literal notranslate"><span class="pre">[i,</span> <span class="pre">i+N)</span></code>. It is ~0 on any locally
+linear trend or slope change, which is what the legacy <code class="docutils literal notranslate"><span class="pre">overlap</span></code> statistic
+(<code class="docutils literal notranslate"><span class="pre">~</span> <span class="pre">-(N-1)</span> <span class="pre">*</span> <span class="pre">slope</span></code> on a trend) gets wrong. See Eichinger &amp; Kirch (2018) on
+MOSUM changepoint detection.</p>
+<p>Python loops run only over scales, tail distances and fixed IRLS iterations;
+never over columns or breaks. Columns are processed in blocks to keep T x C
+temporaries cache-sized.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="autots.tools.level_shift.PrefixSums">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">autots.tools.level_shift.</span></span><span class="sig-name descname"><span class="pre">PrefixSums</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">values</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.level_shift.PrefixSums" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Prefix sums of count, t, t^2, y and t*y, built once per column block.</p>
+<p>Shared across every scale so each window score is a handful of <code class="docutils literal notranslate"><span class="pre">take</span></code> ops.
+Time is centred to keep t^2 sums well-conditioned.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.tools.level_shift.PrefixSums.window">
+<span class="sig-name descname"><span class="pre">window</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">prefix</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lo</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hi</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.level_shift.PrefixSums.window" title="Link to this definition">¶</a></dt>
+<dd><p>Sum over rows <code class="docutils literal notranslate"><span class="pre">[i+lo,</span> <span class="pre">i+hi)</span></code> for every row i, clipped to the series.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.level_shift.bump_test">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.level_shift.</span></span><span class="sig-name descname"><span class="pre">bump_test</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">values</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rows_post</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cols</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gap_sign</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">window_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anomaly_window</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slopes</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.level_shift.bump_test" title="Link to this definition">¶</a></dt>
+<dd><p>Two-sided persistence test: reject candidates a temporary bump explains.</p>
+<p><code class="docutils literal notranslate"><span class="pre">rows_post</span></code> are first post-shift rows. The test window is at least
+<code class="docutils literal notranslate"><span class="pre">2</span> <span class="pre">*</span> <span class="pre">anomaly_window</span></code> so a bump of <code class="docutils literal notranslate"><span class="pre">anomaly_window</span></code> points can always be
+told apart from a step; candidates too close to an edge are rejected.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.level_shift.chow_gap">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.level_shift.</span></span><span class="sig-name descname"><span class="pre">chow_gap</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">prefix_sums</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">window_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_points</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.level_shift.chow_gap" title="Link to this definition">¶</a></dt>
+<dd><p>Pooled-slope two-intercept gap at each row (row = first post-shift index).</p>
+<p>Returns <code class="docutils literal notranslate"><span class="pre">(gap,</span> <span class="pre">norm)</span></code>: gap in data units (post minus pre) and gap divided
+by its OLS standard-error factor (sigma omitted; robust_z supplies scale).
+Rows with fewer than <code class="docutils literal notranslate"><span class="pre">min_points</span></code> on either side are NaN, which is what
+keeps the series edges from ever being flagged.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.level_shift.detect_multiscale">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.level_shift.</span></span><span class="sig-name descname"><span class="pre">detect_multiscale</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">values</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scales</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_shifts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anomaly_window</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2000</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.level_shift.detect_multiscale" title="Link to this definition">¶</a></dt>
+<dd><p>Detect level shifts per column with the multiscale <code class="docutils literal notranslate"><span class="pre">linear_gap</span></code> score.</p>
+<p>Returns <code class="docutils literal notranslate"><span class="pre">(rows_f,</span> <span class="pre">cols,</span> <span class="pre">scores,</span> <span class="pre">gaps,</span> <span class="pre">scales)</span></code>: last pre-shift row, column,
+penalised robust z, gap (post minus pre, data units) and detecting window.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.level_shift.detect_multiscale_shared">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.level_shift.</span></span><span class="sig-name descname"><span class="pre">detect_multiscale_shared</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">values</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scales</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_shifts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anomaly_window</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.level_shift.detect_multiscale_shared" title="Link to this definition">¶</a></dt>
+<dd><p>Univariate mode: shared dates from mean per-series z^2, accepted per series.</p>
+<p>Combining z^2 (not standardised levels) stops opposite-sign shifts in
+different series cancelling. Each series then takes a shared date only if it
+is individually significant there and passes its own bump test.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.level_shift.dilate">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.level_shift.</span></span><span class="sig-name descname"><span class="pre">dilate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mask</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">distance</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.level_shift.dilate" title="Link to this definition">¶</a></dt>
+<dd><p>True where any True lies within +-distance rows in the same column.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.level_shift.fast_nanmedian">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.level_shift.</span></span><span class="sig-name descname"><span class="pre">fast_nanmedian</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axis</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.level_shift.fast_nanmedian" title="Link to this definition">¶</a></dt>
+<dd><p>np.median when NaN-free (one vectorized partition); nanmedian loops per slice.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.level_shift.gather_windows">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.level_shift.</span></span><span class="sig-name descname"><span class="pre">gather_windows</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">values</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rows</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cols</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">offsets</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.level_shift.gather_windows" title="Link to this definition">¶</a></dt>
+<dd><p>Gather <code class="docutils literal notranslate"><span class="pre">values[rows</span> <span class="pre">+</span> <span class="pre">offsets,</span> <span class="pre">cols]</span></code> as <code class="docutils literal notranslate"><span class="pre">(n,</span> <span class="pre">len(offsets))</span></code> with validity mask.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.level_shift.min_window_points">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.level_shift.</span></span><span class="sig-name descname"><span class="pre">min_window_points</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">window_size</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.level_shift.min_window_points" title="Link to this definition">¶</a></dt>
+<dd><p>Fewest points per side for a valid window score; shared by every method.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.level_shift.quiet_empty_slices">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.level_shift.</span></span><span class="sig-name descname"><span class="pre">quiet_empty_slices</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">func</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.level_shift.quiet_empty_slices" title="Link to this definition">¶</a></dt>
+<dd><p>Silence numpy empty/all-NaN slice warnings: missing or short series are expected input.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.level_shift.robust_slope">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.level_shift.</span></span><span class="sig-name descname"><span class="pre">robust_slope</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">values</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lag</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">columns</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.level_shift.robust_slope" title="Link to this definition">¶</a></dt>
+<dd><p>Per-column median of <code class="docutils literal notranslate"><span class="pre">(y[t+lag]</span> <span class="pre">-</span> <span class="pre">y[t])</span> <span class="pre">/</span> <span class="pre">lag</span></code>; robust to spikes and isolated steps.</p>
+<p><code class="docutils literal notranslate"><span class="pre">columns</span></code> limits the work to columns that have candidates; others get 0.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.level_shift.robust_z">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.level_shift.</span></span><span class="sig-name descname"><span class="pre">robust_z</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">norm</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scale_floor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.level_shift.robust_z" title="Link to this definition">¶</a></dt>
+<dd><p>Single-pass per-column robust z: <code class="docutils literal notranslate"><span class="pre">(x</span> <span class="pre">-</span> <span class="pre">median)</span> <span class="pre">/</span> <span class="pre">(1.4826</span> <span class="pre">*</span> <span class="pre">MAD)</span></code>.</p>
+<p>Uses the MAD of the score itself (not of first differences, which is
+miscalibrated under autocorrelated noise). <code class="docutils literal notranslate"><span class="pre">scale_floor</span></code> stops float noise
+on noiseless data from being blown up into detections.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.level_shift.row_masked_median">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.level_shift.</span></span><span class="sig-name descname"><span class="pre">row_masked_median</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ok</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.level_shift.row_masked_median" title="Link to this definition">¶</a></dt>
+<dd><p>Median of <code class="docutils literal notranslate"><span class="pre">x[ok]</span></code> per row with one sort; NaN for rows with no valid points.</p>
+<p>np.nanmedian on small rows goes through masked arrays and is ~10x slower.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.level_shift.scale_penalty">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.level_shift.</span></span><span class="sig-name descname"><span class="pre">scale_penalty</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">T</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">window_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reference</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">30</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.level_shift.scale_penalty" title="Link to this definition">¶</a></dt>
+<dd><p>Extra threshold for short windows, which scan more independent positions.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.level_shift.tail_scan">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.level_shift.</span></span><span class="sig-name descname"><span class="pre">tail_scan</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">values</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_post</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_post</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reference</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">60</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">last_break_rows</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.level_shift.tail_scan" title="Link to this definition">¶</a></dt>
+<dd><p>Find at most one shift per column ‘min_post’..’max_post’ rows from the end.</p>
+<p>The main detector can’t see shifts this close to the end (the bump test
+needs more than <code class="docutils literal notranslate"><span class="pre">anomaly_window</span></code> post points). A line fitted to the pre
+window is extrapolated over the last k points; a shift needs a
+long-run-variance z above alpha and &gt;=80% of post points on the shifted side.
+<code class="docutils literal notranslate"><span class="pre">last_break_rows</span></code> bounds the pre window so an earlier break isn’t mistaken
+for a tail one. Returns <code class="docutils literal notranslate"><span class="pre">(rows_f,</span> <span class="pre">cols,</span> <span class="pre">gaps)</span></code>.</p>
+</dd></dl>
+
+</section>
+<section id="module-autots.tools.level_shift_seasonality">
+<span id="autots-tools-level-shift-seasonality-module"></span><h2>autots.tools.level_shift_seasonality module<a class="headerlink" href="#module-autots.tools.level_shift_seasonality" title="Link to this heading">¶</a></h2>
+<p>Seasonal profile removal used before <code class="docutils literal notranslate"><span class="pre">linear_gap</span></code> level shift detection.</p>
+<p>Detection-only preprocessing (numpy only): sizing and correction run on the
+same deseasonalised values, but the transformer output keeps the seasonality.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.level_shift_seasonality.deseasonalize">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.level_shift_seasonality.</span></span><span class="sig-name descname"><span class="pre">deseasonalize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">values</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">season</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.level_shift_seasonality.deseasonalize" title="Link to this definition">¶</a></dt>
+<dd><p>Subtract a median per-phase seasonal profile; detection-only preprocessing.</p>
+<p><code class="docutils literal notranslate"><span class="pre">season</span></code>: True infers the length, an int fixes it. Returns
+<code class="docutils literal notranslate"><span class="pre">(deseasonalised,</span> <span class="pre">season_length)</span></code>; season_length 0 means unchanged input.
+Removing the profile beat rounding window sizes to whole seasons, because
+the detector’s slope estimate otherwise picks up the seasonal swing.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.level_shift_seasonality.infer_season_length">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.level_shift_seasonality.</span></span><span class="sig-name descname"><span class="pre">infer_season_length</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">values</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">candidates</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(7,</span> <span class="pre">12,</span> <span class="pre">24,</span> <span class="pre">52)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_correlation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">divisor_tolerance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.05</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.level_shift_seasonality.infer_season_length" title="Link to this definition">¶</a></dt>
+<dd><p>Season length with the largest median lag-m autocorrelation of first differences.</p>
+<p>A candidate that divides the winner and scores within <code class="docutils literal notranslate"><span class="pre">divisor_tolerance</span></code>
+of it is returned instead: a period-12 season also correlates at lag 24, and
+the shorter period gives more cycles per phase. Returns 0 when no candidate
+clears <code class="docutils literal notranslate"><span class="pre">min_correlation</span></code> (no seasonality).</p>
+</dd></dl>
+
+</section>
+<section id="module-autots.tools.level_shift_selection">
+<span id="autots-tools-level-shift-selection-module"></span><h2>autots.tools.level_shift_selection module<a class="headerlink" href="#module-autots.tools.level_shift_selection" title="Link to this heading">¶</a></h2>
+<p>Per-column peak selection for level shift candidates (numpy only).</p>
+<p>Replaces the legacy progressive while-loop, whose row-index group ids were
+shared across columns (a shift in one series removed candidates in others),
+NaN at row 0 (stalling selection) and kept one shift too many.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.level_shift_selection.near_taken">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.level_shift_selection.</span></span><span class="sig-name descname"><span class="pre">near_taken</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rows</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cols</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">taken_rows</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">taken_cols</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">distance</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.level_shift_selection.near_taken" title="Link to this definition">¶</a></dt>
+<dd><p>True for candidates with an accepted detection within +-distance in their column.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.level_shift_selection.select_run_peaks">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.level_shift_selection.</span></span><span class="sig-name descname"><span class="pre">select_run_peaks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">score</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mask</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tiebreak</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_shifts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tie_tolerance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.level_shift_selection.select_run_peaks" title="Link to this definition">¶</a></dt>
+<dd><p>One row per contiguous run of <code class="docutils literal notranslate"><span class="pre">mask</span></code> per column, then top-k runs per column.</p>
+<p>In each run the winner is the argmax of <code class="docutils literal notranslate"><span class="pre">score</span></code>; rows within
+<code class="docutils literal notranslate"><span class="pre">tie_tolerance</span> <span class="pre">*</span> <span class="pre">peak</span></code> of it are treated as tied and the one with the
+largest <code class="docutils literal notranslate"><span class="pre">tiebreak</span></code> wins (earliest on exact ties). The legacy window means
+tie exactly at the two rows either side of a clean step, so without this
+integer data flagged both and counted the step twice.</p>
+<p>Returns <code class="docutils literal notranslate"><span class="pre">(rows,</span> <span class="pre">cols,</span> <span class="pre">run_scores)</span></code>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.level_shift_selection.thresholded_peaks">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.level_shift_selection.</span></span><span class="sig-name descname"><span class="pre">thresholded_peaks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">abs_score</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">half_width</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.level_shift_selection.thresholded_peaks" title="Link to this definition">¶</a></dt>
+<dd><p>Rows above threshold that are their column’s maximum within +-half_width.</p>
+<p>Equivalent to a dense +-half_width rolling-max test (rows below threshold
+can’t dominate a peak above it) but sparse: one argmax per run above
+threshold, then run peaks closer than half_width suppress the lower one.
+Exact ties keep the earlier row. Returns <code class="docutils literal notranslate"><span class="pre">(rows,</span> <span class="pre">cols)</span></code>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.level_shift_selection.top_k_per_column">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.level_shift_selection.</span></span><span class="sig-name descname"><span class="pre">top_k_per_column</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cols</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scores</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.level_shift_selection.top_k_per_column" title="Link to this definition">¶</a></dt>
+<dd><p>Indices of the k highest-scoring entries per column (ties to the earlier entry).</p>
+</dd></dl>
+
+</section>
+<section id="module-autots.tools.level_shift_sizing">
+<span id="autots-tools-level-shift-sizing-module"></span><h2>autots.tools.level_shift_sizing module<a class="headerlink" href="#module-autots.tools.level_shift_sizing" title="Link to this heading">¶</a></h2>
+<p>Level shift sizing and correction for <code class="docutils literal notranslate"><span class="pre">LevelShiftMagic</span></code> (numpy only).</p>
+<p>Breaks are sparse <code class="docutils literal notranslate"><span class="pre">(rows_f,</span> <span class="pre">cols)</span></code> arrays, <code class="docutils literal notranslate"><span class="pre">rows_f</span></code> the last pre-shift row.
+Sizes are <code class="docutils literal notranslate"><span class="pre">post</span> <span class="pre">level</span> <span class="pre">-</span> <span class="pre">pre</span> <span class="pre">level</span></code> in data units. Sizing windows are bounded
+by the neighbouring breaks in the same column, so close steps don’t
+contaminate each other.</p>
+<p>Breaks are gathered into padded <code class="docutils literal notranslate"><span class="pre">(n_breaks,</span> <span class="pre">window)</span></code> arrays in blocks, so
+there are no Python loops over breaks or columns.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.level_shift_sizing.additive_shift">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.level_shift_sizing.</span></span><span class="sig-name descname"><span class="pre">additive_shift</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">shape</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rows_f</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cols</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sizes</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.level_shift_sizing.additive_shift" title="Link to this definition">¶</a></dt>
+<dd><p>Reverse cumulative sum of <code class="docutils literal notranslate"><span class="pre">-size</span></code> at each break (the <code class="docutils literal notranslate"><span class="pre">lvlshft</span></code> convention).</p>
+<p>History before a break carries <code class="docutils literal notranslate"><span class="pre">-size</span></code>, so <code class="docutils literal notranslate"><span class="pre">values</span> <span class="pre">-</span> <span class="pre">shift</span></code> aligns all
+history to the latest regime.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.level_shift_sizing.huber_location">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.level_shift_sizing.</span></span><span class="sig-name descname"><span class="pre">huber_location</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ok</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">iterations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scale</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.level_shift_sizing.huber_location" title="Link to this definition">¶</a></dt>
+<dd><p>Huber M-estimate of location per row: robust start, fixed scale, IRLS steps.</p>
+<p><code class="docutils literal notranslate"><span class="pre">start</span></code> defaults to the median and <code class="docutils literal notranslate"><span class="pre">scale</span></code> to the MAD about it; callers
+with estimates from a longer-window robust fit pass them in.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.level_shift_sizing.neighbour_bounds">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.level_shift_sizing.</span></span><span class="sig-name descname"><span class="pre">neighbour_bounds</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rows_f</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cols</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.level_shift_sizing.neighbour_bounds" title="Link to this definition">¶</a></dt>
+<dd><p>Previous and next break row in the same column (-1 / T-1 when none).</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.level_shift_sizing.ratio_shift">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.level_shift_sizing.</span></span><span class="sig-name descname"><span class="pre">ratio_shift</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">values</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rows_f</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cols</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sizes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pre_levels</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shift</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.level_shift_sizing.ratio_shift" title="Link to this definition">¶</a></dt>
+<dd><p>Safe multiplicative correction for columns additive would push below zero.</p>
+<p>Only non-negative columns whose additively corrected history goes negative
+switch to ratios <code class="docutils literal notranslate"><span class="pre">(P</span> <span class="pre">+</span> <span class="pre">size)</span> <span class="pre">/</span> <span class="pre">P</span></code>. Returns <code class="docutils literal notranslate"><span class="pre">(ratio_frame,</span> <span class="pre">ratio_columns)</span></code>
+where <code class="docutils literal notranslate"><span class="pre">corrected</span> <span class="pre">=</span> <span class="pre">values</span> <span class="pre">/</span> <span class="pre">ratio_frame</span></code>; ratio_frame is 1 elsewhere.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.level_shift_sizing.size_breaks">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.level_shift_sizing.</span></span><span class="sig-name descname"><span class="pre">size_breaks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">values</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rows_f</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cols</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">window_sizes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'linear_robust'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1000</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.level_shift_sizing.size_breaks" title="Link to this definition">¶</a></dt>
+<dd><p>Size each break as post level minus pre level.</p>
+<dl class="simple">
+<dt>method:</dt><dd><ul class="simple">
+<li><p>“median”: difference of medians of the N-windows either side.</p></li>
+<li><p>“linear_robust”: Huber pooled slope over up to 3N points per side
+(local N-window slope when curvature is detected), then difference of
+Huber levels of the detrended N-windows. Falls back to “median” when
+a side has fewer than <code class="docutils literal notranslate"><span class="pre">max(3,</span> <span class="pre">N</span> <span class="pre">//</span> <span class="pre">3)</span></code> points.</p></li>
+</ul>
+</dd>
+</dl>
+<p>Returns <code class="docutils literal notranslate"><span class="pre">(sizes,</span> <span class="pre">pre_levels)</span></code>; pre_level is the level at the break,
+used to build safe ratio corrections.</p>
+</dd></dl>
+
+</section>
+<section id="module-autots.tools.linear">
+<span id="autots-tools-linear-module"></span><h2>autots.tools.linear module<a class="headerlink" href="#module-autots.tools.linear" title="Link to this heading">¶</a></h2>
+<p>Private NumPy least-squares utilities with explicit diagonal penalties.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.linear.linear_fit_covariance">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.linear.</span></span><span class="sig-name descname"><span class="pre">linear_fit_covariance</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">design</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">penalty</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.linear.linear_fit_covariance" title="Link to this definition">¶</a></dt>
+<dd><p>Return unit-noise coefficient covariance and residual degrees of freedom.</p>
+<p>SVD of the design (augmented for ridge) retains the rank convention of
+lstsq without inferring rank from the less stable squared singular values.
+No time-by-time hat matrix is constructed.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.linear.observation_mask_groups">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.linear.</span></span><span class="sig-name descname"><span class="pre">observation_mask_groups</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">design</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">targets</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.linear.observation_mask_groups" title="Link to this definition">¶</a></dt>
+<dd><p>Yield (usable rows, target columns), sharing solves across equal masks.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.linear.solve_huber_coefficients">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.linear.</span></span><span class="sig-name descname"><span class="pre">solve_huber_coefficients</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">design</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">targets</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">penalty</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">iterations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">50</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.linear.solve_huber_coefficients" title="Link to this definition">¶</a></dt>
+<dd><p>Fit frozen-MAD Huber regression across all targets sharing usable rows.</p>
+<p>Each update uses matrix products over the full target group. Only the
+dependent optimization iterations and distinct observation masks require
+Python loops; no loop or chunking is performed over individual targets.
+Temporary residual arrays scale with observations times targets.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.linear.solve_linear_coefficients">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.linear.</span></span><span class="sig-name descname"><span class="pre">solve_linear_coefficients</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">design</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">targets</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">penalty</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.linear.solve_linear_coefficients" title="Link to this definition">¶</a></dt>
+<dd><p>Solve finite, shared-design least squares, preserving a diagonal ridge loss.</p>
+<p>Targets may be one- or two-dimensional. Missing observations must be removed
+before calling: multiplying NaNs by zero does not remove them from products.</p>
+</dd></dl>
+
+</section>
 <section id="module-autots.tools.lunar">
 <span id="autots-tools-lunar-module"></span><h2>autots.tools.lunar module<a class="headerlink" href="#module-autots.tools.lunar" title="Link to this heading">¶</a></h2>
 <p>Phases of the moon.
@@ -2274,7 +2650,7 @@ performed inside try/except blocks, and integration remains a no-op when
 MLflow is not installed.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="autots.tools.mlflow.autolog">
-<span class="sig-prename descclassname"><span class="pre">autots.tools.mlflow.</span></span><span class="sig-name descname"><span class="pre">autolog</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">disable</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tried_models_logging</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'single'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log_model_runs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log_model_forecasts</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">silent</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.mlflow.autolog" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">autots.tools.mlflow.</span></span><span class="sig-name descname"><span class="pre">autolog</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">disable</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tried_models_logging</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'single'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log_model_runs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log_model_forecasts</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">silent</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log_insights</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.mlflow.autolog" title="Link to this definition">¶</a></dt>
 <dd><p>Enable or disable AutoTS MLflow autologging.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -2285,8 +2661,12 @@ MLflow is not installed.</p>
 “individual” logs a nested run for each tried model row.
 “none” logs only run summary + best model metadata.</p></li>
 <li><p><strong>log_model_runs</strong> (<em>bool</em>) – if True, direct ModelObject.fit() calls are logged.</p></li>
-<li><p><strong>log_model_forecasts</strong> (<em>bool</em>) – if True, direct ModelObject.predict() calls are logged.</p></li>
+<li><p><strong>log_model_forecasts</strong> (<em>bool</em>) – if True, direct ModelObject.predict() calls are logged,
+and AutoTS.predict() logs its long-form forecast as autots/forecast.csv.</p></li>
 <li><p><strong>silent</strong> (<em>bool</em>) – suppress non-fatal integration messages.</p></li>
+<li><p><strong>log_insights</strong> (<em>bool</em>) – if True, AutoTS fits also log generation convergence
+(step metrics), per-series errors, ensemble routing tables, and seed drift
+metrics; see autots.tools.mlflow_insights.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -2300,21 +2680,27 @@ MLflow is not installed.</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="autots.tools.mlflow.load_model">
-<span class="sig-prename descclassname"><span class="pre">autots.tools.mlflow.</span></span><span class="sig-name descname"><span class="pre">load_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">run_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">artifact_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Any</span></span></span><a class="headerlink" href="#autots.tools.mlflow.load_model" title="Link to this definition">¶</a></dt>
-<dd><p>Load an AutoTS or ModelObject instance from an MLflow run.</p>
+<span class="sig-prename descclassname"><span class="pre">autots.tools.mlflow.</span></span><span class="sig-name descname"><span class="pre">load_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">run_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">artifact_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">autots_overrides</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Any</span></span></span><a class="headerlink" href="#autots.tools.mlflow.load_model" title="Link to this definition">¶</a></dt>
+<dd><p>Load an AutoTS or ModelObject instance from an MLflow run or registered template.</p>
+<p>For AutoTS, returns an AutoTS with the logged best model imported and the
+original constructor settings restored. Call <cite>fit_data(df)</cite> then <cite>predict()</cite> to
+refit only the winner on new data; calling <cite>fit()</cite> would run a new search.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>run_id</strong> (<em>str</em>) – MLflow run ID.</p></li>
-<li><p><strong>artifact_path</strong> (<em>str</em>) – Path to the JSON artifact.
+<li><p><strong>run_id</strong> (<em>str</em>) – MLflow run ID of an autologged fit, or a model URI from
+<cite>mlflow_log_template</cite>, such as “models:/demand_seed&#64;approved”.</p></li>
+<li><p><strong>artifact_path</strong> (<em>str</em>) – Path to the JSON artifact (run IDs only).
 If None, tries ‘autots/model_as_code.json’ then ‘modelobject/model_as_code.json’.</p></li>
+<li><p><strong>**autots_overrides</strong> – AutoTS constructor args that replace logged values,
+e.g. forecast_length=56 or n_jobs=4. Ignored for ModelObject runs.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>The reconstructed model instance.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference internal" href="autots.html#autots.AutoTS" title="autots.AutoTS">AutoTS</a> or <a class="reference internal" href="autots.models.html#autots.models.base.ModelObject" title="autots.models.base.ModelObject">ModelObject</a></p>
+<dd class="field-odd"><p><a class="reference internal" href="autots.html#autots.AutoTS" title="autots.AutoTS">autots.AutoTS</a> or <a class="reference internal" href="autots.models.html#autots.models.base.ModelObject" title="autots.models.base.ModelObject">ModelObject</a></p>
 </dd>
 </dl>
 </dd></dl>
@@ -2341,6 +2727,190 @@ If None, tries ‘autots/model_as_code.json’ then ‘modelobject/model_as_code
 <dt class="sig sig-object py" id="autots.tools.mlflow.modelobject_predict_start">
 <span class="sig-prename descclassname"><span class="pre">autots.tools.mlflow.</span></span><span class="sig-name descname"><span class="pre">modelobject_predict_start</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model_obj</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">args</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kwargs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.mlflow.modelobject_predict_start" title="Link to this definition">¶</a></dt>
 <dd><p>Called by ModelObject wrappers before predict().</p>
+</dd></dl>
+
+</section>
+<section id="module-autots.tools.mlflow_insights">
+<span id="autots-tools-mlflow-insights-module"></span><h2>autots.tools.mlflow_insights module<a class="headerlink" href="#module-autots.tools.mlflow_insights" title="Link to this heading">¶</a></h2>
+<p>Explain an AutoTS search in MLflow: convergence, per-series error, routing, seed drift.</p>
+<p>Called by the autolog fit wrapper in autots.tools.mlflow (<cite>log_insights=True</cite>).
+Every item is computed after fit from results AutoTS already keeps, so fit itself
+needs no hooks, and each item fails independently without breaking the fit.</p>
+<dl>
+<dt>Logged to the AutoTS.fit run:</dt><dd><dl class="simple">
+<dt>metrics (step = generation): autots.generation_best_score, autots.generation_best_smape</dt><dd><p>Scores are relative to the final pool of models, so compare them within a run only.</p>
+</dd>
+<dt>tables (mlflow.log_table, sortable in the UI):</dt><dd><p>autots/validation_results.json, autots/per_series_best.json,
+autots/ensemble_routing.json and autots/mosaic_routing.json (horizontal/mosaic winners)</p>
+</dd>
+</dl>
+<p>best.worst_series_mape, best.median_series_mape, best.worst_series,
+best.ensemble_families, best.ensemble_model_count
+seed drift (only when the search was seeded with an exported template):</p>
+<blockquote>
+<div><p>drift.seed_count, drift.winner_seed_share, drift.winner_origin
+drift.seed_survival_rate is logged by mlflow_log_template, since it compares the
+seed with the new exported template and so needs the export settings.
+Result IDs are rebuilt from the parameters a model actually used, so a few seeds
+can count as new.</p>
+</div></blockquote>
+</dd>
+</dl>
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.mlflow_insights.collect_seed_ids">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.mlflow_insights.</span></span><span class="sig-name descname"><span class="pre">collect_seed_ids</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">autots_obj</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span></span></span><a class="headerlink" href="#autots.tools.mlflow_insights.collect_seed_ids" title="Link to this definition">¶</a></dt>
+<dd><p>Single-model IDs of an imported template, read before fit overwrites initial_template.</p>
+<p>Exported templates always carry an ID; general/random templates have none, so an
+unseeded search returns []. Ensemble rows contribute their constituents, because the
+ensemble itself is rebuilt (with a new ID) in every search.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.mlflow_insights.ensemble_leaf_models">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.mlflow_insights.</span></span><span class="sig-name descname"><span class="pre">ensemble_leaf_models</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model_params</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span></span></span><a class="headerlink" href="#autots.tools.mlflow_insights.ensemble_leaf_models" title="Link to this definition">¶</a></dt>
+<dd><p>Map of constituent model ID -&gt; model name, recursing through nested ensembles.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.mlflow_insights.log_autots_insights">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.mlflow_insights.</span></span><span class="sig-name descname"><span class="pre">log_autots_insights</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mlflow</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">autots_obj</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed_ids</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.mlflow_insights.log_autots_insights" title="Link to this definition">¶</a></dt>
+<dd><p>Log every insight; each one is skipped on its own if it cannot be computed.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.mlflow_insights.log_ensemble_routing">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.mlflow_insights.</span></span><span class="sig-name descname"><span class="pre">log_ensemble_routing</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mlflow</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">autots_obj</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.mlflow_insights.log_ensemble_routing" title="Link to this definition">¶</a></dt>
+<dd><p>Which models the winning ensemble uses, and which series each one serves.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.mlflow_insights.log_generation_convergence">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.mlflow_insights.</span></span><span class="sig-name descname"><span class="pre">log_generation_convergence</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mlflow</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">autots_obj</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.mlflow_insights.log_generation_convergence" title="Link to this definition">¶</a></dt>
+<dd><p>Best single-model score per generation, the plot_generation_loss curve as metrics.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.mlflow_insights.log_per_series_errors">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.mlflow_insights.</span></span><span class="sig-name descname"><span class="pre">log_per_series_errors</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mlflow</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">autots_obj</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.mlflow_insights.log_per_series_errors" title="Link to this definition">¶</a></dt>
+<dd><p>Per-series error of the winner; a good overall score can hide one bad series.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.mlflow_insights.seed_drift_metrics">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.mlflow_insights.</span></span><span class="sig-name descname"><span class="pre">seed_drift_metrics</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">autots_obj</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed_ids</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span></span></span><a class="headerlink" href="#autots.tools.mlflow_insights.seed_drift_metrics" title="Link to this definition">¶</a></dt>
+<dd><p>Whether the winner came from the incoming seed. Empty when unseeded.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.mlflow_insights.seed_survival_rate">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.mlflow_insights.</span></span><span class="sig-name descname"><span class="pre">seed_survival_rate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seed_ids</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">template</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">DataFrame</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.mlflow_insights.seed_survival_rate" title="Link to this definition">¶</a></dt>
+<dd><p>Share of seed models kept in the new exported template; None when unseeded.</p>
+<p>Compares like with like only if both templates use the same export settings.
+It is below 1 even on unchanged data, because every search also finds new models
+(0.42 measured on a 2-generation superfast refit), so watch its trend across runs,
+where a sharp drop suggests the data changed (concept drift).</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.mlflow_insights.template_model_ids">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.mlflow_insights.</span></span><span class="sig-name descname"><span class="pre">template_model_ids</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">template</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">DataFrame</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">set</span></span></span><a class="headerlink" href="#autots.tools.mlflow_insights.template_model_ids" title="Link to this definition">¶</a></dt>
+<dd><p>Single-model IDs in an exported template, with ensembles expanded to constituents.</p>
+</dd></dl>
+
+</section>
+<section id="module-autots.tools.mlflow_pyfunc">
+<span id="autots-tools-mlflow-pyfunc-module"></span><h2>autots.tools.mlflow_pyfunc module<a class="headerlink" href="#module-autots.tools.mlflow_pyfunc" title="Link to this heading">¶</a></h2>
+<p>MLflow models-from-code file for registered AutoTS templates (see mlflow_registry).</p>
+<p>Loaded only by MLflow (autots never imports it); the import guard only keeps module
+scanners such as sphinx autodoc working where mlflow is not installed.</p>
+<p>predict(model_input, params) refits the winning model on the given history and
+forecasts; no search runs. model_input is wide history (one column per series) with a
+DatetimeIndex, or with a date column (params date_col, default the first column) as
+REST/JSON payloads lose the index.</p>
+<dl>
+<dt>params:</dt><dd><p>forecast_length (int): overrides the logged forecast_length.
+prediction_interval (float): overrides the logged prediction_interval.
+date_col (str): date column when model_input has no DatetimeIndex.
+output (str): “long” (default) for long_form_results with upper/lower bounds, or</p>
+<blockquote>
+<div><p>“forecast” for the wide point forecast. Both return dates as a “datetime” column.</p>
+</div></blockquote>
+</dd>
+</dl>
+<dl class="py class">
+<dt class="sig sig-object py" id="autots.tools.mlflow_pyfunc.AutoTSPyfunc">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">autots.tools.mlflow_pyfunc.</span></span><span class="sig-name descname"><span class="pre">AutoTSPyfunc</span></span><a class="headerlink" href="#autots.tools.mlflow_pyfunc.AutoTSPyfunc" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.tools.mlflow_pyfunc.AutoTSPyfunc.load_context">
+<span class="sig-name descname"><span class="pre">load_context</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">context</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.mlflow_pyfunc.AutoTSPyfunc.load_context" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.tools.mlflow_pyfunc.AutoTSPyfunc.predict">
+<span class="sig-name descname"><span class="pre">predict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">context</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_input</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.mlflow_pyfunc.AutoTSPyfunc.predict" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-autots.tools.mlflow_registry">
+<span id="autots-tools-mlflow-registry-module"></span><h2>autots.tools.mlflow_registry module<a class="headerlink" href="#module-autots.tools.mlflow_registry" title="Link to this heading">¶</a></h2>
+<p>Version AutoTS Top-N templates in the MLflow Model Registry.</p>
+<p>The template, not a model weight, is the state that carries across production runs:
+each run seeds its search with the last Top-N and exports a new one. Registering it
+gives every template a version, and aliases select which one a run uses:</p>
+<blockquote>
+<div><p>rolling (evolve): import “models:/demand_seed&#64;rolling”, fit, log_template(alias=”rolling”)
+approved (frozen): mlflow_load_model(“models:/demand_seed&#64;approved”), fit_data, predict</p>
+</div></blockquote>
+<p>Rolling back is moving the alias to an earlier version in the MLflow UI.</p>
+<p>MLflow registers only real models (an MLmodel file), so the template is logged as a
+pyfunc (autots/tools/mlflow_pyfunc.py). The same version can be served: its predict
+refits the winning model on the history it is given, because a fitted AutoTS cannot
+be pickled.</p>
+<p>Artifacts of the logged model: template.csv (best model first, with validation
+results) and autots_config.json (same payload as the autologged model_as_code.json).</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.mlflow_registry.download_config">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.mlflow_registry.</span></span><span class="sig-name descname"><span class="pre">download_config</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uri</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span></span></span><a class="headerlink" href="#autots.tools.mlflow_registry.download_config" title="Link to this definition">¶</a></dt>
+<dd><p>AutoTS rebuild payload (init_params + best model) from a logged template.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.mlflow_registry.download_template">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.mlflow_registry.</span></span><span class="sig-name descname"><span class="pre">download_template</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uri</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">DataFrame</span></span></span><a class="headerlink" href="#autots.tools.mlflow_registry.download_template" title="Link to this definition">¶</a></dt>
+<dd><p>Top-N template DataFrame from a logged template, e.g. “models:/demand_seed&#64;rolling”.</p>
+<p>Raises FileNotFoundError if the alias, version, or model does not exist.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.mlflow_registry.log_template">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.mlflow_registry.</span></span><span class="sig-name descname"><span class="pre">log_template</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">autots_model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alias</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">40</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">run_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pip_requirements</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'autots_template'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">export_kwargs</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span></span></span><a class="headerlink" href="#autots.tools.mlflow_registry.log_template" title="Link to this definition">¶</a></dt>
+<dd><p>Log a fitted AutoTS’s Top-N template as a pyfunc model, optionally registered.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>autots_model</strong> (<a class="reference internal" href="autots.html#autots.AutoTS" title="autots.AutoTS"><em>AutoTS</em></a>) – fitted AutoTS.</p></li>
+<li><p><strong>registry_name</strong> (<em>str</em>) – registered model name. None logs without registering.</p></li>
+<li><p><strong>alias</strong> (<em>str</em>) – alias to point at the new version, e.g. “rolling”. Needs registry_name.
+Leave None for frozen mode, where an approved alias is moved by hand.</p></li>
+<li><p><strong>n</strong> (<em>int</em>) – models in the template, passed to export_template.</p></li>
+<li><p><strong>run_id</strong> (<em>str</em>) – run to attach to. Defaults to the autologged fit run of this
+model, then the active run, else a new run.</p></li>
+<li><p><strong>pip_requirements</strong> (<em>list</em>) – serving requirements; defaults to this autots version.</p></li>
+<li><p><strong>name</strong> (<em>str</em>) – name of the logged model within the run.</p></li>
+<li><p><strong>**export_kwargs</strong> – passed to AutoTS.export_template, e.g. max_per_model_class=6,
+min_metrics, max_metrics, focus_models.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>model_uri, run_id, and (when registered) registered_model_uri and version.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
 </dd></dl>
 
 </section>
@@ -2706,6 +3276,13 @@ It will be sensitive to the transformations of the data.</p>
 <section id="module-autots.tools.profile">
 <span id="autots-tools-profile-module"></span><h2>autots.tools.profile module<a class="headerlink" href="#module-autots.tools.profile" title="Link to this heading">¶</a></h2>
 <p>Profiling</p>
+<dl class="py exception">
+<dt class="sig sig-object py" id="autots.tools.profile.ProfileWarning">
+<span class="property"><span class="k"><span class="pre">exception</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">autots.tools.profile.</span></span><span class="sig-name descname"><span class="pre">ProfileWarning</span></span><a class="headerlink" href="#autots.tools.profile.ProfileWarning" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">UserWarning</span></code></p>
+<p>A profiling operation failed and its existing fallback was used.</p>
+</dd></dl>
+
 <dl class="py function">
 <dt class="sig sig-object py" id="autots.tools.profile.data_profile">
 <span class="sig-prename descclassname"><span class="pre">autots.tools.profile.</span></span><span class="sig-name descname"><span class="pre">data_profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.profile.data_profile" title="Link to this definition">¶</a></dt>
@@ -2721,9 +3298,7 @@ Input: a pd DataFrame of columns which are time series, and a datetime index</p>
 <dt>Profiles time series data into categories:</dt><dd><p>smooth: series driven mostly by trend, generally series that don’t fit other categories
 intermittent: occasional demand, one-sided spikes around median, usually many zeroes
 binary: only two values, often 0 and 1 (also includes trinary, three states)
-stationary: limited trend, drift, or seasonality, two-sided around mean
 smooth_drift: smooth series whose dynamics are predominantly changepoint/trend driven with strong first-order autocorrelation
-smooth_trend
 erratic: high volatility series
 flat: generally constant with only occasional movements
 new_product: limited data, series just started receiving data
@@ -2734,25 +3309,42 @@ highly_seasonal: strong seasonal component dominates series</p>
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>df</strong> (<em>pd.DataFrame</em>) – Wide format DataFrame with datetime index and each column as a time series.</p></li>
-<li><p><strong>new_product_threshold</strong> (<em>float</em>) – one of the more finiky thresholds, percent of null or zero data from beginning to declare new product</p></li>
+<li><p><strong>new_product_threshold</strong> (<em>float</em><em> or </em><em>str</em>) – leading null-or-zero fraction required
+for new_product. ‘auto’ resolves from the index length and elapsed span.</p></li>
 <li><p><strong>drift_trend_threshold</strong> (<em>float</em>) – minimum proportion of trend/changepoint contribution required to flag a smooth series as smooth_drift</p></li>
 <li><p><strong>drift_autocorr_threshold</strong> (<em>float</em>) – minimum lag-1 autocorrelation required to flag a smooth series as smooth_drift</p></li>
-<li><p><strong>new_product_correct</strong> (<em>bool</em>) – use dt index to correct</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>DataFrame with ‘SERIES’ and ‘DEMAND_PROFILE’ columns.</p>
+<dd class="field-even"><p><dl class="simple">
+<dt>DataFrame with ‘SERIES’ and ‘PROFILE’ columns. For</dt><dd><p>MultiIndex series labels, identifier levels remain separate columns.</p>
+</dd>
+</dl>
+</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>pd.DataFrame</p>
 </dd>
 </dl>
+<p>Precedence, highest first: highly_seasonal, new_product, flat, binary,
+erratic, intermittent, smooth_drift, then smooth. Use summarize_series for
+the underlying metrics. ProfileWarning reports batch-wide fallback use.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.tools.profile.profile_time_series_mapping">
+<span class="sig-prename descclassname"><span class="pre">autots.tools.profile.</span></span><span class="sig-name descname"><span class="pre">profile_time_series_mapping</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">profile_kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.profile.profile_time_series_mapping" title="Link to this definition">¶</a></dt>
+<dd><p>Map original series labels (including tuples) to their profiles.</p>
+<p>Profile rows retain input column order, so use the original labels rather
+than inferring identifiers from reset_index’s potentially renamed levels.</p>
 </dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="autots.tools.profile.summarize_series">
 <span class="sig-prename descclassname"><span class="pre">autots.tools.profile.</span></span><span class="sig-name descname"><span class="pre">summarize_series</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.profile.summarize_series" title="Link to this definition">¶</a></dt>
-<dd><p>Summarize time series data.</p>
+<dd><p>Return statistics as rows and input time series as columns.</p>
+<p>Failed autocorrelation or decomposition operations emit ProfileWarning and
+retain their existing batch-wide fallbacks.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pd.DataFrame</em>) – wide style data with datetimeindex</p>
@@ -2890,7 +3482,7 @@ Can also be float for percentage or None to disable FFT features</p></li>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="autots.tools.seasonal.build_adaptive_fourier_features">
-<span class="sig-prename descclassname"><span class="pre">autots.tools.seasonal.</span></span><span class="sig-name descname"><span class="pre">build_adaptive_fourier_features</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">DTindex</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">detected_periods</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_order</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">12</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.seasonal.build_adaptive_fourier_features" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">autots.tools.seasonal.</span></span><span class="sig-name descname"><span class="pre">build_adaptive_fourier_features</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">DTindex</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">detected_periods</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_order</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">12</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_obs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.seasonal.build_adaptive_fourier_features" title="Link to this definition">¶</a></dt>
 <dd><p>Build Fourier features using FFT-detected dominant periods.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -2898,6 +3490,9 @@ Can also be float for percentage or None to disable FFT features</p></li>
 <li><p><strong>DTindex</strong> (<em>pd.DatetimeIndex</em>) – Index used to generate deterministic seasonal regressors.</p></li>
 <li><p><strong>detected_periods</strong> (<em>list</em>) – Sequence of <cite>(period, strength)</cite> tuples from <cite>FFT.detect_dominant_periods()</cite>.</p></li>
 <li><p><strong>max_order</strong> (<em>int</em>) – Upper bound for harmonics generated per detected period.</p></li>
+<li><p><strong>n_obs</strong> (<em>int</em><em>, </em><em>optional</em>) – Number of observations used to size the harmonic order. Pass the
+training length when building features for a forecast index so the
+columns match those used at fit time. Defaults to <code class="docutils literal notranslate"><span class="pre">len(DTindex)</span></code>.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -3106,13 +3701,13 @@ If new categorical series or levels are present in .transform() it won’t work!
 <dl class="py function">
 <dt class="sig sig-object py" id="autots.tools.shaping.drop_leading_na_block">
 <span class="sig-prename descclassname"><span class="pre">autots.tools.shaping.</span></span><span class="sig-name descname"><span class="pre">drop_leading_na_block</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.75</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">window</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_drop_fraction</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">warn</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">DataFrame</span></span></span><a class="headerlink" href="#autots.tools.shaping.drop_leading_na_block" title="Link to this definition">¶</a></dt>
-<dd><dl class="simple">
-<dt>Drop an initial leading block of rows if:</dt><dd><ul class="simple">
+<dd><p>Drop an initial leading block of rows if:</p>
+<blockquote>
+<div><ul class="simple">
 <li><p>Those rows are ‘bad’ (row NaN proportion &gt; threshold), AND</p></li>
-<li><p>There are at least <cite>window</cite> consecutive bad rows starting from the top.</p></li>
+<li><p>There are at least <code class="docutils literal notranslate"><span class="pre">window</span></code> consecutive bad rows starting from the top.</p></li>
 </ul>
-</dd>
-</dl>
+</div></blockquote>
 <p>Will warn or raise if more than <cite>max_drop_fraction</cite> of rows would be dropped.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -3158,22 +3753,13 @@ if False, proceeds with printed warning.</p></li>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>df</strong> (<em>pd.DataFrame</em>)</p></li>
-<li><p><strong>date_col</strong> (<em>str</em>)</p></li>
-<li><p><strong>value_col</strong> (<em>str</em>) – <ul>
-<li><p>the name of the column with the values of the time series (ie sales $)</p></li>
-</ul>
-</p></li>
-<li><p><strong>id_col</strong> (<em>str</em>) – <ul>
-<li><p>name of the id column, unique for each time series</p></li>
-</ul>
-</p></li>
-<li><p><strong>aggfunc</strong> (<em>str</em>) – <ul>
-<li><p>passed to pd.pivot_table, determines how to aggregate duplicates for series_id and datetime</p></li>
-</ul>
-<p>other options include “mean” and other numpy functions, beware data <em>must</em> already be input as numeric type for these to work.
-if categorical data is provided, <cite>aggfunc=’first’</cite> is recommended</p>
-</p></li>
+<li><p><strong>df</strong> (<em>pd.DataFrame</em>) – a pandas dataframe having three columns:</p></li>
+<li><p><strong>date_col</strong> (<em>str</em>) – the name of the column containing dates, preferrably already in pandas datetime format</p></li>
+<li><p><strong>value_col</strong> (<em>str</em>) – the name of the column with the values of the time series (ie sales $)</p></li>
+<li><p><strong>id_col</strong> (<em>str</em>) – name of the id column, unique for each time series</p></li>
+<li><p><strong>aggfunc</strong> (<em>str</em>) – passed to pd.pivot_table, determines how to aggregate duplicates for series_id and datetime
+other options include “mean” and other numpy functions, beware data <em>must</em> already be input as numeric type for these to work.
+if categorical data is provided, <cite>aggfunc=’first’</cite> is recommended</p></li>
 </ul>
 </dd>
 </dl>
@@ -3187,15 +3773,12 @@ if categorical data is provided, <cite>aggfunc=’first’</cite> is recommended
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – number of future periods to predict</p></li>
-<li><p><strong>min_allowed_train_percent</strong> (<em>float</em>) – <ul>
-<li><p>forecast length cannot be greater than 1 - this</p></li>
-</ul>
-<p>constrains the forecast length from being much larger than than the training data
+<li><p><strong>min_allowed_train_percent</strong> (<em>float</em>) – forecast length cannot be greater than 1 - this
+constrains the forecast length from being much larger than than the training data
 note this includes NaNs in current configuration
 When forecast_length exceeds the available rows, callers that have
 already warned about degraded validation use an approximately 50/50
-train/test split instead.</p>
-</p></li>
+train/test split instead.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -3273,9 +3856,9 @@ tradeoff between:</p>
 <blockquote>
 <div><ol class="loweralpha simple">
 <li><p>number of anomalies and anomalous ranges</p></li>
+<li><p>the reduction in mean and st dev if anomalous points are removed
+from errors</p></li>
 </ol>
-<p>b) the reduction in mean and st dev if anomalous points are removed
-from errors</p>
 </div></blockquote>
 <p>(see <a class="reference external" href="https://arxiv.org/pdf/1802.04431.pdf">https://arxiv.org/pdf/1802.04431.pdf</a>)</p>
 <dl class="field-list simple">
@@ -4884,10 +5467,8 @@ None - no discretization
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>fillNA</strong> (<em>str</em>) – <ul>
-<li><p>method to fill NA, passed through to FillNA()</p></li>
-</ul>
-<p>’ffill’ - fill most recent non-na value forward until another non-na value is reached
+<li><p><strong>fillNA</strong> (<em>str</em>) – method to fill NA, passed through to FillNA()
+‘ffill’ - fill most recent non-na value forward until another non-na value is reached
 ‘zero’ - fill with zero. Useful for sales and other data where NA does usually mean $0.
 ‘mean’ - fill all missing values with the series’ overall average value
 ‘median’ - fill all missing values with the series’ overall median value
@@ -4896,12 +5477,9 @@ None - no discretization
 ‘ffill_mean_biased’ - simple avg of ffill and mean
 ‘fake_date’ - shifts forward data over nan, thus values will have incorrect timestamps
 ‘IterativeImputer’ - sklearn iterative imputer
-most of the interpolate methods from pandas.interpolate</p>
-</p></li>
-<li><p><strong>transformations</strong> (<em>dict</em>) – <ul>
-<li><p>transformations to apply {0: “MinMaxScaler”, 1: “Detrend”, …}</p></li>
-</ul>
-<p>’None’
+most of the interpolate methods from pandas.interpolate</p></li>
+<li><p><strong>transformations</strong> (<em>dict</em>) – transformations to apply {0: “MinMaxScaler”, 1: “Detrend”, …}
+‘None’
 ‘MinMaxScaler’ - Sklearn MinMaxScaler
 ‘PowerTransformer’ - Sklearn PowerTransformer
 ‘QuantileTransformer’ - Sklearn
@@ -4960,8 +5538,7 @@ most of the interpolate methods from pandas.interpolate</p>
 “MeanPercentSplitter”: split data into rolling mean and percent of rolling mean
 “UpscaleDownscaleTransformer”: upscales and downscales
 “ReconciliationTransformer”: creates hierarchies then reconciles on the way back
-“CointegrationTransformer”: creates stationary features from cointegrated sets of series</p>
-</p></li>
+“CointegrationTransformer”: creates stationary features from cointegrated sets of series</p></li>
 <li><p><strong>transformation_params</strong> (<em>dict</em>) – params of transformers {0: {}, 1: {‘model’: ‘Poisson’}, …}
 pass through dictionary of empty dictionaries to utilize defaults</p></li>
 <li><p><strong>random_seed</strong> (<em>int</em>) – random state passed through where applicable</p></li>
@@ -5160,15 +5737,23 @@ AutoTS prediction container</p></li>
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.tools.transform.HolidayTransformer.dates_to_holidays">
 <span class="sig-name descname"><span class="pre">dates_to_holidays</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dates</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">style</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'flag'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">holiday_impacts</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_features</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">365</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.HolidayTransformer.dates_to_holidays" title="Link to this definition">¶</a></dt>
-<dd><p>dates (pd.DatetimeIndex): list of dates
-style (str): option for how to return information</p>
-<blockquote>
-<div><p>“long” - return date, name, series for all holidays in a long style dataframe
-“impact” - returns dates, series with values of sum of impacts (if given) or joined string of holiday names
-‘flag’ - return dates, holidays flag, (is not 0-1 but rather sum of input series impacted for that holiday and day)
-‘prophet’ - return format required for prophet. Will need to be filtered on <cite>series</cite> for multivariate case
-‘series_flag’ - dates, series 0/1 for if holiday occurred in any calendar</p>
-</div></blockquote>
+<dd><p>Convert dates to holidays.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dates</strong> (<em>pd.DatetimeIndex</em>) – list of dates</p></li>
+<li><p><strong>style</strong> (<em>str</em>) – <p>option for how to return information</p>
+<ul>
+<li><p>”long” - return date, name, series for all holidays in a long style dataframe</p></li>
+<li><p>”impact” - returns dates, series with values of sum of impacts (if given) or joined string of holiday names</p></li>
+<li><p>’flag’ - return dates, holidays flag, (is not 0-1 but rather sum of input series impacted for that holiday and day)</p></li>
+<li><p>’prophet’ - return format required for prophet. Will need to be filtered on <cite>series</cite> for multivariate case</p></li>
+<li><p>’series_flag’ - dates, series 0/1 for if holiday occurred in any calendar</p></li>
+</ul>
+</p></li>
+</ul>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py method">
@@ -5350,39 +5935,69 @@ style (str): option for how to return information</p>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="autots.tools.transform.LevelShiftMagic">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">autots.tools.transform.</span></span><span class="sig-name descname"><span class="pre">LevelShiftMagic</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">window_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">90</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">grouping_forward_limit</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_level_shifts</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alignment</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'average'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'multivariate'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remove_at_shift</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shift_remove_window</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shift_fillna</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'linear'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">window_method</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'overlap'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.LevelShiftMagic" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">autots.tools.transform.</span></span><span class="sig-name descname"><span class="pre">LevelShiftMagic</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">window_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">90</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">grouping_forward_limit</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_level_shifts</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alignment</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'multivariate'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remove_at_shift</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shift_remove_window</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shift_fillna</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'linear'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">window_method</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'overlap'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scales</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">deseasonalize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">anomaly_window</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tail_scan</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">correction_mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'additive'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.LevelShiftMagic" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.tools.transform.EmptyTransformer" title="autots.tools.transform.EmptyTransformer"><code class="xref py py-class docutils literal notranslate"><span class="pre">EmptyTransformer</span></code></a></p>
 <p>Detects and corrects for level shifts. May seriously skew trend.</p>
 <p>May look small, but is probably one of my most important contributions to time series tooling (so say I, Colin)</p>
+<p>A moving-sum (MOSUM) changepoint detector: compare means of a back and a
+forward window, threshold, and take one peak per group.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>window_size</strong> (<em>int</em>) – size of rolling window for detection</p></li>
-<li><p><strong>alpha</strong> (<em>float</em>) – threshold multiplier for standard deviation</p></li>
-<li><p><strong>grouping_forward_limit</strong> (<em>int</em>) – number of periods to group nearby shifts</p></li>
-<li><p><strong>max_level_shifts</strong> (<em>int</em>) – maximum number of level shifts to detect</p></li>
-<li><p><strong>alignment</strong> (<em>str</em>) – method for aligning level shift magnitudes</p></li>
+<li><p><strong>window_size</strong> (<em>int</em>) – size of rolling window for detection (legacy methods;
+“linear_gap” uses <code class="docutils literal notranslate"><span class="pre">scales</span></code>)</p></li>
+<li><p><strong>alpha</strong> (<em>float</em>) – detection threshold. Its scale depends on window_method:
+legacy methods multiply the standard deviation of the window score
+(typically 1-4); “linear_gap” thresholds a robust z score before its
+multiscale penalty (typically 3-6, 3.5-4 a good start). Values are not
+interchangeable between the two.</p></li>
+<li><p><strong>grouping_forward_limit</strong> (<em>int</em>) – number of periods to group nearby shifts
+(legacy methods only)</p></li>
+<li><p><strong>max_level_shifts</strong> (<em>int</em>) – maximum number of level shifts to detect per series</p></li>
+<li><p><strong>alignment</strong> (<em>str</em>) – method for sizing level shift magnitudes, None for the
+method default (“average” legacy, “linear_robust” for “linear_gap”).
+Legacy methods: “average”, “last_value”, “rolling_diff”,
+“rolling_diff_3nn”, “rolling_diff_5nn”, “median”, “linear_robust”.
+“linear_gap”: “linear_robust” (Huber-detrended window levels),
+“median” (difference of window medians) or “gap” (the detector’s own
+detrended gap); anything else raises.</p></li>
 <li><p><strong>output</strong> (<em>str</em>) – ‘multivariate’ (default, each series independent) or ‘univariate’
-(detect shared level shifts across series)</p></li>
+(detect shared level shift dates across series, sized and applied per series)</p></li>
 <li><p><strong>remove_at_shift</strong> (<em>bool</em>) – if True, remove data points at detected level shifts and fill gaps</p></li>
 <li><p><strong>shift_remove_window</strong> (<em>int</em>) – number of points to remove on each side of shift point (0, 1, or 2)</p></li>
 <li><p><strong>shift_fillna</strong> (<em>str</em>) – fillna method to use for gaps created by shift removal</p></li>
-<li><p><strong>window_method</strong> (<em>str</em>) – <p>method for comparing forward and backward rolling windows
-- “overlap” (default): both windows include current point i, then subtract means</p>
-<blockquote>
-<div><p>backward=[i-N+1 to i], forward=[i to i+N-1], compare: rolling - rolling_forward</p>
-</div></blockquote>
+<li><p><strong>window_method</strong> (<em>str</em>) – <p>method for comparing forward and backward rolling windows</p>
 <ul>
+<li><p>”overlap” (default): both windows include current point i, then subtract means
+backward=[i-N+1 to i], forward=[i to i+N-1], compare: rolling - rolling_forward</p></li>
 <li><p>”exclusive”: windows exclude current point with 1-point gap, then subtract means
 backward=[i-N to i-1], forward=[i+1 to i+N], compare: rolling - rolling_forward</p></li>
 <li><p>”diff_overlap”: diff data first, then overlapping windows, detect when BOTH exceed threshold
 Apply diff first, then backward=[i-N+1 to i], forward=[i to i+N-1]
 Point i is a shift if BOTH rolling and rolling_forward independently exceed threshold in same direction</p></li>
+<li><p>”linear_gap”: detrended pooled-slope gap between [i-N, i) and [i, i+N),
+robust z-scored, multiscale, with a bump test rejecting spikes. Unlike the
+others it neither fires on steady trends nor misses steps against the trend.</p></li>
 </ul>
 </p></li>
+<li><p><strong>scales</strong> (<em>list</em>) – window sizes for “linear_gap”, None uses [14, 30, 60].
+Several scales catch both close opposite steps and long subtle ones.</p></li>
+<li><p><strong>deseasonalize</strong> (<em>bool</em><em> or </em><em>int</em>) – “linear_gap” only, remove a median seasonal profile
+before detection; True infers the season length, an int fixes it</p></li>
+<li><p><strong>anomaly_window</strong> (<em>int</em>) – longest bump treated as an anomaly rather than a shift by
+“linear_gap”, and the minimum post-shift length for tail_scan</p></li>
+<li><p><strong>tail_scan</strong> (<em>bool</em>) – “linear_gap” only (default on), also look for shifts in
+the last anomaly_window to 20 points, which window detection cannot see</p></li>
+<li><p><strong>correction_mode</strong> (<em>str</em>) – “additive” or “auto” (ratio correction for non-negative
+series that the additive correction would push below zero)</p></li>
 </ul>
 </dd>
 </dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="autots.tools.transform.LevelShiftMagic.default_linear_gap_scales">
+<span class="sig-name descname"><span class="pre">default_linear_gap_scales</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">[14,</span> <span class="pre">30,</span> <span class="pre">60]</span></span><a class="headerlink" href="#autots.tools.transform.LevelShiftMagic.default_linear_gap_scales" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.tools.transform.LevelShiftMagic.extract_level_shift_dates">
 <span class="sig-name descname"><span class="pre">extract_level_shift_dates</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.LevelShiftMagic.extract_level_shift_dates" title="Link to this definition">¶</a></dt>
@@ -5458,6 +6073,31 @@ If None, uses the index from lvlshft.</p>
 </dl>
 </dd></dl>
 
+<dl class="py attribute">
+<dt class="sig sig-object py" id="autots.tools.transform.LevelShiftMagic.legacy_alignments">
+<span class="sig-name descname"><span class="pre">legacy_alignments</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">['average',</span> <span class="pre">'last_value',</span> <span class="pre">'rolling_diff',</span> <span class="pre">'rolling_diff_3nn',</span> <span class="pre">'rolling_diff_5nn',</span> <span class="pre">'median',</span> <span class="pre">'linear_robust']</span></span><a class="headerlink" href="#autots.tools.transform.LevelShiftMagic.legacy_alignments" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="autots.tools.transform.LevelShiftMagic.legacy_window_methods">
+<span class="sig-name descname"><span class="pre">legacy_window_methods</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">['overlap',</span> <span class="pre">'exclusive',</span> <span class="pre">'diff_overlap']</span></span><a class="headerlink" href="#autots.tools.transform.LevelShiftMagic.legacy_window_methods" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="autots.tools.transform.LevelShiftMagic.linear_gap_alignments">
+<span class="sig-name descname"><span class="pre">linear_gap_alignments</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">['linear_robust',</span> <span class="pre">'median',</span> <span class="pre">'gap']</span></span><a class="headerlink" href="#autots.tools.transform.LevelShiftMagic.linear_gap_alignments" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="autots.tools.transform.LevelShiftMagic.robust_alignments">
+<span class="sig-name descname"><span class="pre">robust_alignments</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">['median',</span> <span class="pre">'linear_robust']</span></span><a class="headerlink" href="#autots.tools.transform.LevelShiftMagic.robust_alignments" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="autots.tools.transform.LevelShiftMagic.rolling_diff_alignments">
+<span class="sig-name descname"><span class="pre">rolling_diff_alignments</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">['rolling_diff',</span> <span class="pre">'rolling_diff_3nn',</span> <span class="pre">'rolling_diff_5nn']</span></span><a class="headerlink" href="#autots.tools.transform.LevelShiftMagic.rolling_diff_alignments" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.tools.transform.LevelShiftMagic.transform">
 <span class="sig-name descname"><span class="pre">transform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.LevelShiftMagic.transform" title="Link to this definition">¶</a></dt>
@@ -5468,6 +6108,16 @@ If None, uses the index from lvlshft.</p>
 </dd>
 </dl>
 </dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.tools.transform.LevelShiftMagic.valid_alignments">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">valid_alignments</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">window_method</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.LevelShiftMagic.valid_alignments" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="autots.tools.transform.LevelShiftMagic.window_methods">
+<span class="sig-name descname"><span class="pre">window_methods</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">['overlap',</span> <span class="pre">'exclusive',</span> <span class="pre">'diff_overlap',</span> <span class="pre">'linear_gap']</span></span><a class="headerlink" href="#autots.tools.transform.LevelShiftMagic.window_methods" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
 
 </dd></dl>
 
@@ -5802,7 +6452,7 @@ inverse_transform can only be applied to the original series, or an immediately 
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>log</strong> (<em>bool</em>) – whether to include a log transform.</p></li>
 <li><p><strong>center_one</strong> (<em>bool</em>) – whether to shift to 1 instead of 0.</p></li>
-<li><p><strong>squared</strong> (<em>bool</em>) – whether to square (<a href="#id3"><span class="problematic" id="id4">**</span></a>2) values after shift.</p></li>
+<li><p><strong>squared</strong> (<em>bool</em>) – whether to square (<code class="docutils literal notranslate"><span class="pre">**2</span></code>) values after shift.</p></li>
 </ul>
 </dd>
 </dl>
@@ -5854,7 +6504,7 @@ inverse_transform can only be applied to the original series, or an immediately 
 
 <dl class="py function">
 <dt class="sig sig-object py" id="autots.tools.transform.RandomTransform">
-<span class="sig-prename descclassname"><span class="pre">autots.tools.transform.</span></span><span class="sig-name descname"><span class="pre">RandomTransform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">transformer_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">{'AlignLastDiff':</span> <span class="pre">0.01,</span> <span class="pre">'AlignLastValue':</span> <span class="pre">0.2,</span> <span class="pre">'AnomalyRemoval':</span> <span class="pre">0.03,</span> <span class="pre">'BKBandpassFilter':</span> <span class="pre">0.01,</span> <span class="pre">'BTCD':</span> <span class="pre">0.005,</span> <span class="pre">'CenterLastValue':</span> <span class="pre">0.01,</span> <span class="pre">'CenterSplit':</span> <span class="pre">0.01,</span> <span class="pre">'ChangepointDetector':</span> <span class="pre">0.01,</span> <span class="pre">'ChangepointDetrend':</span> <span class="pre">0.01,</span> <span class="pre">'ClipOutliers':</span> <span class="pre">0.03,</span> <span class="pre">'CointegrationTransformer':</span> <span class="pre">0.01,</span> <span class="pre">'Constraint':</span> <span class="pre">0.01,</span> <span class="pre">'ConvolutionFilter':</span> <span class="pre">0.01,</span> <span class="pre">'CumSumTransformer':</span> <span class="pre">0.005,</span> <span class="pre">'DatepartRegression':</span> <span class="pre">0.01,</span> <span class="pre">'Detrend':</span> <span class="pre">0.02,</span> <span class="pre">'DiffSmoother':</span> <span class="pre">0.005,</span> <span class="pre">'DifferencedTransformer':</span> <span class="pre">0.05,</span> <span class="pre">'Discretize':</span> <span class="pre">0.01,</span> <span class="pre">'EWMAFilter':</span> <span class="pre">0.02,</span> <span class="pre">'FFTDecomposition':</span> <span class="pre">0.01,</span> <span class="pre">'FFTFilter':</span> <span class="pre">0.01,</span> <span class="pre">'FIRFilter':</span> <span class="pre">0.01,</span> <span class="pre">'FastICA':</span> <span class="pre">0.005,</span> <span class="pre">'G711Scaler':</span> <span class="pre">0.01,</span> <span class="pre">'G726Filter':</span> <span class="pre">0.01,</span> <span class="pre">'HPFilter':</span> <span class="pre">0.01,</span> <span class="pre">'HistoricValues':</span> <span class="pre">0.01,</span> <span class="pre">'HolidayTransformer':</span> <span class="pre">0.01,</span> <span class="pre">'IntermittentOccurrence':</span> <span class="pre">0.01,</span> <span class="pre">'KalmanSmoothing':</span> <span class="pre">0.01,</span> <span class="pre">'LevelShiftTransformer':</span> <span class="pre">0.03,</span> <span class="pre">'LocalLinearTrend':</span> <span class="pre">0.01,</span> <span class="pre">'Log':</span> <span class="pre">0.01,</span> <span class="pre">'MaxAbsScaler':</span> <span class="pre">0.03,</span> <span class="pre">'MeanDifference':</span> <span class="pre">0.002,</span> <span class="pre">'MeanPercentSplitter':</span> <span class="pre">0.01,</span> <span class="pre">'MinMaxScaler':</span> <span class="pre">0.03,</span> <span class="pre">'PCA':</span> <span class="pre">0.01,</span> <span class="pre">'PctChangeTransformer':</span> <span class="pre">0.01,</span> <span class="pre">'PositiveShift':</span> <span class="pre">0.02,</span> <span class="pre">'PowerTransformer':</span> <span class="pre">0.01,</span> <span class="pre">'QuantileTransformer':</span> <span class="pre">0.03,</span> <span class="pre">'ReconciliationTransformer':</span> <span class="pre">0.01,</span> <span class="pre">'RegressionFilter':</span> <span class="pre">0.01,</span> <span class="pre">'ReplaceConstant':</span> <span class="pre">0.02,</span> <span class="pre">'RobustScaler':</span> <span class="pre">0.03,</span> <span class="pre">'RollingMean100thN':</span> <span class="pre">0.01,</span> <span class="pre">'RollingMeanTransformer':</span> <span class="pre">0.02,</span> <span class="pre">'Round':</span> <span class="pre">0.02,</span> <span class="pre">'STLFilter':</span> <span class="pre">0.01,</span> <span class="pre">'ScipyFilter':</span> <span class="pre">0.02,</span> <span class="pre">'SeasonalDifference':</span> <span class="pre">0.06,</span> <span class="pre">'ShiftFirstValue':</span> <span class="pre">0.01,</span> <span class="pre">'SinTrend':</span> <span class="pre">0.01,</span> <span class="pre">'Slice':</span> <span class="pre">0.02,</span> <span class="pre">'StandardScaler':</span> <span class="pre">0.04,</span> <span class="pre">'ThetaTransformer':</span> <span class="pre">0.01,</span> <span class="pre">'UpscaleDownscaleTransformer':</span> <span class="pre">0.005,</span> <span class="pre">'bkfilter':</span> <span class="pre">0.05,</span> <span class="pre">'cffilter':</span> <span class="pre">0.01,</span> <span class="pre">'convolution_filter':</span> <span class="pre">0.001,</span> <span class="pre">None:</span> <span class="pre">0.0}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transformer_max_depth</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">4</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">na_prob_dict</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">{'DatepartRegressionImputer':</span> <span class="pre">0.01,</span> <span class="pre">'IterativeImputer':</span> <span class="pre">0.025,</span> <span class="pre">'IterativeImputerExtraTrees':</span> <span class="pre">0.0001,</span> <span class="pre">'KNNImputer':</span> <span class="pre">0.02,</span> <span class="pre">'SeasonalityMotifImputer1K':</span> <span class="pre">0.005,</span> <span class="pre">'SeasonalityMotifImputerLinMix':</span> <span class="pre">0.005,</span> <span class="pre">'fake_date':</span> <span class="pre">0.1,</span> <span class="pre">'ffill':</span> <span class="pre">0.4,</span> <span class="pre">'ffill_mean_biased':</span> <span class="pre">0.1,</span> <span class="pre">'interpolate':</span> <span class="pre">0.4,</span> <span class="pre">'mean':</span> <span class="pre">0.06,</span> <span class="pre">'median':</span> <span class="pre">0.03,</span> <span class="pre">'rolling_mean':</span> <span class="pre">0.1,</span> <span class="pre">'rolling_mean_24':</span> <span class="pre">0.1,</span> <span class="pre">'seasonal_linear':</span> <span class="pre">0.01,</span> <span class="pre">'seasonal_linear_window_3':</span> <span class="pre">0.01,</span> <span class="pre">'zero':</span> <span class="pre">0.05,</span> <span class="pre">None:</span> <span class="pre">0.001}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fast_params</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">superfast_params</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">traditional_order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transformer_min_depth</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_none</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">no_nan_fill</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_fillna</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.RandomTransform" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">autots.tools.transform.</span></span><span class="sig-name descname"><span class="pre">RandomTransform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">transformer_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">{'AlignLastDiff':</span> <span class="pre">0.01,</span> <span class="pre">'AlignLastValue':</span> <span class="pre">0.2,</span> <span class="pre">'AnomalyRemoval':</span> <span class="pre">0.03,</span> <span class="pre">'BKBandpassFilter':</span> <span class="pre">0.01,</span> <span class="pre">'BTCD':</span> <span class="pre">0.005,</span> <span class="pre">'CenterLastValue':</span> <span class="pre">0.01,</span> <span class="pre">'CenterSplit':</span> <span class="pre">0.01,</span> <span class="pre">'ChangepointDetector':</span> <span class="pre">0.01,</span> <span class="pre">'ChangepointDetrend':</span> <span class="pre">0.01,</span> <span class="pre">'ClipOutliers':</span> <span class="pre">0.03,</span> <span class="pre">'CointegrationTransformer':</span> <span class="pre">0.01,</span> <span class="pre">'Constraint':</span> <span class="pre">0.01,</span> <span class="pre">'ConvolutionFilter':</span> <span class="pre">0.01,</span> <span class="pre">'CumSumTransformer':</span> <span class="pre">0.005,</span> <span class="pre">'DatepartRegression':</span> <span class="pre">0.01,</span> <span class="pre">'Detrend':</span> <span class="pre">0.02,</span> <span class="pre">'DiffSmoother':</span> <span class="pre">0.005,</span> <span class="pre">'DifferencedTransformer':</span> <span class="pre">0.05,</span> <span class="pre">'Discretize':</span> <span class="pre">0.01,</span> <span class="pre">'EWMAFilter':</span> <span class="pre">0.02,</span> <span class="pre">'FFTDecomposition':</span> <span class="pre">0.005,</span> <span class="pre">'FFTFilter':</span> <span class="pre">0.01,</span> <span class="pre">'FIRFilter':</span> <span class="pre">0.01,</span> <span class="pre">'FastICA':</span> <span class="pre">0.005,</span> <span class="pre">'G711Scaler':</span> <span class="pre">0.01,</span> <span class="pre">'G726Filter':</span> <span class="pre">0.01,</span> <span class="pre">'HPFilter':</span> <span class="pre">0.01,</span> <span class="pre">'HistoricValues':</span> <span class="pre">0.01,</span> <span class="pre">'HolidayTransformer':</span> <span class="pre">0.01,</span> <span class="pre">'IntermittentOccurrence':</span> <span class="pre">0.01,</span> <span class="pre">'KalmanSmoothing':</span> <span class="pre">0.01,</span> <span class="pre">'LevelShiftTransformer':</span> <span class="pre">0.03,</span> <span class="pre">'LocalLinearTrend':</span> <span class="pre">0.01,</span> <span class="pre">'Log':</span> <span class="pre">0.01,</span> <span class="pre">'MaxAbsScaler':</span> <span class="pre">0.03,</span> <span class="pre">'MeanDifference':</span> <span class="pre">0.002,</span> <span class="pre">'MeanPercentSplitter':</span> <span class="pre">0.01,</span> <span class="pre">'MinMaxScaler':</span> <span class="pre">0.03,</span> <span class="pre">'PCA':</span> <span class="pre">0.01,</span> <span class="pre">'PctChangeTransformer':</span> <span class="pre">0.01,</span> <span class="pre">'PositiveShift':</span> <span class="pre">0.02,</span> <span class="pre">'PowerTransformer':</span> <span class="pre">0.01,</span> <span class="pre">'QuantileTransformer':</span> <span class="pre">0.03,</span> <span class="pre">'ReconciliationTransformer':</span> <span class="pre">0.01,</span> <span class="pre">'RegressionFilter':</span> <span class="pre">0.01,</span> <span class="pre">'ReplaceConstant':</span> <span class="pre">0.02,</span> <span class="pre">'RobustScaler':</span> <span class="pre">0.03,</span> <span class="pre">'RollingMean100thN':</span> <span class="pre">0.01,</span> <span class="pre">'RollingMeanTransformer':</span> <span class="pre">0.02,</span> <span class="pre">'Round':</span> <span class="pre">0.02,</span> <span class="pre">'STLFilter':</span> <span class="pre">0.01,</span> <span class="pre">'ScipyFilter':</span> <span class="pre">0.02,</span> <span class="pre">'SeasonalDifference':</span> <span class="pre">0.06,</span> <span class="pre">'ShiftFirstValue':</span> <span class="pre">0.01,</span> <span class="pre">'SinTrend':</span> <span class="pre">0.01,</span> <span class="pre">'Slice':</span> <span class="pre">0.02,</span> <span class="pre">'StandardScaler':</span> <span class="pre">0.04,</span> <span class="pre">'ThetaTransformer':</span> <span class="pre">0.01,</span> <span class="pre">'UpscaleDownscaleTransformer':</span> <span class="pre">0.005,</span> <span class="pre">'bkfilter':</span> <span class="pre">0.05,</span> <span class="pre">'cffilter':</span> <span class="pre">0.01,</span> <span class="pre">'convolution_filter':</span> <span class="pre">0.001,</span> <span class="pre">None:</span> <span class="pre">0.0}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transformer_max_depth</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">4</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">na_prob_dict</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">{'DatepartRegressionImputer':</span> <span class="pre">0.01,</span> <span class="pre">'IterativeImputer':</span> <span class="pre">0.025,</span> <span class="pre">'IterativeImputerExtraTrees':</span> <span class="pre">0.0001,</span> <span class="pre">'KNNImputer':</span> <span class="pre">0.02,</span> <span class="pre">'SeasonalityMotifImputer1K':</span> <span class="pre">0.005,</span> <span class="pre">'SeasonalityMotifImputerLinMix':</span> <span class="pre">0.005,</span> <span class="pre">'fake_date':</span> <span class="pre">0.1,</span> <span class="pre">'ffill':</span> <span class="pre">0.4,</span> <span class="pre">'ffill_mean_biased':</span> <span class="pre">0.1,</span> <span class="pre">'interpolate':</span> <span class="pre">0.4,</span> <span class="pre">'mean':</span> <span class="pre">0.06,</span> <span class="pre">'median':</span> <span class="pre">0.03,</span> <span class="pre">'rolling_mean':</span> <span class="pre">0.1,</span> <span class="pre">'rolling_mean_24':</span> <span class="pre">0.1,</span> <span class="pre">'seasonal_linear':</span> <span class="pre">0.01,</span> <span class="pre">'seasonal_linear_window_3':</span> <span class="pre">0.01,</span> <span class="pre">'zero':</span> <span class="pre">0.05,</span> <span class="pre">None:</span> <span class="pre">0.001}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fast_params</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">superfast_params</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">traditional_order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transformer_min_depth</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_none</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">no_nan_fill</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_fillna</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.RandomTransform" title="Link to this definition">¶</a></dt>
 <dd><p>Return a dict of randomly choosen transformation selections.</p>
 <p>BTCD is used as a signal that slow parameters are allowed.</p>
 <dl class="field-list simple">
@@ -5886,12 +6536,9 @@ plus a small ridge to ensure numerical stability.</p></li>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>group_size</strong> (<em>int</em>) – Number of bottom-level series to combine into one middle-level aggregator
 if no hierarchy_map is provided.</p></li>
-<li><p><strong>hierarchy_map</strong> (<em>dict</em><em> or </em><em>None</em>) – <dl class="simple">
-<dt>If provided, describes aggregator sums for top/middle levels. E.g.,</dt><dd><p>{ “TOP”: [“A”,”B”,”C”,”D”], “MID1”:[“A”,”B”], “MID2”:[“C”,”D”] }.</p>
-</dd>
-</dl>
-<p>If None, automatically creates groups of size group_size plus a single “TOP”.</p>
-</p></li>
+<li><p><strong>hierarchy_map</strong> (<em>dict</em><em> or </em><em>None</em>) – If provided, describes aggregator sums for top/middle levels. E.g.,
+<code class="docutils literal notranslate"><span class="pre">{</span> <span class="pre">&quot;TOP&quot;:</span> <span class="pre">[&quot;A&quot;,&quot;B&quot;,&quot;C&quot;,&quot;D&quot;],</span> <span class="pre">&quot;MID1&quot;:[&quot;A&quot;,&quot;B&quot;],</span> <span class="pre">&quot;MID2&quot;:[&quot;C&quot;,&quot;D&quot;]</span> <span class="pre">}</span></code>.
+If None, automatically creates groups of size group_size plus a single “TOP”.</p></li>
 <li><p><strong>reconciliation_params</strong> (<em>dict</em>) – <dl class="simple">
 <dt>Dict of parameters for reconciliation. Structure:</dt><dd><ul>
 <li><dl class="simple">
@@ -6943,17 +7590,17 @@ will ultimately yield a DataFrame with the same DatetimeIndex as the original.</
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>df</strong> (<em>pandas.DataFrame</em>) – training data frame to slice</p></li>
-<li><p><strong>method</strong> (<em>str</em>) – <p>Option to slice dataframe
-‘None’ - return unaltered dataframe
-‘HalfMax’ - return half of dataframe
-‘ForecastLength’ - return dataframe equal to length of forecast
-‘2ForecastLength’ - return dataframe equal to twice length of forecast</p>
-<blockquote>
-<div><p>(also takes 4, 6, 8, 10 in addition to 2)</p>
-</div></blockquote>
-<p>’n’ - any integer length to slice by
-‘-n’ - full length less this amount
-“0.n” - this percent of the full data</p>
+<li><p><strong>method</strong> (<em>str</em>) – <p>Option to slice dataframe</p>
+<ul>
+<li><p>’None’ - return unaltered dataframe</p></li>
+<li><p>’HalfMax’ - return half of dataframe</p></li>
+<li><p>’ForecastLength’ - return dataframe equal to length of forecast</p></li>
+<li><p>’2ForecastLength’ - return dataframe equal to twice length of forecast
+(also takes 4, 6, 8, 10 in addition to 2)</p></li>
+<li><p>’n’ - any integer length to slice by</p></li>
+<li><p>’-n’ - full length less this amount</p></li>
+<li><p>”0.n” - this percent of the full data</p></li>
+</ul>
 </p></li>
 </ul>
 </dd>
@@ -7321,6 +7968,7 @@ Note that this returns a different orientation than window_maker_2</p>
 <li class="toctree-l1"><a class="reference internal" href="intro.html#autots">AutoTS</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorial.html">Tutorial</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorial.html#extended-tutorial">Extended Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../metric_weighting_guide.html">AutoTS Metric Weighting</a></li>
 </ul>
 <ul class="current">
 <li class="toctree-l1 current"><a class="reference internal" href="modules.html">autots</a><ul class="current">

@@ -14,11 +14,11 @@
         gtag('config', 'G-P2KLF8302E');
     </script>
     
-    <title>autots.evaluator.feature_detector.utils package &#8212; AutoTS 1.0.4 documentation</title>
+    <title>autots.evaluator.feature_detector.utils package &#8212; AutoTS 1.0.5 documentation</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=ec641305" />
-    <script src="../_static/documentation_options.js?v=71272d9f"></script>
+    <script src="../_static/documentation_options.js?v=d55fa986"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../genindex.html" />
@@ -58,6 +58,110 @@
 </dd></dl>
 
 </section>
+<section id="module-autots.evaluator.feature_detector.utils.joint_trend_selection">
+<span id="autots-evaluator-feature-detector-utils-joint-trend-selection-module"></span><h2>autots.evaluator.feature_detector.utils.joint_trend_selection module<a class="headerlink" href="#module-autots.evaluator.feature_detector.utils.joint_trend_selection" title="Link to this heading">¶</a></h2>
+<p>Vectorized joint selection of trend hinges (slope changes) and steps (level shifts).</p>
+<p>Greedy forward selection under one least-squares model <code class="docutils literal notranslate"><span class="pre">[1,</span> <span class="pre">t,</span> <span class="pre">nuisance,</span>
+<span class="pre">hinges,</span> <span class="pre">steps]</span></code> with a BIC stop, then relocation and pruning. Every candidate
+position is scored at once: by Frisch-Waugh-Lovell, adding column <code class="docutils literal notranslate"><span class="pre">x</span></code> to a
+model with orthonormal basis <code class="docutils literal notranslate"><span class="pre">Q</span></code> and residual <code class="docutils literal notranslate"><span class="pre">r</span></code> lowers SSE by
+<code class="docutils literal notranslate"><span class="pre">(r.x)^2</span> <span class="pre">/</span> <span class="pre">(|x|^2</span> <span class="pre">-</span> <span class="pre">|Q'x|^2)</span></code>, and for hinge/step columns all the inner
+products come from prefix/suffix cumulative sums in O(n) per basis vector.</p>
+<p>Conventions: <code class="docutils literal notranslate"><span class="pre">t</span></code> is scaled to [0, 1) for conditioning. A step at <code class="docutils literal notranslate"><span class="pre">c</span></code> is
+<code class="docutils literal notranslate"><span class="pre">1[i</span> <span class="pre">&gt;=</span> <span class="pre">c]</span> <span class="pre">-</span> <span class="pre">1</span></code> (<code class="docutils literal notranslate"><span class="pre">-1</span></code> before, <code class="docutils literal notranslate"><span class="pre">0</span></code> after), matching LevelShiftMagic, so a
+positive coefficient is an upward shift and the final level is unaffected.
+All positions and lengths are in points (periods), not days.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.utils.joint_trend_selection.HingeStepCandidates">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.utils.joint_trend_selection.</span></span><span class="sig-name descname"><span class="pre">HingeStepCandidates</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.utils.joint_trend_selection.HingeStepCandidates" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Closed-form inner products and norms for every hinge/step position.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.utils.joint_trend_selection.HingeStepCandidates.column">
+<span class="sig-name descname"><span class="pre">column</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">position</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kind</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.utils.joint_trend_selection.HingeStepCandidates.column" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.utils.joint_trend_selection.HingeStepCandidates.dots">
+<span class="sig-name descname"><span class="pre">dots</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">vectors</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kind</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.utils.joint_trend_selection.HingeStepCandidates.dots" title="Link to this definition">¶</a></dt>
+<dd><p>Inner products of every candidate column with each column of <code class="docutils literal notranslate"><span class="pre">vectors</span></code> -&gt; (n, k).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.utils.joint_trend_selection.HingeStepCandidates.norm2">
+<span class="sig-name descname"><span class="pre">norm2</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">kind</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.utils.joint_trend_selection.HingeStepCandidates.norm2" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.utils.joint_trend_selection.JointTrendModel">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.utils.joint_trend_selection.</span></span><span class="sig-name descname"><span class="pre">JointTrendModel</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">values</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nuisance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.utils.joint_trend_selection.JointTrendModel" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Holds the base design and builds full designs for a given term list.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.utils.joint_trend_selection.JointTrendModel.basis_and_residual">
+<span class="sig-name descname"><span class="pre">basis_and_residual</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">terms</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.utils.joint_trend_selection.JointTrendModel.basis_and_residual" title="Link to this definition">¶</a></dt>
+<dd><p>Orthonormal basis of [base, terms] and the residual of values on it.</p>
+<p>Same column space as _orthonormal_basis(self.design(terms)): term columns are
+projected off the cached base basis and only that (n, len(terms)) remainder is
+SVD’d, with the rank tolerance scaled as for the full design.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.utils.joint_trend_selection.JointTrendModel.design">
+<span class="sig-name descname"><span class="pre">design</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">terms</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.utils.joint_trend_selection.JointTrendModel.design" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.utils.joint_trend_selection.JointTrendModel.term_statistics">
+<span class="sig-name descname"><span class="pre">term_statistics</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">terms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_inflation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.utils.joint_trend_selection.JointTrendModel.term_statistics" title="Link to this definition">¶</a></dt>
+<dd><p>beta, SSE increase if each term is dropped, AR(1)-adjusted t, SSE, variance.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.utils.joint_trend_selection.joint_fit">
+<span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.utils.joint_trend_selection.</span></span><span class="sig-name descname"><span class="pre">joint_fit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">values</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">terms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nuisance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.utils.joint_trend_selection.joint_fit" title="Link to this definition">¶</a></dt>
+<dd><p>One least-squares fit of the selected terms.</p>
+<p>Returns dict with <code class="docutils literal notranslate"><span class="pre">trend</span></code> (intercept, slope, hinges), <code class="docutils literal notranslate"><span class="pre">level_shift</span></code> (steps),
+per-term <code class="docutils literal notranslate"><span class="pre">coefficient</span></code> (hinge: slope change per point; step: shift size) and
+AR(1)-adjusted <code class="docutils literal notranslate"><span class="pre">t_stat</span></code>, plus <code class="docutils literal notranslate"><span class="pre">variance</span></code> of the residual.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.utils.joint_trend_selection.profile_likelihood_windows">
+<span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.utils.joint_trend_selection.</span></span><span class="sig-name descname"><span class="pre">profile_likelihood_windows</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">values</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">terms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nuisance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_segment</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">28</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edge</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">critical_value</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3.84</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.utils.joint_trend_selection.profile_likelihood_windows" title="Link to this definition">¶</a></dt>
+<dd><p>95% date window per term from the profile likelihood of its position.</p>
+<p>Each term is moved between its same-kind neighbours with all others held;
+positions whose SSE rises by at most <code class="docutils literal notranslate"><span class="pre">critical_value</span> <span class="pre">*</span> <span class="pre">variance_AR</span></code> (chi^2_1)
+over the best position form the window. Returns [(low, high)] aligned to terms.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.utils.joint_trend_selection.select_hinge_step_terms">
+<span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.utils.joint_trend_selection.</span></span><span class="sig-name descname"><span class="pre">select_hinge_step_terms</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">values</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nuisance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_segment</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">28</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edge</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">14</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_terms</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bic_multiplier</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">step_t_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">4.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search_steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fixed_steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">()</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_refine_rounds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">effective_n_prune</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.utils.joint_trend_selection.select_hinge_step_terms" title="Link to this definition">¶</a></dt>
+<dd><p>Select hinge knots and steps for one series.</p>
+<p><code class="docutils literal notranslate"><span class="pre">effective_n_prune</span></code> divides the pruning/merge likelihood gain by the AR(1)
+variance inflation of the current residual (BIC on the effective sample size).</p>
+<p><code class="docutils literal notranslate"><span class="pre">fixed_steps</span></code> are externally proposed step positions (e.g. LevelShiftMagic
+candidates): they are never relocated or BIC-pruned, only dropped when their
+joint-model <a href="#id1"><span class="problematic" id="id2">|t|</span></a> falls below <code class="docutils literal notranslate"><span class="pre">step_t_threshold</span></code>. <code class="docutils literal notranslate"><span class="pre">search_steps</span></code> lets the
+greedy search also propose steps (the unified mode). Returns a sorted list
+of <code class="docutils literal notranslate"><span class="pre">(kind,</span> <span class="pre">position)</span></code>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.utils.joint_trend_selection.split_transient_step_pairs">
+<span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.utils.joint_trend_selection.</span></span><span class="sig-name descname"><span class="pre">split_transient_step_pairs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">step_details</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_gap</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cancel_ratio</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.utils.joint_trend_selection.split_transient_step_pairs" title="Link to this definition">¶</a></dt>
+<dd><p>Pair adjacent opposite-sign steps that nearly cancel within <code class="docutils literal notranslate"><span class="pre">max_gap</span></code> points.</p>
+<p>A holiday block or multi-week anomaly otherwise enters the trend as two
+permanent level shifts. Returns (kept_steps, transients) where each transient
+is {‘start’, ‘end’, ‘magnitude’} with magnitude the effect while it lasted.</p>
+</dd></dl>
+
+</section>
 <section id="module-autots.evaluator.feature_detector.utils.rescaling">
 <span id="autots-evaluator-feature-detector-utils-rescaling-module"></span><h2>autots.evaluator.feature_detector.utils.rescaling module<a class="headerlink" href="#module-autots.evaluator.feature_detector.utils.rescaling" title="Link to this heading">¶</a></h2>
 <p>RescalingMixin for TimeSeriesFeatureDetector.</p>
@@ -66,6 +170,101 @@
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.utils.rescaling.</span></span><span class="sig-name descname"><span class="pre">RescalingMixin</span></span><a class="headerlink" href="#autots.evaluator.feature_detector.utils.rescaling.RescalingMixin" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Mixin providing methods to convert components from standardized to original scale.</p>
+</dd></dl>
+
+</section>
+<section id="module-autots.evaluator.feature_detector.utils.trend_forecast">
+<span id="autots-evaluator-feature-detector-utils-trend-forecast-module"></span><h2>autots.evaluator.feature_detector.utils.trend_forecast module<a class="headerlink" href="#module-autots.evaluator.feature_detector.utils.trend_forecast" title="Link to this heading">¶</a></h2>
+<p>Trend extrapolation helpers for TimeSeriesFeatureDetector.forecast.</p>
+<p>Two additions over plain last-segment OLS extrapolation:
+- future_trend_change_variance: variance from changepoints and level shifts that</p>
+<blockquote>
+<div><p>have not happened yet, at the rates the detector observed in training.</p>
+</div></blockquote>
+<ul class="simple">
+<li><p>shrink_last_slope: empirical-Bayes shrinkage of a noisy last-segment slope
+toward a recency-weighted average of earlier segment slopes.</p></li>
+<li><p>damped_trend_steps: per-period damping phi of the extrapolated slope.</p></li>
+</ul>
+<p>All rates are per observation step (not per day) because forecast horizons and
+stored slopes are both in steps.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.utils.trend_forecast.damped_trend_steps">
+<span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.utils.trend_forecast.</span></span><span class="sig-name descname"><span class="pre">damped_trend_steps</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">forecast_length</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trend_damping</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.utils.trend_forecast.damped_trend_steps" title="Link to this definition">¶</a></dt>
+<dd><p>Effective step counts sum_{i&lt;=h} phi^i for h = 1..forecast_length.</p>
+<p>The trend at step h is <code class="docutils literal notranslate"><span class="pre">last</span> <span class="pre">+</span> <span class="pre">slope</span> <span class="pre">*</span> <span class="pre">steps[h-1]</span></code>; the total increment is
+bounded by slope * phi / (1 - phi) for phi &lt; 1. phi None or 1 gives 1..H.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.utils.trend_forecast.future_trend_change_variance">
+<span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.utils.trend_forecast.</span></span><span class="sig-name descname"><span class="pre">future_trend_change_variance</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rates</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">horizon</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.utils.trend_forecast.future_trend_change_variance" title="Link to this definition">¶</a></dt>
+<dd><p>(H, N) variance added by future slope changes and level shifts.</p>
+<p>A slope change delta arriving at step t shifts the level at horizon h by
+delta*(h - t); summing over Poisson arrivals gives rate*E[delta^2]*sum k^2
+for k = 0..h-1, the exact grid form of h^3/3. Level shifts add rate*E[s^2]*h.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.utils.trend_forecast.resolve_trend_damping">
+<span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.utils.trend_forecast.</span></span><span class="sig-name descname"><span class="pre">resolve_trend_damping</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">trend_damping</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">date_index</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.utils.trend_forecast.resolve_trend_damping" title="Link to this definition">¶</a></dt>
+<dd><p>Per-period phi (float) or None from a validated trend_damping.</p>
+<p>‘auto’ is DEFAULT_TREND_DAMPING_PER_DAY compounded over the median period
+length, so the calendar half-life is the same for hourly, daily or weekly
+data (weekly 0.99**7 ~= 0.932). A non-datetime index counts as daily.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.utils.trend_forecast.segment_sxx">
+<span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.utils.trend_forecast.</span></span><span class="sig-name descname"><span class="pre">segment_sxx</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">segment_length</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.utils.trend_forecast.segment_sxx" title="Link to this definition">¶</a></dt>
+<dd><p>Sum of squared x deviations for x = 0..m-1, i.e. m(m^2 - 1)/12.</p>
+<p>Shared by the OLS leverage term and the slope-precision used in shrinkage.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.utils.trend_forecast.shrink_last_slope">
+<span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.utils.trend_forecast.</span></span><span class="sig-name descname"><span class="pre">shrink_last_slope</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">slope_info</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">date_index</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">residual_sigma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mean_sq_slope_change</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">recency_days</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">180.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.utils.trend_forecast.shrink_last_slope" title="Link to this definition">¶</a></dt>
+<dd><p>Shrink the last segment slope toward earlier segment slopes.</p>
+<p>Prior mean: earlier slopes weighted by length * exp(-age_days / recency_days),
+age measured from segment end to the training end in calendar days so the
+decay is frequency independent. Shrinkage is precision weighted: the last
+slope’s OLS variance sigma^2/Sxx against tau^2 = E[delta^2]/2, the slope
+dispersion implied by independent adjacent segments. Short last segments
+are pulled strongly; long well-determined ones barely move.</p>
+<p>Returns the last slope unchanged when there is no earlier segment or no
+usable dispersion/noise estimate.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.utils.trend_forecast.trend_change_rates">
+<span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.utils.trend_forecast.</span></span><span class="sig-name descname"><span class="pre">trend_change_rates</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">trend_changepoints</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level_shifts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">columns</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_obs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.utils.trend_forecast.trend_change_rates" title="Link to this definition">¶</a></dt>
+<dd><p>Per-series event rates and mean squared sizes from detected events.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>trend_changepoints</strong> – {series: [(date, prior_slope, new_slope), …]}</p></li>
+<li><p><strong>level_shifts</strong> – {series: [(date, magnitude, …), …]}</p></li>
+<li><p><strong>columns</strong> – series order for the output arrays.</p></li>
+<li><p><strong>n_obs</strong> – number of training observations (rate denominator).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>rate_cp, mean_sq_slope_change, rate_ls,
+mean_sq_level_shift. Series with no events get zeros, so their
+future-change variance vanishes (the previous behaviour).</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>dict of (N,) float arrays</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.utils.trend_forecast.validate_trend_damping">
+<span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.utils.trend_forecast.</span></span><span class="sig-name descname"><span class="pre">validate_trend_damping</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">trend_damping</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.utils.trend_forecast.validate_trend_damping" title="Link to this definition">¶</a></dt>
+<dd><p>Return phi as a float in (0, 1], ‘auto’, or None (undamped).</p>
+<p>Raises instead of silently ignoring an out-of-range phi: phi &gt; 1 would be an
+accelerating trend and phi &lt;= 0 is meaningless, both almost surely typos.</p>
 </dd></dl>
 
 </section>
@@ -119,6 +318,7 @@
 <li class="toctree-l1"><a class="reference internal" href="intro.html#autots">AutoTS</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorial.html">Tutorial</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorial.html#extended-tutorial">Extended Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../metric_weighting_guide.html">AutoTS Metric Weighting</a></li>
 </ul>
 <ul class="current">
 <li class="toctree-l1 current"><a class="reference internal" href="modules.html">autots</a><ul class="current">

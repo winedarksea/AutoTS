@@ -382,6 +382,68 @@ class AutoTSTest(unittest.TestCase):
         self.assertFalse(forecasts_df2.isna().any().any())
         self.assertFalse(model.initial_results.per_series_metrics.empty)
 
+    def test_update_fit_cache_respects_prediction_interval(self):
+        df = load_daily(long=False).iloc[:, :2]
+        template = pd.DataFrame(
+            {
+                "Model": ["DatepartRegression"],
+                "ModelParameters": [
+                    json.dumps(
+                        {
+                            "regression_model": {
+                                "model": "ElasticNet",
+                                "model_params": {},
+                            },
+                            "datepart_method": "simple",
+                            "polynomial_degree": None,
+                            "holiday_countries_used": False,
+                            "lags": None,
+                            "forward_lags": None,
+                            "regression_type": None,
+                        }
+                    )
+                ],
+                "TransformationParameters": [
+                    json.dumps(
+                        {
+                            "fillna": "ffill",
+                            "transformations": {},
+                            "transformation_params": {},
+                        }
+                    )
+                ],
+                "Ensemble": [0],
+            }
+        )
+        model = AutoTS(
+            forecast_length=7,
+            prediction_interval=0.9,
+            model_list=["DatepartRegression"],
+            max_generations=0,
+            num_validations=0,
+            ensemble=None,
+            verbose=-1,
+            n_jobs=1,
+        )
+        model.import_template(template, method="only")
+        model.fit(df)
+
+        def interval_width(prediction):
+            return float(
+                (prediction.upper_forecast - prediction.lower_forecast).mean().mean()
+            )
+
+        p90 = model.predict()
+        p50 = model.predict(prediction_interval=0.5)
+        self.assertEqual(model.model.prediction_interval, 0.5)
+        self.assertLess(interval_width(p50), interval_width(p90))
+
+        # list prediction must not leave its last interval cached for a default predict
+        model.predict(prediction_interval=[0.5, 0.8])
+        p_default = model.predict()
+        self.assertEqual(model.model.prediction_interval, 0.9)
+        np.testing.assert_allclose(p_default.upper_forecast, p90.upper_forecast)
+
     def test_all_default_models(self):
         print("Starting test_all_default_models")
         forecast_length = 8

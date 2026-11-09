@@ -6,20 +6,27 @@ import pandas as pd
 import copy
 import warnings
 from autots.tools.transform import DatepartRegressionTransformer
-from autots.tools.seasonal import date_part, build_adaptive_fourier_features
+from autots.tools.seasonal import (
+    date_part,
+    build_adaptive_fourier_features,
+    fourier_series,
+)
 from autots.tools.fft import FFT
 
 
 class SeasonalityMixin:
     """Mixin providing seasonality fitting, strength estimation, and changepoint detection."""
 
-    def _final_seasonality_fit(self, df_work, rough_residual, rough_seasonality):
+    def _final_seasonality_fit(
+        self, df_work, rough_residual, rough_seasonality, level_shift_dates=None
+    ):
         """
         Fit final seasonality model including holiday effects.
 
         Fits on original data (df_work) with only anomalies removed.
         This ensures final seasonality captures the full seasonal pattern,
-        and holidays are fit simultaneously as regressors.
+        and holidays are fit simultaneously as regressors. ``level_shift_dates``
+        ({series: [dates]}) adds steps to the trend prior removed before fitting.
 
         Returns
         -------
@@ -27,10 +34,11 @@ class SeasonalityMixin:
             (final_residual, final_seasonality, seasonality_strength, holiday_component,
              holiday_coefficients, holiday_splash_impacts)
         """
-        # Reconstruct original data with anomalies removed
-        # df_work = original standardized data
-        # We need to remove anomalies from df_work, not from rough_residual
-        df_without_anomalies = self.anomaly_detector.transform(df_work)
+        # Remove anomalies from df_work, filling them in rough-residual space so a
+        # filled point keeps its own day's seasonality rather than a neighbour's.
+        df_without_anomalies = self._remove_anomalies_in_residual_space(
+            df_work, rough_seasonality
+        )
 
         # Fit final seasonality on original data (with anomalies removed)
         # Holiday effects are captured as regressors during this fit
@@ -43,7 +51,9 @@ class SeasonalityMixin:
             holiday_coefficients,
             holiday_splash_impacts_scaled,
         ) = self._fit_final_seasonality(
-            df_without_anomalies, self._holiday_regressors_temp
+            df_without_anomalies,
+            self._holiday_regressors_temp,
+            level_shift_dates=level_shift_dates,
         )
 
         return (
@@ -55,7 +65,9 @@ class SeasonalityMixin:
             holiday_splash_impacts_scaled,
         )
 
-    def _fit_final_seasonality(self, df, holiday_regressors=None):
+    def _fit_final_seasonality(
+        self, df, holiday_regressors=None, level_shift_dates=None
+    ):
         """
         Fit final seasonality model and decompose holiday effects.
 
@@ -65,18 +77,44 @@ class SeasonalityMixin:
             (residual, seasonal_component, strength, model, holiday_component, holiday_coefficients, holiday_splash_impacts)
         """
         regressor = None
+        holiday_columns = []
         if holiday_regressors is not None and not holiday_regressors.empty:
             regressor = holiday_regressors.reindex(df.index).fillna(0.0)
+            holiday_columns = list(regressor.columns)
 
         seasonality_params = copy.deepcopy(self.seasonality_params)
+
+        # Seasonal regressors fit on raw data absorb a trend as a yearly sawtooth
+        # (whose Jan 1 step then shows up as a fake level shift). Remove a linear
+        # trend estimated jointly with seasonal terms first; it is added back to
+        # the residual below so trend detection still owns it.
+        trend_prior_override = getattr(self, '_trend_prior_override', None)
+        if trend_prior_override is not None:
+            # Backfit pass: seed with the previous pass's trend + level shifts.
+            trend_prior = trend_prior_override.reindex(
+                index=df.index, columns=df.columns
+            ).fillna(0.0)
+        elif (
+            self._uses_joint_trend() and self._joint_trend_settings()['seasonal_prior']
+        ):
+            trend_prior = self._joint_seasonal_trend_prior(df)
+        elif getattr(self, 'seasonality_trend_prior', True):
+            trend_prior = self._estimate_seasonality_adjusted_trend(
+                df, level_shift_dates
+            )
+        else:
+            trend_prior = pd.DataFrame(0.0, index=df.index, columns=df.columns)
+        df_detrended = df - trend_prior
 
         # Adaptive Fourier mode: detect dominant periods with FFT, then augment
         # regressors with period-specific Fourier features.
         self.detected_seasonal_periods = None
+        self._adaptive_n_obs = None
+        self._seasonal_offset = None
         if seasonality_params.get('datepart_method') == 'adaptive_fourier':
             try:
                 fft_model = FFT(n_harm=None, detrend='linear')
-                fft_input = df.dropna(how='all').to_numpy(dtype=float)
+                fft_input = df_detrended.dropna(how='all').to_numpy(dtype=float)
                 nan_mask = np.isfinite(fft_input).all(axis=1)
                 if nan_mask.sum() >= 14:
                     fft_model.fit(fft_input[nan_mask])
@@ -88,14 +126,17 @@ class SeasonalityMixin:
 
                 if len(detected) >= 2:
                     self.detected_seasonal_periods = detected
+                    self._adaptive_n_obs = len(df.index)
                     adaptive_features = build_adaptive_fourier_features(
-                        df.index, detected, max_order=12
+                        df.index, detected, max_order=12, n_obs=self._adaptive_n_obs
                     )
                     if regressor is not None:
                         regressor = pd.concat([regressor, adaptive_features], axis=1)
                     else:
                         regressor = adaptive_features
-                    seasonality_params['datepart_method'] = 'simple_3'
+                    # 'simple_3' includes an unscaled epoch (Julian date) column that
+                    # stalls linear solvers and folds trend into seasonality.
+                    seasonality_params['datepart_method'] = 'recurring'
                 else:
                     seasonality_params['datepart_method'] = 'common_fourier'
             except Exception:
@@ -103,24 +144,25 @@ class SeasonalityMixin:
 
         model = DatepartRegressionTransformer(**seasonality_params)
         regressor_full = regressor
-        df_fit = df.dropna(how='all')
+        df_fit = df_detrended.dropna(how='all')
         if df_fit.empty:
-            df_fit = df
+            df_fit = df_detrended
         regressor_fit = None
         if regressor_full is not None:
             regressor_fit = regressor_full.loc[df_fit.index]
         model.fit(df_fit, regressor=regressor_fit)
-        residual = model.transform(df, regressor=regressor_full)
-        seasonal_total = df - residual
+        residual = model.transform(df_detrended, regressor=regressor_full)
+        seasonal_total = df_detrended - residual
 
         holiday_component = pd.DataFrame(0.0, index=df.index, columns=df.columns)
         seasonal_component = seasonal_total
         holiday_coefficients = {col: {} for col in df.columns}
         holiday_splash_impacts = {col: {} for col in df.columns}
 
-        if regressor is not None:
+        if holiday_columns:
+            # Zero only holiday columns; adaptive Fourier columns are seasonality.
             zero_regressor = regressor.copy()
-            zero_regressor.loc[:, :] = 0.0
+            zero_regressor.loc[:, holiday_columns] = 0.0
             zeros_df = pd.DataFrame(0.0, index=df.index, columns=df.columns)
             try:
                 baseline_pred = model.inverse_transform(
@@ -150,8 +192,15 @@ class SeasonalityMixin:
                 )
                 seasonal_component = seasonal_total
             holiday_coefficients = self._solve_holiday_coefficients(
-                regressor, holiday_component
+                regressor[holiday_columns], holiday_component
             )
+
+        # The regression intercept carries the series level; move it to the
+        # residual so trend (not seasonality) owns the level.
+        seasonal_offset = seasonal_component.mean().fillna(0.0)
+        seasonal_component = seasonal_component - seasonal_offset
+        residual = residual + seasonal_offset + trend_prior
+        self._seasonal_offset = seasonal_offset
 
         strength = self._compute_seasonality_strength(df, residual, seasonal_component)
         return (
@@ -163,6 +212,58 @@ class SeasonalityMixin:
             holiday_coefficients,
             holiday_splash_impacts,
         )
+
+    @staticmethod
+    def _estimate_seasonality_adjusted_trend(df, level_shift_dates=None):
+        """Linear trend (plus steps) from one joint least-squares fit with weekly/yearly Fourier terms.
+
+        Fitting the slope alongside periodic terms keeps seasonality out of the
+        slope and the slope out of seasonality. Steps at known level-shift dates
+        stop a shift from inflating the slope. Yearly terms are only included with
+        1.5+ years of history; with less, a ramp and a yearly cycle are not
+        separable and the ambiguity is attributed to trend.
+
+        Returns the trend+step part of the fit only (no intercept matters, since
+        the seasonal fit's mean is moved back to the residual anyway).
+        """
+        trend = pd.DataFrame(0.0, index=df.index, columns=df.columns)
+        if len(df.index) < 14 or not isinstance(df.index, pd.DatetimeIndex):
+            return trend
+        days = np.asarray((df.index - df.index[0]) / pd.Timedelta(days=1), dtype=float)
+        span_days = days[-1]
+        if span_days <= 0:
+            return trend
+        base_columns = [np.ones_like(days), days / span_days]
+        seasonal_columns = []
+        if np.median(np.diff(days)) < 7:
+            seasonal_columns.append(fourier_series(days, p=7, n=3))
+        if span_days >= 548:
+            seasonal_columns.append(fourier_series(days, p=365.25, n=6))
+        # Interpolation only feeds this estimate; all-NaN series get no trend.
+        values = (
+            df.interpolate(limit_direction='both').fillna(0.0).to_numpy(dtype=float)
+        )
+        # Series sharing a set of step positions share one design matrix.
+        level_shift_dates = level_shift_dates or {}
+        groups = {}
+        for position, col in enumerate(df.columns):
+            step_positions = df.index.searchsorted(
+                pd.DatetimeIndex(level_shift_dates.get(col, []))
+            )
+            step_key = tuple(
+                sorted({int(p) for p in step_positions if 0 < p < len(df.index)})
+            )
+            groups.setdefault(step_key, []).append(position)
+        for step_key, positions in groups.items():
+            step_columns = [
+                (np.arange(len(df.index)) >= p).astype(float) for p in step_key
+            ]
+            trend_design = np.column_stack(base_columns + step_columns)
+            design = np.column_stack([trend_design] + seasonal_columns)
+            beta, _, _, _ = np.linalg.lstsq(design, values[:, positions], rcond=None)
+            n_trend = trend_design.shape[1]
+            trend.iloc[:, positions] = trend_design @ beta[:n_trend]
+        return trend
 
     def _compute_seasonality_strength(self, original_df, residual_df, seasonal_df):
         strength = {}
@@ -235,7 +336,10 @@ class SeasonalityMixin:
             (valid.index[-1] - valid.index[0]).days if len(valid.index) > 1 else 0
         )
         if date_range_days >= 180:
-            yearly_groups = valid.groupby(valid.index.dayofyear).mean()
+            # With few years, each day-of-year group holds 1-3 points from different
+            # weekdays, so remove the weekday pattern before grouping.
+            deweekly = valid - valid.groupby(valid.index.dayofweek).transform('mean')
+            yearly_groups = deweekly.groupby(deweekly.index.dayofyear).mean()
             if len(yearly_groups) > 1:
                 yearly_strength = float(np.nanstd(yearly_groups)) / series_scale
 

@@ -61,7 +61,7 @@ from autots.evaluator.validation import (
     generate_validation_indices,
 )
 from autots.tools.constraint import constraint_new_params
-from autots.tools.profile import profile_time_series
+from autots.tools.profile import profile_time_series_mapping
 from autots.tools.plotting import (
     plot_forecast_with_intervals,
     colors_list,
@@ -88,16 +88,20 @@ class AutoTS(object):
         no_negatives (bool): if True, all negative predictions are rounded up to 0.
         constraint (float): when not None, use this float value * data st dev above max or below min for constraining forecast values.
             now also instead accepts a dictionary containing the following key/values:
-                constraint_method (str): one of
-                    stdev_min - threshold is min and max of historic data +/- constraint * st dev of data
-                    stdev - threshold is the mean of historic data +/- constraint * st dev of data
-                    absolute - input is array of length series containing the threshold's final value for each
-                    quantile - constraint is the quantile of historic data to use as threshold
-                constraint_regularization (float): 0 to 1
-                    where 0 means no constraint, 1 is hard threshold cutoff, and in between is penalty term
-                upper_constraint (float): or array, depending on method, None if unused
-                lower_constraint (float): or array, depending on method, None if unused
-                bounds (bool): if True, apply to upper/lower forecast, otherwise False applies only to forecast
+
+            - constraint_method (str): one of
+
+              - stdev_min - threshold is min and max of historic data +/- constraint * st dev of data
+              - stdev - threshold is the mean of historic data +/- constraint * st dev of data
+              - absolute - input is array of length series containing the threshold's final value for each
+              - quantile - constraint is the quantile of historic data to use as threshold
+
+            - constraint_regularization (float): 0 to 1,
+              where 0 means no constraint, 1 is hard threshold cutoff, and in between is penalty term
+            - upper_constraint (float): or array, depending on method, None if unused
+            - lower_constraint (float): or array, depending on method, None if unused
+            - bounds (bool): if True, apply to upper/lower forecast, otherwise False applies only to forecast
+
         ensemble (str): None or list or comma-separated string containing:
             'auto', 'simple', 'distance', 'horizontal', 'horizontal-min', 'horizontal-max', "mosaic", "subsample"
         initial_template (str): 'Random' - randomly generates starting template, 'General' uses template included in package, 'General+Random' - both of previous. Also can be overriden with self.import_template()
@@ -1170,10 +1174,7 @@ class AutoTS(object):
         self.df_wide_numeric = df_wide_numeric
         self.startTimeStamps = df_wide_numeric.notna().idxmax()
         try:
-            profile_df = profile_time_series(self.df_wide_numeric)
-            self.series_profiles = (
-                profile_df.set_index("SERIES").to_dict().get("PROFILE", {})
-            )
+            self.series_profiles = profile_time_series_mapping(self.df_wide_numeric)
         except Exception as e:
             if self.verbose >= 0:
                 print(f"profile_time_series failed during fit_data: {repr(e)}")
@@ -2369,7 +2370,11 @@ class AutoTS(object):
             use_model in update_fit
         )  # True means model can be updated without retraining
         if self.update_fit_check and not bypass_save:
-            if self.model is None or refit:
+            if (
+                self.model is None
+                or refit
+                or self.model.prediction_interval != prediction_interval
+            ):
                 self.model = ModelPrediction(
                     transformation_dict=use_trans,
                     model_str=use_model,
@@ -2474,8 +2479,8 @@ class AutoTS(object):
             forecast_length (int): Number of periods of data to forecast ahead
             prediction_interval (float): interval of upper/lower forecasts.
                 defaults to 'self' ie the interval specified in __init__()
-                if prediction_interval is a list, then returns a dict of forecast objects.
-                    {str(interval): prediction_object}
+                if prediction_interval is a list, then returns a dict of forecast objects,
+                ``{str(interval): prediction_object}``
             future_regressor (numpy.Array): additional regressor
             hierarchy: Not yet implemented
             just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
@@ -2660,22 +2665,15 @@ class AutoTS(object):
                     for mod in focus_models:
                         one_model = export_template[export_template["Model"] == mod]
                         extra_mods.append(
-                            extra_mods.append(
-                                one_model.nsmallest(1, columns=['Score']).copy()
-                            )
+                            one_model.nsmallest(1, columns=['Score']).copy()
                         )
+                        # metric columns were already coerced to numeric above
                         if min_metrics is not None:
-                            export_template[metric] = pd.to_numeric(
-                                export_template[metric], errors="coerce"
-                            )
                             for metric in min_metrics:
                                 extra_mods.append(
                                     one_model.nsmallest(1, columns=metric).copy()
                                 )
                         if max_metrics is not None:
-                            export_template[metric] = pd.to_numeric(
-                                export_template[metric], errors="coerce"
-                            )
                             for metric in max_metrics:
                                 extra_mods.append(
                                     one_model.nlargest(1, columns=metric).copy()
@@ -2765,6 +2763,11 @@ class AutoTS(object):
         """Helper funciton for just loading the file part of import_template."""
         if isinstance(filename, pd.DataFrame):
             import_template = filename.copy()
+        elif str(filename).startswith(("models:/", "runs:/")):
+            # template logged by autots.mlflow_log_template, e.g. "models:/name@alias"
+            from autots.tools.mlflow_registry import download_template
+
+            import_template = download_template(filename)
         elif '.csv' in filename:
             import_template = pd.read_csv(filename)
         elif '.json' in filename:
@@ -2885,7 +2888,7 @@ class AutoTS(object):
         elif method.lower() in ['only', 'user only', 'user_only', 'import_only']:
             self.initial_template = import_template
         else:
-            return ValueError("method must be 'addon' or 'only'")
+            raise ValueError("method must be 'addon' or 'only'")
 
         if force_validation:
             if self.validate_import is None:
@@ -2938,6 +2941,10 @@ class AutoTS(object):
 
         Input can be filename with .csv or .pickle.
         or can be a DataFrame of model results or a full TemplateEvalObject
+
+        Warning:
+            .pickle files are loaded with pickle.load, which can execute arbitrary code.
+            Only load pickles you created yourself; prefer .csv for results from other sources.
         """
         csv_flag = False
         if isinstance(filename, str):
@@ -2969,7 +2976,8 @@ class AutoTS(object):
             elif '.pickle' in filename:
                 import pickle
 
-                new_obj = pickle.load(open(filename, "rb"))
+                with open(filename, "rb") as f:
+                    new_obj = pickle.load(f)
             else:
                 raise ValueError("import type not recognized.")
             self.initial_results = self.initial_results.concat(new_obj)
@@ -3100,11 +3108,7 @@ class AutoTS(object):
                     modz = None
                 id_to_group_mapping = None
                 if mosaic_config.get("profiled", False):
-                    id_to_group_mapping = (
-                        profile_time_series(df_wide)
-                        .set_index("SERIES")
-                        .to_dict()["PROFILE"]
-                    )
+                    id_to_group_mapping = profile_time_series_mapping(df_wide)
                 # and actually generate the template
                 ens_templates = generate_mosaic_template(
                     initial_results=initial_results.model_results,
@@ -3347,10 +3351,11 @@ class AutoTS(object):
         There may be jumps in data between chunks.
 
         Args are same as for model_forecast except...
-        n_splits(int): how many pieces to split data into. Pass 2 for fastest, or "auto" for best accuracy
-        series (str): if to run on only one column, pass column name. Faster than full.
-        tail (int): df.tail() of the dataset, back_forecast is only run on n most recent observations.
-            which points at eval_periods of lower-level back_forecast function
+
+        * n_splits(int): how many pieces to split data into. Pass 2 for fastest, or "auto" for best accuracy
+        * series (str): if to run on only one column, pass column name. Faster than full.
+        * tail (int): df.tail() of the dataset, back_forecast is only run on n most recent observations,
+          which points at eval_periods of lower-level back_forecast function
 
         Returns a standard prediction object (access .forecast, .lower_forecast, .upper_forecast)
         """

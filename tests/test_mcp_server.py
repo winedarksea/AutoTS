@@ -737,7 +737,10 @@ class TestMCPPyodideAPI(unittest.IsolatedAsyncioTestCase):
         restored = get_cached_object(result["data_id"], "data")
         self.assertEqual(restored["metadata"]["source"], "test_restore")
         self.assertEqual(list(restored["object"].columns), ["sales", "returns"])
-        self.assertEqual(str(restored["object"].index.dtype), "datetime64[ns]")
+        # pandas 3 parses strings at "us" resolution; only the kind is the contract.
+        self.assertTrue(
+            pd.api.types.is_datetime64_any_dtype(restored["object"].index)
+        )
         self.assertTrue(pd.isna(restored["object"].iloc[1, 0]))
         clear_cache(result["data_id"], "data")
 

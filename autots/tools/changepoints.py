@@ -1,11 +1,15 @@
 import random
 import heapq
 from math import comb
-from functools import lru_cache
 import numpy as np
 import pandas as pd
 from autots.tools.shaping import infer_frequency
 from autots.tools.window_functions import chunk_reshape
+from autots.tools.changepoints_probabilistic import (
+    bayesian_online_changepoint_probabilities,
+    piecewise_mean_fit,
+    residual_block_bootstrap,
+)
 
 valid_changepoint_methods = [
     'basic',
@@ -209,14 +213,14 @@ def _create_basic_changepoints(DTindex, changepoint_spacing, changepoint_distanc
     """
     n = len(DTindex)
 
-    # Calculate the number of data points available for changepoints
-    changepoint_range_end = n - changepoint_distance_end
+    # Short histories still need a ramp anchored at their first observation.
+    changepoint_range_end = min(max(n - changepoint_distance_end, 0), n - 1)
 
     # Calculate the number of changepoints based on changepoint_spacing
     # Only place changepoints within the range [0, changepoint_range_end)
     changepoints = np.arange(0, changepoint_range_end, changepoint_spacing)
 
-    # Ensure the last changepoint is exactly at changepoint_distance_end from the end
+    # Keep the terminal changepoint within the observed history.
     changepoints = np.append(changepoints, changepoint_range_end)
 
     # Efficient concatenation approach to generate changepoint features
@@ -257,8 +261,8 @@ def _calculate_segment_cost(segment_data, loss_function):
         # Uses the sorted-order identity to avoid an O(n^2) double loop:
         #   sum_{i,j} |x_i - x_j| = 2 * sum_k (2k - n + 1) * x_sorted[k]
         # where k is 0-indexed and x_sorted is the within-segment sorted order.
-        # The factor of 2 makes this consistent with _build_ed_prefix_sums which
-        # accumulates both (i,j) and (j,i) directions.
+        # The factor of 2 counts both (i,j) and (j,i) directions, matching the
+        # ordered-pair convention ED-PELT uses.
         n = len(segment_data)
         if n < 2:
             return 0.0
@@ -269,28 +273,22 @@ def _calculate_segment_cost(segment_data, loss_function):
         raise ValueError(f"Unknown loss function: {loss_function}")
 
 
-def _build_ed_prefix_sums(data):
+def _extend_ed_running_pairwise_sums(data, running_pairwise, low, end):
     """
-    Precompute the 2-D prefix-sum matrix of the absolute pairwise difference matrix
-    so that the energy-distance cost of any segment [s, t) can be retrieved in O(1):
+    Extend energy-distance running sums from segments ending at ``end - 1`` to
+    segments ending at ``end`` by adding the point ``data[end - 1]``.
 
-        cost(s, t) = P[t, t] - P[s, t] - P[t, s] + P[s, s]
-
-    Memory footprint is O(n^2): ~8 MB at n=1000, ~200 MB at n=5000.
-
-    Parameters:
-    data (np.ndarray): 1-D float array of length n.
-
-    Returns:
-    np.ndarray: Zero-padded (n+1, n+1) prefix-sum array P where
-        P[i, j] = sum_{r<i, c<j} |data[r] - data[c]|.
+    Contract: before the call ``running_pairwise[s] == sum_{s<=i<j<end-1}
+    |x_i - x_j|`` for every ``s >= low``; afterwards the same holds with
+    ``end``. Entries below ``low`` go stale, so ``low`` must never exceed the
+    smallest start still queried. Memory is O(n) and each call costs
+    O(end - low), versus the O(n^2) memory of a 2-D prefix-sum table.
     """
-    # Build full pairwise |x_i - x_j| matrix via broadcasting -- O(n^2) time and space.
-    diff_matrix = np.abs(data[:, None] - data[None, :])  # shape (n, n)
-    # Two cumulative sums turn the diff matrix into a 2-D prefix sum (SAT).
-    prefix_2d = np.zeros((len(data) + 1, len(data) + 1), dtype=float)
-    prefix_2d[1:, 1:] = np.cumsum(np.cumsum(diff_matrix, axis=0), axis=1)
-    return prefix_2d
+    new_index = end - 1
+    if new_index > low:
+        new_point_diffs = np.abs(data[low:new_index] - data[new_index])
+        # Reversed cumsum gives sum_{i=s}^{new_index-1} |x_new - x_i| for each s.
+        running_pairwise[low:new_index] += np.cumsum(new_point_diffs[::-1])[::-1]
 
 
 def _detect_pelt_changepoints(
@@ -305,10 +303,11 @@ def _detect_pelt_changepoints(
       O(1) and the full algorithm is O(n) amortised (fastest).
     * ``'ed'``  – energy-distance cost (ED-PELT, Haynes et al. 2017).  Detects
       distributional changes rather than pure level shifts, making it robust to
-      heavy-tailed noise and outliers.  Precomputes an O(n^2) 2-D prefix-sum
-      matrix so individual queries are O(1); total complexity O(n^2) in space
-      and time.  Set *penalty* roughly 2–10× higher than for ``'l2'`` because
-      the ED cost magnitude grows as O(n^2) per segment.
+      heavy-tailed noise and outliers.  Keeps O(n) running pairwise sums for
+      every start at or after the oldest live candidate, so time is O(n^2) in
+      the worst case (no changepoints) but memory stays O(n).  The pairwise sum
+      is divided by segment length so the cost grows O(L) like 'l2' and a fixed
+      penalty controls it.
     * ``'l1'``  – absolute-error cost.  Per-segment recomputation; slow for
       large n.
     * ``'huber'`` – Huber-loss cost.  Per-segment recomputation; slow for
@@ -317,20 +316,19 @@ def _detect_pelt_changepoints(
     Parameters:
     data (array-like): Time series data.
     penalty (float): Additive penalty per changepoint for model complexity.
-        Tip for 'ed': scale penalty ~2–10× relative to 'l2' because the
-        energy-distance cost grows as O(n^2) per segment.
     loss_function (str): One of ``'l2'``, ``'ed'``, ``'l1'``, ``'huber'``.
     min_segment_length (int): Minimum allowed segment length between changepoints.
     pruning_factor (float): Controls PELT candidate pruning aggressiveness.
-        1.0 = standard PELT.  Values > 1.0 prune earlier (faster) at the cost of
-        potentially missing some changepoints.  Values like 2.0–5.0 can give
-        significant speedups without much accuracy loss in practice.
+        1.0 = standard (exact) PELT pruning.  Values > 1.0 are approximate: the
+        candidate set is capped at the ``ceil(128 / pruning_factor)`` best-scoring
+        candidates (minimum 8), bounding per-step work on long segments.
 
     Returns:
     np.ndarray: Sorted array of changepoint indices (positions in *data*).
     """
     data = np.asarray(data, dtype=float)
     n = len(data)
+    min_segment_length = max(1, int(min_segment_length))
     if n < 2 * min_segment_length:
         return np.array([])
 
@@ -340,112 +338,127 @@ def _detect_pelt_changepoints(
     cp = np.zeros(n + 1, dtype=int)
 
     # ------------------------------------------------------------------
-    # Build cost-computation helpers. Each loss defines two callables:
-    #   segment_cost(s, t)          – scalar cost of segment [s, t)
-    #   batch_segment_cost(starts, t) – vectorized cost for many start
-    #                                    indices at once (numpy array in,
-    #                                    numpy array out). Used when |R|>10.
+    # batch_segment_cost(starts, t): vectorized cost of segments [s, t)
+    # for an int array of start indices.
     # ------------------------------------------------------------------
+    running_pairwise = None
     if loss_function == 'l2':
         # O(1) per query via 1-D prefix sums.
         prefix_sum = np.concatenate(([0.0], np.cumsum(data)))
         prefix_sq_sum = np.concatenate(([0.0], np.cumsum(data**2)))
 
-        def segment_cost(start, end):
-            length = end - start
-            if length <= 0:
-                return 0.0
-            s_sum = prefix_sum[end] - prefix_sum[start]
-            s_sq = prefix_sq_sum[end] - prefix_sq_sum[start]
-            return float(s_sq - (s_sum**2) / length)
-
         def batch_segment_cost(starts, end):
-            # starts is a numpy int array; end is a scalar int
-            lengths = end - starts  # shape (k,)
+            lengths = end - starts
             s_sums = prefix_sum[end] - prefix_sum[starts]
             s_sqs = prefix_sq_sum[end] - prefix_sq_sum[starts]
-            return s_sqs - (s_sums**2) / lengths  # shape (k,)
+            return s_sqs - (s_sums**2) / lengths
 
     elif loss_function == 'ed':
         # ED-PELT (Energy Distance PELT, Haynes et al. 2017).
-        # Precompute 2-D prefix sum of |x_i - x_j|; O(n^2) memory/time up-front
-        # but O(1) per segment query thereafter.
-        # For n > ~6000 memory may become substantial (~290 MB at n=6000).
-        prefix_2d = _build_ed_prefix_sums(data)
-
-        def segment_cost(start, end):
-            if end <= start:
-                return 0.0
-            return float(
-                prefix_2d[end, end]
-                - prefix_2d[start, end]
-                - prefix_2d[end, start]
-                + prefix_2d[start, start]
-            )
+        # running_pairwise[s] holds the unordered pairwise sum of segment [s, t),
+        # advanced one point per step by _extend_ed_running_pairwise_sums.
+        running_pairwise = np.zeros(n + 1)
 
         def batch_segment_cost(starts, end):
-            # Fully vectorized: all array indexing, no Python loop.
-            return (
-                prefix_2d[end, end]
-                - prefix_2d[starts, end]
-                - prefix_2d[end, starts]
-                + prefix_2d[starts, starts]
-            )
+            # The raw pairwise sum grows O(L^2), which no fixed penalty can
+            # balance (pure noise fragments at any penalty). Dividing by L gives
+            # L * mean|x_i - x_j|, the same O(L) growth as the l2 cost. The 2x
+            # converts unordered pairs to the ordered sum of _calculate_segment_cost.
+            return 2.0 * running_pairwise[starts] / (end - starts)
 
     else:
-        # l1 / huber: per-segment recomputation with lru_cache.
-        # Inherently sequential; slow for large n.
-        @lru_cache(maxsize=10000)
-        def segment_cost(start, end):
-            if end <= start:
-                return 0.0
-            return float(_calculate_segment_cost(data[start:end], loss_function))
-
+        # l1 / huber: per-segment recomputation. Each (start, end) pair is
+        # queried once, so caching would never hit.
         def batch_segment_cost(starts, end):
-            return np.array([segment_cost(int(s), end) for s in starts], dtype=float)
+            return np.array(
+                [
+                    _calculate_segment_cost(data[start:end], loss_function)
+                    for start in starts
+                ],
+                dtype=float,
+            )
 
-    # PELT main loop
-    R = [0]  # Pruned set of potential last-changepoint candidates
+    # Approximate mode (pruning_factor > 1) bounds the candidate set to the
+    # best-scoring few. Value margins fail here: a candidate at a true change
+    # trails the incumbent by ~one penalty until enough post-change data
+    # accumulates, so any margin prunes it. By rank, its gain soon exceeds the
+    # ~2 log(n) gains of noise candidates, so it stays among the best.
+    if pruning_factor is not None and pruning_factor > 1.0:
+        candidate_cap = max(8, int(np.ceil(128.0 / float(pruning_factor))))
+    else:
+        candidate_cap = None
 
-    for t in range(1, n + 1):
-        # Vectorise candidate evaluation when |R| is large enough that numpy
-        # overhead pays off (empirically ~10 elements).
-        if len(R) > 10:
-            R_array = np.array(R, dtype=int)
-            valid_mask = (t - R_array) >= min_segment_length
-            if np.any(valid_mask):
-                valid_R = R_array[valid_mask]
-                costs = batch_segment_cost(valid_R, t)
-                total_costs = F[valid_R] + costs + penalty
-                best_idx = np.argmin(total_costs)
-                F[t] = total_costs[best_idx]
-                cp[t] = valid_R[best_idx]
-            else:
-                continue
+    # Candidate last-changepoint positions with their expiry times, held in
+    # preallocated arrays (live entries are [:candidate_count], ascending) so all
+    # per-step bookkeeping is vectorized. Candidates are added lagged by
+    # min_segment_length so every live one is admissible.
+    # Exact pruning: a candidate s dominated at t (F[s] + C(s, t) > F[t]) is only
+    # provably beaten by t once t itself is admissible, at t + min_segment_length,
+    # so removal is deferred until then.
+    candidates = np.zeros(n + 1, dtype=np.intp)
+    expiry = np.full(n + 1, n + 1, dtype=np.intp)
+    candidate_count = 1
+    next_expiry = n + 1
+    # Oldest live candidate; ED running sums below it are never queried again.
+    oldest_candidate = 0
+
+    if running_pairwise is not None:
+        for t in range(1, min_segment_length):
+            _extend_ed_running_pairwise_sums(data, running_pairwise, 0, t)
+
+    for t in range(min_segment_length, n + 1):
+        if running_pairwise is not None:
+            _extend_ed_running_pairwise_sums(
+                data, running_pairwise, oldest_candidate, t
+            )
+        new_candidate = t - min_segment_length
+        if new_candidate >= min_segment_length and F[new_candidate] < np.inf:
+            candidates[candidate_count] = new_candidate
+            expiry[candidate_count] = n + 1
+            candidate_count += 1
+        if t >= next_expiry:
+            keep = expiry[:candidate_count] > t
+            kept_count = int(keep.sum())
+            candidates[:kept_count] = candidates[:candidate_count][keep]
+            expiry[:kept_count] = expiry[:candidate_count][keep]
+            candidate_count = kept_count
+            next_expiry = int(expiry[:candidate_count].min()) if kept_count else n + 1
+            if kept_count:
+                oldest_candidate = int(candidates[0])
+        if candidate_count == 0:
+            continue
+
+        live = candidates[:candidate_count]
+        partial = F[live] + batch_segment_cost(live, t)
+        best_idx = int(partial.argmin())
+        F_t = partial[best_idx] + penalty
+        F[t] = F_t
+        cp[t] = live[best_idx]
+
+        # Pruning (Killick et al. 2012, K=0): segment costs are additive-or-better
+        # under splitting, so s can never beat t once F[s] + C(s, t) > F[t].
+        if candidate_cap is None:
+            expire_at = t + min_segment_length
+            live_expiry = expiry[:candidate_count]
+            dominated = (partial > F_t) & (live_expiry > expire_at)
+            if dominated.any():
+                live_expiry[dominated] = expire_at
+                if expire_at < next_expiry:
+                    next_expiry = expire_at
         else:
-            # Plain Python for small R (numpy overhead perhaps not worthwhile).
-            candidates = []
-            for s in R:
-                if t - s >= min_segment_length:
-                    cost = segment_cost(s, t)
-                    total_cost = F[s] + cost + penalty
-                    candidates.append((total_cost, s))
-
-            if candidates:
-                F[t], cp[t] = min(candidates, key=lambda x: x[0])
-            else:
-                continue
-
-        # Pruning: discard candidates that cannot be part of any optimal future
-        # segmentation.  Standard PELT keeps s when F[s] <= F[t]; aggressive
-        # pruning (pruning_factor > 1) tightens the threshold further.
-        if pruning_factor <= 1.0:
-            threshold = F[t]
-        else:
-            threshold = F[t] - penalty * (pruning_factor - 1.0)
-        R_new = [s for s in R if F[s] <= threshold]
-        R_new.append(t)
-        R = R_new
+            keep = partial <= F_t
+            kept_count = int(keep.sum())
+            if kept_count > candidate_cap:
+                kept_idx = np.flatnonzero(keep)
+                best_kept = np.argpartition(partial[kept_idx], candidate_cap - 1)
+                kept_idx = np.sort(kept_idx[best_kept[:candidate_cap]])
+                candidates[:candidate_cap] = live[kept_idx]
+                candidate_count = candidate_cap
+            elif kept_count < candidate_count:
+                candidates[:kept_count] = live[keep]
+                candidate_count = kept_count
+            if candidate_count:
+                oldest_candidate = int(candidates[0])
 
     # Backtrack through cp[] to recover the optimal segmentation.
     changepoints = []
@@ -515,6 +528,39 @@ def _resolve_l0_max_changepoints(
     return int(np.clip(int(max_changepoints), 0, spacing_cap))
 
 
+def _difference_changepoint_offset(difference_order):
+    """
+    Shift from a k-th difference index to the changepoint it represents.
+
+    The k-th difference at i spans x[i..i+k]. A kink of the order's natural
+    spline at cp (level shift for k=1, hinge max(0, t - cp) for k=2, ...) puts
+    its k-th difference mass centered on cp - k/2, so the shift is ceil(k/2):
+    1, 1, 2, 2 for orders 1-4. Shifting by k reports orders >= 2 late.
+    """
+    return (int(difference_order) + 1) // 2
+
+
+def _collapse_adjacent_runs(positions, scores):
+    """
+    Keep the highest-scoring position within each run of consecutive positions.
+
+    Orders >= 3 spread one kink over k-1 adjacent differences, which would
+    otherwise be reported as several changepoints one step apart.
+    """
+    positions = np.asarray(positions, dtype=int)
+    if positions.size <= 1:
+        return positions
+    scores = np.asarray(scores, dtype=float)
+    run_starts = np.flatnonzero(np.concatenate(([True], np.diff(positions) > 1)))
+    run_ids = np.repeat(
+        np.arange(run_starts.size), np.diff(np.r_[run_starts, positions.size])
+    )
+    # Sort by (run, -score) so the first entry of each run is its peak.
+    order = np.lexsort((-scores, run_ids))
+    first_in_run = np.concatenate(([True], np.diff(run_ids[order]) != 0))
+    return np.sort(positions[order][first_in_run])
+
+
 def _topk_changepoints_from_differences(
     differences,
     difference_order,
@@ -531,7 +577,9 @@ def _topk_changepoints_from_differences(
     if np.allclose(scores, 0.0, atol=1e-12, rtol=0.0):
         return np.array([], dtype=int)
 
-    candidates = np.arange(scores.size, dtype=int) + int(difference_order)
+    candidates = np.arange(scores.size, dtype=int) + _difference_changepoint_offset(
+        difference_order
+    )
     valid = (candidates > int(difference_order)) & (
         candidates < int(n_obs) - int(difference_order)
     )
@@ -577,6 +625,9 @@ def _detect_l1_trend_changepoints(
     adaptive=False,
     adaptive_gamma=1.0,
     irls_iterations=4,
+    threshold_mode='relative',
+    threshold_multiplier=1.0,
+    segment_length=5,
 ):
     """
     L1 trend filtering for changepoint detection.
@@ -590,6 +641,10 @@ def _detect_l1_trend_changepoints(
     adaptive (bool): Enable adaptive L1 reweighting (adaptive lasso style).
     adaptive_gamma (float): Exponent used in adaptive weights.
     irls_iterations (int): Iterations for IRLS solver.
+    threshold_mode (str): 'relative' (default, mean + 1.5 std of own kinks) or
+        'noise' (absolute, scaled to residual noise).
+    threshold_multiplier (float): Multiplier on the noise threshold ('noise' only).
+    segment_length (int): Segment length used in the noise threshold scale.
 
     Returns:
     tuple: (changepoints, fitted_trend)
@@ -633,7 +688,13 @@ def _detect_l1_trend_changepoints(
         return _simple_threshold_changepoints(data), data.copy()
 
     changepoints = _extract_changepoints_from_trend(
-        fitted_trend, method=method, difference_order=order
+        fitted_trend,
+        method=method,
+        difference_order=order,
+        data=data,
+        threshold_mode=threshold_mode,
+        threshold_multiplier=threshold_multiplier,
+        segment_length=segment_length,
     )
     return changepoints, fitted_trend
 
@@ -964,11 +1025,12 @@ def _detect_bottom_up_changepoints(
     else:
         penalty_val = float(penalty)
 
+    # Merging stops at the penalty only once the segment count is within the
+    # cap; above the cap, the cheapest merges continue regardless of penalty.
     if max_changepoints in {None, 'auto'}:
-        target_segments = 1
+        max_segments = segment_count
     else:
-        max_cp = max(0, int(max_changepoints))
-        target_segments = max(1, max_cp + 1)
+        max_segments = max(1, int(max_changepoints) + 1)
 
     prev_idx = np.arange(-1, segment_count - 1, dtype=int)
     next_idx = np.arange(1, segment_count + 1, dtype=int)
@@ -1000,7 +1062,7 @@ def _detect_bottom_up_changepoints(
     for left in range(segment_count - 1):
         push_pair(left)
 
-    while heap and active_count > target_segments:
+    while heap and active_count > 1:
         increase, left, left_version, right_version = heapq.heappop(heap)
         right = next_idx[left] if 0 <= left < segment_count else -1
         if right == -1:
@@ -1012,7 +1074,7 @@ def _detect_bottom_up_changepoints(
             or version[right] != right_version
         ):
             continue
-        if penalty_val >= 0 and increase > penalty_val:
+        if penalty_val >= 0 and increase > penalty_val and active_count <= max_segments:
             break
 
         ends[left] = ends[right]
@@ -1648,7 +1710,7 @@ def _detect_ewma_changepoints(
     EWMA is effective at detecting small to moderate shifts in the process mean and
     responds more quickly to process changes than standard Shewhart charts. This
     implementation includes several optimizations from the statistical process control
-    literature including adaptive control limits and fast-initial-response (FIR).
+    literature including exact time-varying control limits for the start-up period.
 
     Parameters:
     data (array-like): Time series values.
@@ -1667,8 +1729,8 @@ def _detect_ewma_changepoints(
         Recommended: True for comparing across different series.
     two_sided (bool): Whether to detect both upward and downward shifts.
         If False, only detects upward shifts.
-    adaptive (bool): Use adaptive control limits that tighten over time.
-        This implements Lucas & Saccucci (1990) fast initial response (FIR).
+    adaptive (bool): Use the exact time-varying control limits, which start
+        narrow and widen to the steady state (Lucas & Saccucci 1990).
         Recommended: True for better performance in initial periods.
 
     Returns:
@@ -1711,7 +1773,10 @@ def _detect_ewma_changepoints(
 
     # Initialize EWMA
     z = np.zeros(n)
-    z[0] = series[0]  # Fast Initial Response (FIR): start at first observation
+    # Start at the target (0 after centering), so z[0] = lambda * x0. Starting at
+    # x0 itself gives z[0] the full variance of x, far above the control limits'
+    # early-time variance, and flags spurious changepoints at t <= 3.
+    z[0] = lambda_param * series[0]
 
     # Calculate standard error of EWMA at each point
     # Lucas & Saccucci (1990) formula for time-varying control limits
@@ -1839,6 +1904,174 @@ def _detect_ewma_changepoints(
     return np.array(sorted(set(validated_changepoints)))
 
 
+# Two-sample z between adjacent CUSUM segments needed to keep a changepoint;
+# ~4 keeps pure-noise false alarms rare across a few hundred candidate splits.
+_CUSUM_SEGMENT_Z_CRITICAL = 4.0
+
+
+def _robust_noise_scale(matrix, lengths):
+    """
+    Per-row noise sigma from the MAD of first differences.
+
+    Level shifts inflate the global std (shrinking a CUSUM's effective
+    sensitivity) but only touch a handful of differences, so the MAD of
+    differences / (0.6745 * sqrt(2)) tracks the within-segment noise instead.
+    Rows whose differences are mostly zero fall back to the std of differences.
+    """
+    n_series, max_len = matrix.shape
+    if max_len < 2:
+        return np.zeros(n_series, dtype=float)
+    diffs = np.diff(matrix, axis=1)
+    diff_valid = np.arange(max_len - 1)[None, :] < (lengths[:, None] - 1)
+    masked = np.where(diff_valid, diffs, np.nan)
+    with np.errstate(all='ignore'):
+        center = np.nanmedian(masked, axis=1)
+        mad = np.nanmedian(np.abs(masked - center[:, None]), axis=1)
+        scale = mad / (0.6745 * np.sqrt(2.0))
+        fallback = np.nanstd(masked, axis=1) / np.sqrt(2.0)
+    scale = np.where(np.isfinite(scale) & (scale > 1e-8), scale, fallback)
+    return np.where(np.isfinite(scale), scale, 0.0)
+
+
+def _cusum_changepoints_core(
+    series_list,
+    threshold,
+    drift,
+    min_distance,
+    normalize,
+    min_segment_length=1,
+):
+    """
+    Two-sided CUSUM with onset estimation and re-centering after each alarm.
+
+    Shared by the single-series and vectorized entry points; loops over time
+    and vectorizes across series. Per alarm:
+
+    * the changepoint reported is the estimated onset (single-change MLE over
+      the current segment through a short lookahead), not the alarm time;
+    * the reference restarts at the onset as a running mean of the new
+      segment, so one step does not keep re-triggering against a stale
+      (e.g. global) mean;
+    * finally, changepoints whose adjacent segments are not significantly
+      different are dropped.
+
+    Returns a list of int arrays of changepoint positions, one per series.
+    """
+    if not series_list:
+        return []
+
+    matrix, lengths = _build_series_matrix(series_list)
+    n_series, max_len = matrix.shape
+    if max_len == 0:
+        return [np.array([], dtype=int) for _ in range(n_series)]
+
+    scale = _robust_noise_scale(matrix, lengths)
+    valid = (lengths >= 2 * max(1, int(min_segment_length))) & (scale > 1e-8)
+    if normalize:
+        matrix = matrix / np.where(valid, scale, 1.0)[:, None]
+        effective_drift = drift if abs(drift) >= 1e-10 else 0.25
+    else:
+        effective_drift = drift
+
+    eff_min_distance = np.maximum(
+        int(min_distance), np.maximum(1, (lengths * 0.02).astype(int))
+    )
+    prefix = np.zeros((n_series, max_len + 1), dtype=float)
+    prefix[:, 1:] = np.cumsum(matrix, axis=1)
+    rows = np.arange(n_series)
+
+    # Self-starting reference: the running mean of the current segment so far.
+    # A short fixed window would leave the reference noisy enough to bias the
+    # CUSUM into false alarms; the global mean straddles every step.
+    segment_start = np.zeros(n_series, dtype=int)
+    g_pos = np.zeros(n_series, dtype=float)
+    g_neg = np.zeros(n_series, dtype=float)
+    last_zero_pos = np.zeros(n_series, dtype=int)
+    last_zero_neg = np.zeros(n_series, dtype=int)
+    last_cp = np.zeros(n_series, dtype=int)
+    changepoint_lists = [[] for _ in range(n_series)]
+
+    for t in range(1, max_len):
+        # Accumulate only once min_distance points establish the reference.
+        active = valid & (t < lengths) & (t >= segment_start + eff_min_distance)
+        reference = (prefix[rows, t] - prefix[rows, segment_start]) / np.maximum(
+            t - segment_start, 1
+        )
+        deviation = matrix[:, t] - reference
+        g_pos = np.where(
+            active, np.maximum(0.0, g_pos + deviation - effective_drift), 0.0
+        )
+        g_neg = np.where(
+            active, np.minimum(0.0, g_neg + deviation + effective_drift), 0.0
+        )
+        last_zero_pos = np.where(g_pos == 0.0, t, last_zero_pos)
+        last_zero_neg = np.where(g_neg == 0.0, t, last_zero_neg)
+
+        alarm_pos = active & (g_pos > threshold)
+        alarm_neg = active & (g_neg < -threshold)
+        alarm = alarm_pos | alarm_neg
+        if not np.any(alarm):
+            continue
+
+        use_pos = alarm_pos & (~alarm_neg | (g_pos >= -g_neg))
+        onset = np.where(use_pos, last_zero_pos, last_zero_neg) + 1
+        for idx in np.flatnonzero(alarm):
+            # The last-zero onset is biased by the drift allowance; refine with the
+            # single-change MLE over the segment plus a min_distance lookahead.
+            cp_idx = _best_single_split(
+                prefix[idx],
+                int(segment_start[idx]),
+                int(min(lengths[idx], t + 1 + eff_min_distance[idx])),
+                fallback=int(onset[idx]),
+            )
+            onset[idx] = cp_idx
+            if (
+                cp_idx - last_cp[idx] >= eff_min_distance[idx]
+                and lengths[idx] - cp_idx >= eff_min_distance[idx]
+            ):
+                changepoint_lists[idx].append(cp_idx)
+                last_cp[idx] = cp_idx
+
+        # Restart the reference at the onset; data between onset and t
+        # (already post-change) seeds the new segment's mean.
+        segment_start = np.where(alarm, onset, segment_start)
+        g_pos = np.where(alarm, 0.0, g_pos)
+        g_neg = np.where(alarm, 0.0, g_neg)
+
+    # Drop changepoints whose neighbouring segments do not differ significantly
+    # (the CUSUM with a small drift allowance alarms on noise every ~100 steps).
+    results = []
+    for idx, cps in enumerate(changepoint_lists):
+        cps = np.array(cps, dtype=int)
+        if cps.size:
+            bounds = np.concatenate(([0], cps, [lengths[idx]]))
+            left_n = bounds[1:-1] - bounds[:-2]
+            right_n = bounds[2:] - bounds[1:-1]
+            left_mean = (prefix[idx, bounds[1:-1]] - prefix[idx, bounds[:-2]]) / left_n
+            right_mean = (prefix[idx, bounds[2:]] - prefix[idx, bounds[1:-1]]) / right_n
+            noise = 1.0 if normalize else scale[idx]
+            z_score = np.abs(right_mean - left_mean) / (
+                noise * np.sqrt(1.0 / left_n + 1.0 / right_n)
+            )
+            cps = cps[z_score > _CUSUM_SEGMENT_Z_CRITICAL]
+        results.append(cps)
+    return results
+
+
+def _best_single_split(prefix_row, start, end, fallback):
+    """Single mean-change MLE in [start, end) from a prefix-sum row."""
+    length = end - start
+    if length < 4:
+        return fallback
+    split = np.arange(start + 2, end - 1)
+    left_n = split - start
+    right_n = end - split
+    left_mean = (prefix_row[split] - prefix_row[start]) / left_n
+    right_mean = (prefix_row[end] - prefix_row[split]) / right_n
+    stat = left_n * right_n / length * (right_mean - left_mean) ** 2
+    return int(split[np.argmax(stat)])
+
+
 def _detect_cusum_changepoints(
     data,
     threshold=5.0,
@@ -1849,119 +2082,32 @@ def _detect_cusum_changepoints(
     """
     Detect changepoints using a two-sided CUSUM procedure.
 
+    Reports the estimated onset of each shift and re-centers on the new level
+    after every alarm (see _cusum_changepoints_core).
+
     Parameters:
     data (array-like): Time series values.
     threshold (float): Threshold for the cumulative sum to trigger a changepoint.
-        Higher values = fewer, more significant changepoints. Recommended: 10-20 for
-        normalized data. If normalize=False, scale threshold to ~2-3x the expected
-        change magnitude.
-    drift (float): Drift parameter to control sensitivity. Higher drift = less sensitive
-        to small sustained changes. Recommended: 0.5 for normalized data, or ~10-20% of
-        expected change magnitude.
+        Higher values = fewer, more significant changepoints. With normalize=True
+        it is in units of the noise sigma (robust, from differences); 5-10 is
+        typical. If normalize=False, it is in the data's units.
+    drift (float): Allowance subtracted each step; roughly half the smallest
+        shift worth detecting. Defaults to 0.25 sigma when 0 and normalize=True.
     min_distance (int): Minimum distance between successive changepoints.
         Prevents clustering of detections. Recommended: 5-10% of series length.
-    normalize (bool): Whether to z-score the data before applying CUSUM.
+    normalize (bool): Whether to scale the data by its robust noise sigma.
         Recommended: True for comparing across different series.
 
     Returns:
     np.ndarray: Indices of detected changepoints.
     """
     data = np.asarray(data, dtype=float)
-    n = len(data)
-    if n == 0:
+    if len(data) == 0:
         return np.array([])
-
-    # Calculate statistics for adaptive parameters
-    series = data.copy()
-    data_mean = np.mean(series)
-    series -= data_mean
-
-    if normalize:
-        std = np.std(series)
-        if std > 1e-8:
-            series /= std
-        else:
-            # Constant data - no changepoints
-            return np.array([])
-
-    # Adaptive drift: if drift is 0, use small default based on data
-    effective_drift = drift
-    if abs(drift) < 1e-10 and normalize:
-        # For normalized data, use a small drift to reduce false positives
-        effective_drift = 0.25  # Reduce sensitivity to noise
-
-    # Adaptive min_distance: if very small, use percentage of data length
-    effective_min_distance = max(
-        min_distance, int(n * 0.02)
-    )  # At least 2% of series length
-
-    g_pos = 0.0
-    g_neg = 0.0
-    changepoints = []
-    candidate_triggers = []  # Store potential changepoints for validation
-
-    for idx, value in enumerate(series):
-        g_pos = max(0.0, g_pos + value - effective_drift)
-        g_neg = min(0.0, g_neg + value + effective_drift)
-
-        trigger = None
-        if g_pos > threshold:
-            trigger = idx
-            candidate_triggers.append((idx, 'pos'))
-            g_pos = 0.0
-            g_neg = 0.0
-        elif g_neg < -threshold:
-            trigger = idx
-            candidate_triggers.append((idx, 'neg'))
-            g_pos = 0.0
-            g_neg = 0.0
-
-        if trigger is not None:
-            # Enforce minimum distance between changepoints
-            if (
-                len(changepoints) == 0
-                or (trigger - changepoints[-1]) >= effective_min_distance
-            ):
-                changepoints.append(trigger)
-
-    if len(changepoints) == 0:
-        return np.array([])
-
-    # Post-processing: validate changepoints by checking for sustained level changes
-    # This helps reduce false positives from temporary spikes
-    validated_changepoints = []
-    for cp in changepoints:
-        # Check if there's a sustained change after this point
-        # Compare mean before and after (using windows to avoid edge effects)
-        window_size = min(30, effective_min_distance, cp, n - cp - 1)
-        if window_size < 3:
-            # Not enough data to validate, but keep it (edge case)
-            validated_changepoints.append(cp)
-            continue
-
-        # Calculate means in windows before and after
-        before_window = series[max(0, cp - window_size) : cp]
-        after_window = series[cp : min(n, cp + window_size)]
-
-        if len(before_window) > 0 and len(after_window) > 0:
-            mean_diff = abs(np.mean(after_window) - np.mean(before_window))
-            # For normalized data, require at least 0.2 std change (less strict)
-            # The mean difference should be larger than noise level
-            std_before = np.std(before_window) if len(before_window) > 1 else 1.0
-            std_after = np.std(after_window) if len(after_window) > 1 else 1.0
-            avg_std = (std_before + std_after) / 2
-
-            # The mean difference should be larger than the typical variation within segments
-            # Use max of 0.2 (for weak changes) or 0.3*avg_std (for noisy data)
-            threshold_val = max(0.2, 0.3 * avg_std)
-            if mean_diff > threshold_val:
-                validated_changepoints.append(cp)
-        else:
-            validated_changepoints.append(cp)
-
-    if len(validated_changepoints) == 0:
-        return np.array([])
-    return np.array(sorted(set(validated_changepoints)))
+    cps = _cusum_changepoints_core(
+        [data], threshold, drift, min_distance, normalize, min_segment_length=1
+    )[0]
+    return cps if cps.size else np.array([])
 
 
 def _build_series_matrix(series_list):
@@ -1985,129 +2131,9 @@ def _vectorized_cusum_changepoints(
     min_segment_length,
 ):
     """Vectorized CUSUM detection across multiple series."""
-    if not series_list:
-        return []
-
-    matrix, lengths = _build_series_matrix(series_list)
-    max_len = matrix.shape[1]
-    mask = np.arange(max_len)[None, :] < lengths[:, None]
-    # Center series
-    sums = (matrix * mask).sum(axis=1)
-    means = sums / np.maximum(lengths, 1)
-    series = matrix - means[:, None]
-    series *= mask
-
-    valid_mask = lengths >= 2 * np.maximum(min_segment_length, 1)
-
-    if normalize:
-        variances = (series**2).sum(axis=1) / np.maximum(lengths, 1)
-        stds = np.sqrt(variances)
-        safe = stds > 1e-8
-        normalized = np.zeros_like(series)
-        safe_idx = np.nonzero(safe)[0]
-        if safe_idx.size:
-            normalized[safe_idx] = series[safe_idx] / stds[safe_idx, None]
-        normalized *= mask
-        series = normalized
-        valid_mask &= safe
-    else:
-        stds = np.sqrt((series**2).sum(axis=1) / np.maximum(lengths, 1))
-        valid_mask &= stds > 1e-8
-
-    n_series = len(series_list)
-    g_pos = np.zeros(n_series, dtype=float)
-    g_neg = np.zeros(n_series, dtype=float)
-    effective_drift = drift if (abs(drift) >= 1e-10 or not normalize) else 0.25
-    effective_min_distance = np.maximum(
-        min_distance, np.maximum(1, (lengths * 0.02).astype(int))
+    return _cusum_changepoints_core(
+        series_list, threshold, drift, min_distance, normalize, min_segment_length
     )
-
-    last_cp = -effective_min_distance.astype(int)
-    changepoint_lists = [[] for _ in range(n_series)]
-
-    for idx in range(max_len):
-        active = (idx < lengths) & valid_mask
-        if not np.any(active):
-            continue
-        values = series[:, idx]
-        g_pos[active] = np.maximum(
-            0.0, g_pos[active] + values[active] - effective_drift
-        )
-        g_neg[active] = np.minimum(
-            0.0, g_neg[active] + values[active] + effective_drift
-        )
-
-        triggered_pos = (g_pos > threshold) & active
-        triggered_neg = (g_neg < -threshold) & active
-        triggered = triggered_pos | triggered_neg
-
-        if np.any(triggered):
-            eligible = triggered & ((idx - last_cp) >= effective_min_distance)
-            if np.any(eligible):
-                eligible_idx = np.nonzero(eligible)[0]
-                for series_idx in eligible_idx:
-                    changepoint_lists[series_idx].append(idx)
-                    last_cp[series_idx] = idx
-            g_pos[triggered] = 0.0
-            g_neg[triggered] = 0.0
-
-    results = []
-    for series_idx in range(n_series):
-        cps = changepoint_lists[series_idx]
-        if not cps:
-            results.append(np.array([], dtype=int))
-            continue
-
-        series_length = lengths[series_idx]
-        eff_min = effective_min_distance[series_idx]
-        series_values = series[series_idx, :series_length]
-
-        # Vectorized validation of changepoints
-        if len(cps) > 0:
-            cps_array = np.array(cps, dtype=int)
-            window_size = (
-                min(30, eff_min, series_length // 10) if series_length > 0 else 3
-            )
-
-            validated = []
-            for cp in cps_array:
-                ws = min(window_size, cp, series_length - cp - 1)
-                if ws < 3:
-                    validated.append(cp)
-                    continue
-
-                before_window = series_values[max(0, cp - ws) : cp]
-                after_window = series_values[cp : min(series_length, cp + ws)]
-
-                if before_window.size == 0 or after_window.size == 0:
-                    validated.append(cp)
-                    continue
-
-                mean_diff = abs(np.mean(after_window) - np.mean(before_window))
-                std_before = np.std(before_window) if before_window.size > 1 else 1.0
-                std_after = np.std(after_window) if after_window.size > 1 else 1.0
-                avg_std = (std_before + std_after) / 2
-                threshold_val = max(0.2, 0.3 * avg_std)
-
-                if mean_diff > threshold_val:
-                    validated.append(cp)
-
-            if validated:
-                # Vectorized min_distance filtering
-                validated_array = np.array(validated, dtype=int)
-                if len(validated_array) > 1:
-                    diffs = np.diff(validated_array)
-                    keep_mask = np.concatenate([[True], diffs >= eff_min])
-                    filtered = validated_array[keep_mask]
-                else:
-                    filtered = validated_array
-                results.append(filtered)
-            else:
-                results.append(np.array([], dtype=int))
-        else:
-            results.append(np.array([], dtype=int))
-
-    return results
 
 
 def _vectorized_ewma_changepoints(
@@ -2165,7 +2191,8 @@ def _vectorized_ewma_changepoints(
 
     z = np.zeros_like(centered)
     if max_len > 0:
-        z[:, 0] = centered[:, 0]
+        # Start at the target (see _detect_ewma_changepoints).
+        z[:, 0] = lambda_param * centered[:, 0]
 
     in_signal = np.zeros(n_series, dtype=bool)
     signal_start = np.full(n_series, -1, dtype=int)
@@ -2273,7 +2300,9 @@ def _solve_weighted_trend_system_batch(chunk, D, identity, lambda_reg, weights):
     A = identity[None, :, :] + np.matmul(
         np.transpose(D_weighted, (0, 2, 1)), D_weighted
     )
-    return np.linalg.solve(A, chunk)
+    # Trailing axis makes b a stack of column vectors; NumPy>=2 treats a bare 2-D b
+    # as one matrix and raises on (k, n, n) vs (k, n).
+    return np.linalg.solve(A, chunk[..., None])[..., 0]
 
 
 def _approximate_l1_trend_filter_batch(
@@ -2401,12 +2430,78 @@ def _approximate_l0_trend_filter_batch(
     return results
 
 
+_THRESHOLD_MODES = ('relative', 'noise')
+
+
+def _validate_threshold_mode(threshold_mode):
+    if threshold_mode not in _THRESHOLD_MODES:
+        raise ValueError(
+            f"threshold_mode must be one of {_THRESHOLD_MODES}, got {threshold_mode!r}"
+        )
+    return threshold_mode
+
+
+def _noise_kink_threshold(
+    data_block, fitted_block, difference_order, multiplier, segment_length
+):
+    """Absolute kink-size threshold per series, tied to the residual noise level.
+
+    sigma comes from MAD of first differences of (data - fitted) / sqrt(2): robust
+    to the kinks themselves and to autocorrelated residuals. A kink of order k
+    estimated from a segment of length L has sd ~ sigma * sqrt(12 / L^(2k-1))
+    (k=2: slope-change sd of a line fit, 12 sigma^2 / L^3), so kinks smaller than
+    multiplier times that are indistinguishable from noise. L is the minimum
+    segment length, which is also the window of _windowed_kink_scores.
+    """
+    residual = np.atleast_2d(data_block) - np.atleast_2d(fitted_block)
+    if residual.shape[1] < 2:
+        return np.zeros(residual.shape[0], dtype=float)
+    residual_steps = np.diff(residual, axis=1)
+    centered = np.abs(residual_steps - np.median(residual_steps, axis=1, keepdims=True))
+    sigma = 1.4826 * np.median(centered, axis=1) / np.sqrt(2.0)
+    segment_length = max(2.0, float(segment_length))
+    order = max(1, int(difference_order))
+    scale = np.sqrt(12.0 / segment_length ** (2 * order - 1))
+    threshold = float(multiplier) * sigma * scale
+    # Floor so a numerically exact fit does not flag float round-off as kinks
+    data_scale = np.max(np.abs(np.atleast_2d(data_block)), axis=1)
+    return np.maximum(threshold, 1e-9 * data_scale + 1e-12)
+
+
+def _windowed_kink_scores(fitted_trends, order, window):
+    """|sum of signed order-k differences| over a centred window, per position.
+
+    Smooth L1/L2 fits spread one true kink over several adjacent differences
+    (the individual spikes shrink, the sum is preserved), so the windowed sum
+    recovers the full slope/level change that the noise threshold is sized for.
+    """
+    signed = np.diff(fitted_trends, n=order, axis=1)
+    window = max(1, int(window))
+    m = signed.shape[1]
+    cumulative = np.concatenate(
+        [np.zeros((signed.shape[0], 1)), np.cumsum(signed, axis=1)], axis=1
+    )
+    positions = np.arange(m)
+    lo = np.maximum(positions - (window - 1) // 2, 0)
+    hi = np.minimum(positions + window // 2 + 1, m)
+    return np.abs(cumulative[:, hi] - cumulative[:, lo])
+
+
 def _extract_changepoints_from_trend_batch(
     fitted_trends,
     difference_order,
     min_segment_length,
+    data_block=None,
+    threshold_mode='relative',
+    threshold_multiplier=1.0,
 ):
-    """Extract changepoints from fitted trends for multiple series."""
+    """Extract changepoints from fitted trends for multiple series.
+
+    threshold_mode 'relative' (default) flags |diff| > mean + 1.5 std of the
+    series' own diffs; 'noise' uses an absolute residual-noise threshold and
+    requires data_block (the raw data the trends were fitted to).
+    """
+    _validate_threshold_mode(threshold_mode)
     if fitted_trends.size == 0:
         return []
 
@@ -2415,18 +2510,34 @@ def _extract_changepoints_from_trend_batch(
     if n <= order:
         return [np.array([], dtype=int) for _ in range(n_series)]
 
+    offset = _difference_changepoint_offset(order)
     differences = np.abs(np.diff(fitted_trends, n=order, axis=1))
-    mean_diff = differences.mean(axis=1)
+    if threshold_mode == 'noise':
+        differences = _windowed_kink_scores(fitted_trends, order, min_segment_length)
+        if data_block is None:
+            raise ValueError("threshold_mode='noise' requires data_block")
+        thresholds = _noise_kink_threshold(
+            data_block,
+            fitted_trends,
+            order,
+            threshold_multiplier,
+            min_segment_length,
+        )
+    else:
+        thresholds = differences.mean(axis=1) + 1.5 * differences.std(axis=1)
     std_diff = differences.std(axis=1)
 
     results = []
     for idx in range(n_series):
-        if differences.shape[1] == 0 or std_diff[idx] == 0:
+        if differences.shape[1] == 0 or (
+            threshold_mode == 'relative' and std_diff[idx] == 0
+        ):
             results.append(np.array([], dtype=int))
             continue
 
-        threshold = mean_diff[idx] + 1.5 * std_diff[idx]
-        candidates = np.where(differences[idx] > threshold)[0] + order
+        threshold = thresholds[idx]
+        above = np.flatnonzero(differences[idx] > threshold)
+        candidates = _collapse_adjacent_runs(above + offset, differences[idx, above])
         candidates = candidates[(candidates > order) & (candidates < n - max(2, order))]
 
         if candidates.size == 0:
@@ -2470,6 +2581,10 @@ def _vectorized_l1_detection(
     adaptive = bool(method_params.get('adaptive', False))
     adaptive_gamma = float(method_params.get('adaptive_gamma', 1.0))
     irls_iterations = int(method_params.get('irls_iterations', 4))
+    threshold_mode = _validate_threshold_mode(
+        method_params.get('threshold_mode', 'relative')
+    )
+    threshold_multiplier = float(method_params.get('threshold_multiplier', 1.0))
     min_required = max(3, difference_order + 2)
 
     # Vectorized length calculation
@@ -2517,13 +2632,17 @@ def _vectorized_l1_detection(
                 adaptive_gamma=adaptive_gamma,
                 irls_iterations=irls_iterations,
             )
-        except Exception:
+        except np.linalg.LinAlgError:
+            # Singular system only; any other error is a bug and must surface
             fitted_block = data_block.copy()
 
         cp_lists = _extract_changepoints_from_trend_batch(
             fitted_block,
             difference_order=difference_order,
             min_segment_length=min_segment_length,
+            data_block=data_block,
+            threshold_mode=threshold_mode,
+            threshold_multiplier=threshold_multiplier,
         )
 
         for row, series_idx in enumerate(indices_in_group):
@@ -2615,7 +2734,7 @@ def _vectorized_l0_detection(names, series_list, method_params, min_segment_leng
                     htp_iterations=htp_iterations,
                     hard_weight=hard_weight,
                 )
-            except Exception:
+            except np.linalg.LinAlgError:
                 fitted_block[nonflat_idx] = data_block[nonflat_idx]
 
         diff_block = (
@@ -3027,18 +3146,18 @@ def create_changepoint_features(
     """
     Creates a feature set for estimating trend changepoints using various algorithms.
 
-    Parameters:
-    DTindex (pd.DatetimeIndex): a datetimeindex
-    changepoint_spacing (int): Distance between consecutive changepoints (legacy, for basic method).
-    changepoint_distance_end (int): Number of rows that belong to the final changepoint (legacy, for basic method).
-    method (str): Method for changepoint detection ('basic', 'pelt', 'l1_fused_lasso',
-        'l1_total_variation', 'l0_trend_filter', 'cusum', 'ewma', 'autoencoder',
-        'kcpd', 'bottom_up', 'wbs2')
-    params (dict): Additional parameters for the chosen method
-    data (array-like): Time series data (required for advanced methods)
+    Args:
+        DTindex (pd.DatetimeIndex): a datetimeindex
+        changepoint_spacing (int): Distance between consecutive changepoints (legacy, for basic method).
+        changepoint_distance_end (int): Number of rows that belong to the final changepoint (legacy, for basic method).
+        method (str): Method for changepoint detection ('basic', 'pelt', 'l1_fused_lasso',
+            'l1_total_variation', 'l0_trend_filter', 'cusum', 'ewma', 'autoencoder',
+            'kcpd', 'bottom_up', 'wbs2')
+        params (dict): Additional parameters for the chosen method
+        data (array-like): Time series data (required for advanced methods)
 
     Returns:
-    pd.DataFrame: DataFrame containing changepoint features for linear regression.
+        pd.DataFrame: DataFrame containing changepoint features for linear regression.
     """
     if params is None:
         params = {}
@@ -3073,6 +3192,8 @@ def create_changepoint_features(
             adaptive=params.get('adaptive', False),
             adaptive_gamma=params.get('adaptive_gamma', 1.0),
             irls_iterations=params.get('irls_iterations', 4),
+            threshold_mode=params.get('threshold_mode', 'relative'),
+            threshold_multiplier=params.get('threshold_multiplier', 1.0),
         )
 
     elif method == 'l0_trend_filter':
@@ -3154,7 +3275,14 @@ def changepoint_fcst_from_last_row(x_t_last_row, n_forecast=10):
 
 
 def half_yr_spacing(df):
-    return int(df.shape[0] / ((df.index.max().year - df.index.min().year + 1) * 2))
+    """Return rows per half-year, using at least one elapsed year of history."""
+    index = df.index.tz_convert(None) if df.index.tz is not None else df.index
+    # Python timedeltas also support histories longer than pandas' ns limit.
+    elapsed = index.max().to_pydatetime(warn=False) - index.min().to_pydatetime(
+        warn=False
+    )
+    elapsed_years = max(elapsed.total_seconds() / (365.25 * 86400), 1.0)
+    return max(1, int(df.shape[0] / (elapsed_years * 2)))
 
 
 def _create_pelt_changepoint_features(
@@ -3194,6 +3322,8 @@ def _create_l1_changepoint_features(
     adaptive=False,
     adaptive_gamma=1.0,
     irls_iterations=4,
+    threshold_mode='relative',
+    threshold_multiplier=1.0,
 ):
     """Create changepoint features using L1 trend filtering."""
     changepoints, _ = _detect_l1_trend_changepoints(
@@ -3204,6 +3334,8 @@ def _create_l1_changepoint_features(
         adaptive=adaptive,
         adaptive_gamma=adaptive_gamma,
         irls_iterations=irls_iterations,
+        threshold_mode=threshold_mode,
+        threshold_multiplier=threshold_multiplier,
     )
 
     if len(changepoints) == 0:
@@ -3574,8 +3706,13 @@ def _extract_changepoints_from_trend(
     fitted_trend,
     method='fused_lasso',
     difference_order=None,
+    data=None,
+    threshold_mode='relative',
+    threshold_multiplier=1.0,
+    segment_length=5,
 ):
-    """Extract changepoints from fitted trend."""
+    """Extract changepoints from fitted trend (see batch variant for threshold modes)."""
+    _validate_threshold_mode(threshold_mode)
     n = len(fitted_trend)
     order = _resolve_difference_order(method, difference_order, max_order=4)
     if n <= order:
@@ -3589,12 +3726,28 @@ def _extract_changepoints_from_trend(
     mean_diff = np.mean(differences)
     std_diff = np.std(differences)
 
-    if std_diff == 0:
-        return np.array([], dtype=int)
-
-    # Use a more conservative threshold
-    threshold = mean_diff + 1.5 * std_diff
-    changepoints = np.where(differences > threshold)[0] + order
+    if threshold_mode == 'noise':
+        if data is None:
+            raise ValueError("threshold_mode='noise' requires data")
+        differences = _windowed_kink_scores(
+            np.asarray(fitted_trend, dtype=float)[None, :], order, segment_length
+        )[0]
+        threshold = _noise_kink_threshold(
+            np.asarray(data, dtype=float)[None, :],
+            np.asarray(fitted_trend, dtype=float)[None, :],
+            order,
+            threshold_multiplier,
+            segment_length,
+        )[0]
+    else:
+        if std_diff == 0:
+            return np.array([], dtype=int)
+        # Use a more conservative threshold
+        threshold = mean_diff + 1.5 * std_diff
+    above = np.flatnonzero(differences > threshold)
+    changepoints = _collapse_adjacent_runs(
+        above + _difference_changepoint_offset(order), differences[above]
+    )
 
     # Filter out changepoints too close to boundaries
     changepoints = changepoints[
@@ -3666,7 +3819,23 @@ class ChangepointDetector(object):
         fitted_trend = data
         probabilities = None
 
-        if len(data) < 2 * self.min_segment_length:
+        method = self.method
+        params = self.method_params
+
+        # Preflight must match the minimum the method actually enforces, else a
+        # method_params override smaller than the detector default skips series.
+        if method in (
+            'pelt',
+            'l1_fused_lasso',
+            'l1_total_variation',
+            'l0_trend_filter',
+        ):
+            effective_min_segment_length = params.get(
+                'min_segment_length', self.min_segment_length
+            )
+        else:
+            effective_min_segment_length = self.min_segment_length
+        if len(data) < 2 * effective_min_segment_length:
             return {
                 'name': series_name,
                 'changepoints': changepoints,
@@ -3674,15 +3843,16 @@ class ChangepointDetector(object):
                 'probabilities': probabilities,
             }
 
-        method = self.method
-        params = self.method_params
-
         if method == 'pelt':
             penalty = params.get('penalty', 10)
             loss_function = params.get('loss_function', 'l2')
             pruning_factor = params.get('pruning_factor', 1.0)
             changepoints = _detect_pelt_changepoints(
-                data, penalty, loss_function, self.min_segment_length, pruning_factor
+                data,
+                penalty,
+                loss_function,
+                params.get('min_segment_length', self.min_segment_length),
+                pruning_factor,
             )
             fitted_trend = data
 
@@ -3699,6 +3869,11 @@ class ChangepointDetector(object):
                 adaptive=params.get('adaptive', False),
                 adaptive_gamma=params.get('adaptive_gamma', 1.0),
                 irls_iterations=params.get('irls_iterations', 4),
+                threshold_mode=params.get('threshold_mode', 'relative'),
+                threshold_multiplier=params.get('threshold_multiplier', 1.0),
+                segment_length=params.get(
+                    'min_segment_length', self.min_segment_length
+                ),
             )
 
         elif method == 'l0_trend_filter':
@@ -3937,7 +4112,7 @@ class ChangepointDetector(object):
                 series_arrays,
                 lambda_reg,
                 self.method,
-                self.min_segment_length,
+                method_params.get('min_segment_length', self.min_segment_length),
                 method_params=method_params,
             )
             results.update(l1_results)
@@ -3947,7 +4122,9 @@ class ChangepointDetector(object):
                 series_names,
                 series_arrays,
                 method_params=method_params,
-                min_segment_length=self.min_segment_length,
+                min_segment_length=method_params.get(
+                    'min_segment_length', self.min_segment_length
+                ),
             )
             results.update(l0_results)
 
@@ -4123,7 +4300,9 @@ class ChangepointDetector(object):
                     aggregated_data,
                     penalty,
                     loss_function,
-                    self.min_segment_length,
+                    self.method_params.get(
+                        'min_segment_length', self.min_segment_length
+                    ),
                     pruning_factor,
                 )
 
@@ -4142,6 +4321,13 @@ class ChangepointDetector(object):
                     adaptive=self.method_params.get('adaptive', False),
                     adaptive_gamma=self.method_params.get('adaptive_gamma', 1.0),
                     irls_iterations=self.method_params.get('irls_iterations', 4),
+                    threshold_mode=self.method_params.get('threshold_mode', 'relative'),
+                    threshold_multiplier=self.method_params.get(
+                        'threshold_multiplier', 1.0
+                    ),
+                    segment_length=self.method_params.get(
+                        'min_segment_length', self.min_segment_length
+                    ),
                 )
 
             elif self.method == 'l0_trend_filter':
@@ -4629,53 +4815,14 @@ class ChangepointDetector(object):
         n = len(data)
 
         if method == 'bayesian_online':
-            # Simple Bayesian online changepoint detection
             hazard_rate = self.method_params.get(
                 'hazard_rate', 1 / 100
             )  # Prior belief about changepoint frequency
-
-            # Initialize
-            R = np.zeros((n, n))  # Run length probabilities
-            R[0, 0] = 1.0
-
-            changepoint_probs = np.zeros(n)
-
-            # Online updates
-            for t in range(1, n):
-                # Calculate predictive probabilities
-                pred_probs = np.zeros(t)
-                for r in range(t):
-                    if R[t - 1, r] > 1e-10:  # Only compute for non-zero probabilities
-                        # Simple Gaussian model for segments
-                        if r == 0:
-                            segment_data = data[:t]
-                        else:
-                            segment_data = data[t - r - 1 : t]
-
-                        if len(segment_data) > 0:
-                            mu = np.mean(segment_data)
-                            sigma = (
-                                np.std(segment_data) + 1e-6
-                            )  # Add small constant for stability
-                            pred_probs[r] = (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp(
-                                -0.5 * ((data[t] - mu) / sigma) ** 2
-                            )
-
-                # Update run length probabilities
-                evidence = 0
-                for r in range(t):
-                    # Growth probability (no changepoint)
-                    R[t, r + 1] = R[t - 1, r] * pred_probs[r] * (1 - hazard_rate)
-                    evidence += R[t, r + 1]
-
-                    # Changepoint probability
-                    R[t, 0] += R[t - 1, r] * pred_probs[r] * hazard_rate
-                    evidence += R[t - 1, r] * pred_probs[r] * hazard_rate
-
-                # Normalize
-                if evidence > 0:
-                    R[t, :] /= evidence
-                    changepoint_probs[t] = R[t, 0]
+            changepoint_probs = bayesian_online_changepoint_probabilities(
+                data,
+                hazard_rate=hazard_rate,
+                lag=max(5, int(self.min_segment_length)),
+            )
 
         elif method == 'bootstrap':
             # Bootstrap-based uncertainty estimation
@@ -4690,31 +4837,19 @@ class ChangepointDetector(object):
             bootstrap_changepoints = []
             rng = np.random.default_rng()
 
+            data = np.asarray(data, dtype=float)
+            base_cps = self._detect_bootstrap_base(data)
+            fitted = piecewise_mean_fit(data, base_cps)
+            residuals = data - fitted
+            block_length = max(int(self.min_segment_length), int(np.sqrt(n)))
+
             for _ in range(n_bootstrap):
-                # Resample data with replacement
-                bootstrap_indices = rng.choice(n, size=n, replace=True)
-                bootstrap_data = data[bootstrap_indices]
-
-                # Detect changepoints on bootstrap sample
-                if self.method == 'pelt':
-                    penalty = self.method_params.get('penalty', 10)
-                    loss_function = self.method_params.get('loss_function', 'l2')
-                    pruning_factor = self.method_params.get('pruning_factor', 1.0)
-                    cps = _detect_pelt_changepoints(
-                        bootstrap_data,
-                        penalty,
-                        loss_function,
-                        self.min_segment_length,
-                        pruning_factor,
-                    )
-                else:
-                    # Use L1 trend filtering as fallback
-                    lambda_reg = self.method_params.get('lambda_reg', 1.0)
-                    cps, _ = _detect_l1_trend_changepoints(
-                        bootstrap_data, lambda_reg, 'fused_lasso'
-                    )
-
-                bootstrap_changepoints.extend(cps)
+                bootstrap_data = residual_block_bootstrap(
+                    fitted, residuals, block_length, rng
+                )
+                bootstrap_changepoints.extend(
+                    self._detect_bootstrap_base(bootstrap_data)
+                )
 
             # Convert to probabilities
             changepoint_probs = np.zeros(n)
@@ -4731,6 +4866,21 @@ class ChangepointDetector(object):
         most_likely_cps = np.where(changepoint_probs > threshold)[0]
 
         return changepoint_probs, most_likely_cps
+
+    def _detect_bootstrap_base(self, data):
+        """Point detector used for the bootstrap: PELT if configured, else fused lasso."""
+        if self.method == 'pelt':
+            return _detect_pelt_changepoints(
+                data,
+                self.method_params.get('penalty', 10),
+                self.method_params.get('loss_function', 'l2'),
+                self.method_params.get('min_segment_length', self.min_segment_length),
+                self.method_params.get('pruning_factor', 1.0),
+            )
+        cps, _ = _detect_l1_trend_changepoints(
+            data, self.method_params.get('lambda_reg', 1.0), 'fused_lasso'
+        )
+        return cps
 
     def get_market_changepoints(self, method='dbscan', params=None):
         """
@@ -4798,6 +4948,17 @@ class ChangepointDetector(object):
         else:
             raise ValueError(f"Unknown clustering method: {method}")
 
+    def _detection_index(self, series_name=None):
+        """
+        Index labels of the values detection ran on; changepoints are positions in it.
+
+        Detection drops NaNs (per series, or rows where the aggregate is NaN), so
+        positions must be mapped through this index, not the full df index.
+        """
+        if series_name is not None:
+            return self.df[series_name].dropna().index
+        return self._aggregate_series(self.df).dropna().index
+
     def plot(self, series_name=None, figsize=(12, 8)):
         """
         Plot time series with detected changepoints.
@@ -4816,16 +4977,19 @@ class ChangepointDetector(object):
 
         fig, axes = plt.subplots(2, 1, figsize=figsize)
 
+        # Changepoints and fitted trends are aligned to the NaN-dropped data.
         if isinstance(self.changepoints_, dict):
             if series_name is None:
                 series_name = self.df.columns[0]
-            data = self.df[series_name]
+            data = self.df[series_name].dropna()
             changepoints = self.changepoints_[series_name]
             fitted_trend = self.fitted_trends_.get(series_name, None)
         else:
-            data = self.df.mean(axis=1)
+            data = self._aggregate_series(self.df).dropna()
             changepoints = self.changepoints_
             fitted_trend = self.fitted_trends_
+        if fitted_trend is not None and len(fitted_trend) != len(data):
+            fitted_trend = None
 
         # Plot original data
         axes[0].plot(data.index, data.values, label='Original Data', alpha=0.7)
@@ -4923,8 +5087,6 @@ class ChangepointDetector(object):
         else:
             freq_seconds = 1.0
 
-        base_index = self.df.index
-
         def _features_from_changepoints(changepoints, series_key=None):
             cp_array = np.asarray(
                 changepoints if changepoints is not None else [], dtype=int
@@ -4936,10 +5098,12 @@ class ChangepointDetector(object):
                 return None
             cp_array = np.unique(cp_array)
 
+            base_index = self._detection_index(series_key)
             if len(base_index) == 0:
                 return None
             capped_positions = np.clip(cp_array, 0, len(base_index) - 1)
             cp_dates = [base_index[pos] for pos in capped_positions]
+            full_positions = self.df.index.get_indexer(cp_dates)
 
             safe_prefix = f"{self.method}_changepoint"
             if series_key is not None:
@@ -4955,7 +5119,7 @@ class ChangepointDetector(object):
                     feature_values = np.maximum(0, periods_since_cp)
                 else:
                     feature_values = np.maximum(
-                        0, np.arange(len(extended_index)) - capped_positions[idx]
+                        0, np.arange(len(extended_index)) - full_positions[idx]
                     )
                 feature_columns.append(
                     pd.Series(feature_values, index=extended_index, name=feature_name)
@@ -4993,6 +5157,7 @@ class ChangepointDetector(object):
 
         Args:
             method (str): Method for parameter selection
+
                 - 'fast': All methods but with fastest parameter configurations for PELT and composite_fused_lasso
                 - Or specify a method name directly: 'basic', 'pelt', 'l1_fused_lasso',
                   'l1_total_variation', 'l0_trend_filter', 'cusum', 'ewma', 'kcpd', 'bottom_up',
@@ -5125,17 +5290,15 @@ class ChangepointDetector(object):
                     20,
                 ]  # Larger segments = faster (fewer breakpoints to evaluate)
                 min_segment_weights = [0.7, 0.1, 0.3]
-                # Aggressive pruning factors for fast mode (2.0-3.5 range)
-                # Higher values = more pruning = faster but potentially miss some changepoints
-                # Benchmark: pruning_factor=2.0 gives 16x speedup, 3.0 gives 48x speedup
+                # Approximate pruning for fast mode: caps the candidate set at the
+                # ceil(128 / pruning_factor) best (bounded per-step work, near-exact F1)
                 pruning_factor_options = [2.0, 2.5, 3.0, 3.5]
                 pruning_factor_weights = [0.2, 0.3, 0.3, 0.2]
             else:
                 penalty_options = [10, 20, 50, 100, 200]
                 penalty_weights = [0.15, 0.25, 0.3, 0.2, 0.1]
-                # 'ed' included at low weight: penalty must be scaled up vs 'l2'
-                # because ED cost grows O(n^2) per segment.  Kept rare because
-                # O(n^2) precomputation is expensive for long series.
+                # 'ed' kept rare because its O(n^2) worst-case time is expensive
+                # for long series without changepoints.
                 loss_functions = ['l2', 'l1', 'huber', 'ed']
                 loss_weights = [0.89, 0.01, 0.02, 0.08]
                 min_segment_options = [2, 5, 10, 15]
@@ -5158,11 +5321,6 @@ class ChangepointDetector(object):
                     pruning_factor_options, weights=pruning_factor_weights, k=1
                 )[0],
             }
-            # ED-PELT cost grows O(n^2) per segment, so a larger penalty is needed
-            # to achieve the same effective number of changepoints as 'l2'.
-            # Scale penalty ~5x (rough empirical calibration for typical series lengths).
-            if new_params['loss_function'] == 'ed':
-                new_params['penalty'] = new_params['penalty'] * 5
 
         elif new_method in ['l1_fused_lasso', 'l1_total_variation']:
             # L1 trend filtering parameters
@@ -5191,6 +5349,13 @@ class ChangepointDetector(object):
                 )[0],
                 'irls_iterations': random.choices(
                     [3, 4, 5], weights=[0.3, 0.5, 0.2], k=1
+                )[0],
+                # Opt-in absolute kink threshold; low weight keeps default behaviour
+                'threshold_mode': random.choices(
+                    ['relative', 'noise'], weights=[0.8, 0.2], k=1
+                )[0],
+                'threshold_multiplier': random.choices(
+                    [0.5, 1.0, 2.0, 4.0], weights=[0.2, 0.4, 0.3, 0.1], k=1
                 )[0],
             }
 
@@ -5295,7 +5460,7 @@ class ChangepointDetector(object):
             two_sided_weights = [0.8, 0.2]  # Usually want both directions
 
             adaptive_options = [True, False]
-            adaptive_weights = [0.6, 0.4]  # Adaptive (FIR) generally better
+            adaptive_weights = [0.6, 0.4]  # Time-varying limits generally better
 
             min_distance_options = [5, 10, 15, 20]
             min_distance_weights = [0.2, 0.4, 0.3, 0.1]

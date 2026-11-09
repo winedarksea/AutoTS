@@ -323,7 +323,7 @@ class MAR(ModelObject):
         predictStartTime = datetime.datetime.now()
         test_index = self.create_forecast_index(forecast_length=forecast_length)
 
-        shifted = wide_to_3d(self.df_train.to_numpy())
+        shifted = wide_to_3d(self.df_train.to_numpy(), seasonality=self.seasonality)
         pred_steps = int(np.ceil(forecast_length / self.seasonality) + 1)
         forecast = np.hstack(
             mar(shifted, pred_steps, family=self.family, maxiter=self.maxiter).T
@@ -798,7 +798,8 @@ def latc_predictor(
         start_2 = temp2.shape[1] % time_intervals
         dim = np.array([num_series, time_intervals, cuts])
         temp2 = mat2ten(temp2[:, start_2:], dim, 0)
-        if (temp2 == 0)[:, 1:].all():
+        all_zero = (temp2 == 0)[:, 1:]
+        if all_zero.size and all_zero.all():
             raise ValueError("LATC cannot accept any arrays that are all 0")
         # if np.all(temp2 == temp2[0, 0, 0])
         tensor = latc_imputer(

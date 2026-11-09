@@ -357,11 +357,16 @@ class FBProphet(ModelObject):
             'prediction_interval': self.prediction_interval,
         }
         if isinstance(self.holiday, dict):
-            mod = HolidayDetector(**self.holiday)
-            mod.detect(self.df_train)
-            args['holiday'] = mod.dates_to_holidays(
-                self.df_train.index.union(test_index), style="prophet"
-            )
+            try:
+                mod = HolidayDetector(**self.holiday)
+                mod.detect(self.df_train)
+                args['holiday'] = mod.dates_to_holidays(
+                    self.df_train.index.union(test_index), style="prophet"
+                )
+            except Exception as e:
+                if self.verbose > 1:
+                    print(f"Prophet auto-holiday detection failed with error: {e}")
+                args['holiday'] = None
 
         parallel = True
         cols = self.df_train.columns.tolist()
@@ -486,8 +491,13 @@ class FBProphet(ModelObject):
                 [0.4, 0.3, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
             )[0]
         else:
+            if method == "fast":
+                spacing_options, spacing_weights = [60, 180], [0.7, 0.3]
+            else:
+                spacing_options = [10, 20, 180, 30, 40, 50, 60]
+                spacing_weights = [0.005, 0.02, 0.2, 0.05, 0.1, 0.05, 0.9]
             params["changepoint_spacing"] = random.choices(
-                [10, 20, 180, 30, 40, 50, 60], [0.05, 0.1, 0.1, 0.1, 0.1, 0.05, 0.9]
+                spacing_options, spacing_weights
             )[0]
             params["changepoint_distance_end"] = random.choices(
                 [10, 20, 180, 30, 40, 50, 60], [0.05, 0.1, 0.1, 0.1, 0.1, 0.05, 0.9]
@@ -550,6 +560,7 @@ def get_changepoints(
     could be, which is around the 93% mark of the data, and then setting a
     relatively course, uniform grid going way back in time.
     (sourced from the work of Benn O)
+
     Args:
         training_start_ds: Pandas datetime or string date of earliest
             historical training date
@@ -562,6 +573,7 @@ def get_changepoints(
             also be the interval between potential changepoints
         custom_changepoints (string): comma separated dates in form YYYY-MM-DD. No
             additional quotations are necessary (e.g., "2020-10-12,2020-11-15")
+
     Returns:
         a pandas Series (dtype: datetime64[ns]) of potential changepoints for Prophet
     """

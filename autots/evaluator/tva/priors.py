@@ -18,11 +18,12 @@ from typing import Dict, Optional
 class SeriesMetadata:
     """Metadata descriptor for a single time series.
 
-    Attributes:
-        name: Series identifier matching DataFrame column name.
-        attribute_values: Arbitrary categorical metadata for the series.
-        hierarchy_path: Ordered path from root to leaf (e.g. ['global', 'NA', 'US']).
-        history_periods: Number of observed time periods available.
+    Attributes
+
+    - name: Series identifier matching DataFrame column name.
+    - attribute_values: Arbitrary categorical metadata for the series.
+    - hierarchy_path: Ordered path from root to leaf (e.g. ['global', 'NA', 'US']).
+    - history_periods: Number of observed time periods available.
     """
 
     name: str

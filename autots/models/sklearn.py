@@ -7,6 +7,7 @@ Decision Tree, Elastic Net,  Random Forest, MLPRegressor, KNN, Adaboost
 import hashlib
 import datetime
 import random
+import warnings
 import numpy as np
 import pandas as pd
 
@@ -21,6 +22,9 @@ try:
         RANSACRegressor,
         Ridge,
     )
+    from sklearn.base import BaseEstimator, RegressorMixin
+    from sklearn.neighbors import NearestNeighbors
+    from sklearn.svm import LinearSVR
     from sklearn.tree import (
         DecisionTreeRegressor,
         DecisionTreeClassifier,
@@ -36,9 +40,95 @@ try:
         """
 
         def fit(self, X, y, **kwargs):
+            """Fit, lowering min_samples only when the sklearn default would fail."""
             if self.min_samples is None and X.shape[1] + 1 > X.shape[0]:
+                # restore after fit so get_params()/clone() still see the user value
                 self.min_samples = max(2, X.shape[0] // 2)
+                try:
+                    return super().fit(X, y, **kwargs)
+                finally:
+                    self.min_samples = None
             return super().fit(X, y, **kwargs)
+
+    class QuietLinearSVR(LinearSVR):
+        """LinearSVR that silences only its own Liblinear convergence warning.
+
+        Scoped to fit rather than a module-level filter so importing AutoTS does
+        not change warnings process-wide; also reaches joblib worker processes.
+        """
+
+        def fit(self, X, y, sample_weight=None):
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore", message="Liblinear failed to converge"
+                )
+                return super().fit(X, y, sample_weight=sample_weight)
+
+    class RelativeRadiusNeighborsRegressor(RegressorMixin, BaseEstimator):
+        """RadiusNeighbors with a per-query radius: a multiple of that query's
+        distance to its nearest training row.
+
+        An absolute radius on unscaled lag/date features rarely contains any
+        training row (85-100% NaN predictions on load_daily/monthly), and one
+        radius from global density fails too: pooled series of mixed scale
+        borrow windows from much larger series, and at 20+ features distances
+        concentrate so the radius holds either every row or none. Relative to
+        each query's own 1-NN distance it adapts to local scale and is never
+        empty. Neighbors are capped at ``max_neighbors`` (large radii reach it).
+        """
+
+        max_neighbors = 50
+
+        def __init__(
+            self,
+            radius=1.5,
+            weights="uniform",
+            algorithm="auto",
+            leaf_size=30,
+            p=2,
+            metric="minkowski",
+            n_jobs=None,
+        ):
+            self.radius = radius
+            self.weights = weights
+            self.algorithm = algorithm
+            self.leaf_size = leaf_size
+            self.p = p
+            self.metric = metric
+            self.n_jobs = n_jobs
+
+        def fit(self, X, y):
+            X = np.asarray(X, dtype=float)
+            self.scaler_ = StandardScaler().fit(X)
+            self.y_ = np.asarray(y, dtype=float)
+            self.neighbors_ = NearestNeighbors(
+                n_neighbors=min(self.max_neighbors, X.shape[0]),
+                algorithm=self.algorithm,
+                leaf_size=self.leaf_size,
+                p=self.p,
+                metric=self.metric,
+                n_jobs=self.n_jobs,
+            ).fit(self.scaler_.transform(X))
+            return self
+
+        def predict(self, X):
+            X_scaled = self.scaler_.transform(np.asarray(X, dtype=float))
+            distances, indices = self.neighbors_.kneighbors(X_scaled)
+            # radius < 1 would exclude the nearest row itself
+            cutoff = max(float(self.radius), 1.0) * distances[:, :1]
+            weight = (distances <= cutoff).astype(float)
+            if self.weights == "distance":
+                exact = distances == 0
+                with np.errstate(divide="ignore"):
+                    inverse = 1.0 / distances
+                # exact matches take all the weight, as in sklearn
+                inverse = np.where(exact.any(axis=1, keepdims=True), exact, inverse)
+                weight = weight * inverse
+            weight = weight / weight.sum(axis=1, keepdims=True)
+            neighbor_y = self.y_[indices]
+            if neighbor_y.ndim == 3:
+                return np.einsum("qk,qko->qo", weight, neighbor_y)
+            return (weight * neighbor_y).sum(axis=1)
 
 except Exception:
     pass
@@ -505,9 +595,7 @@ def retrieve_regressor(
         from sklearn.ensemble import AdaBoostRegressor
 
         if regression_model["model_params"]['estimator'] == 'SVR':
-            from sklearn.svm import LinearSVR
-
-            svc = LinearSVR(verbose=0, random_state=random_seed, max_iter=1500)
+            svc = QuietLinearSVR(verbose=0, random_state=random_seed, max_iter=1500)
             regr = AdaBoostRegressor(
                 estimator=svc,
                 n_estimators=regression_model["model_params"]['n_estimators'],
@@ -577,15 +665,13 @@ def retrieve_regressor(
             )
         return regr
     elif model_class in ['SVM', "LinearSVR"]:
-        from sklearn.svm import LinearSVR
-
         if multioutput:
             regr = MultiOutputRegressor(
-                LinearSVR(verbose=verbose_bool, **model_param_dict),
+                QuietLinearSVR(verbose=verbose_bool, **model_param_dict),
                 n_jobs=n_jobs,
             )
         else:
-            regr = LinearSVR(verbose=verbose_bool, **model_param_dict)
+            regr = QuietLinearSVR(verbose=verbose_bool, **model_param_dict)
         return regr
     elif model_class == 'Ridge':
         return Ridge(random_state=random_seed, **model_param_dict)
@@ -611,10 +697,7 @@ def retrieve_regressor(
         "RadiusRegressor",
         "RadiusNeighborsRegressor",
     ]:
-        from sklearn.neighbors import RadiusNeighborsRegressor
-
-        regr = RadiusNeighborsRegressor(n_jobs=n_jobs, **model_param_dict)
-        return regr
+        return RelativeRadiusNeighborsRegressor(n_jobs=n_jobs, **model_param_dict)
     elif model_class == "PoissonRegresssion":
         from sklearn.linear_model import PoissonRegressor
 
@@ -1660,8 +1743,10 @@ def generate_regressor_params(
                 },
             }
         elif model == 'RadiusNeighbors':
+            # multiples of each query's 1-NN distance (RelativeRadiusNeighborsRegressor);
+            # Rolling scored best at small radii, expanded Datepart at large
             radius_choice = random.choices(
-                [0.5, 1.0, 2.0, 5.0, 10.0], [0.1, 0.4, 0.4, 0.15, 0.05]
+                [1.1, 1.25, 1.5, 2.0, 3.0, 5.0], [0.2, 0.15, 0.2, 0.2, 0.15, 0.1]
             )[0]
             weights_choice = random.choices(["uniform", "distance"], [0.6, 0.4])[0]
             algorithm_choice = random.choices(
@@ -1851,7 +1936,7 @@ class RollingRegression(ModelObject):
             features = pd.DataFrame(transformed, index=features.index)
             features = features.replace([np.inf, -np.inf], 0).fillna(0)
         elif isinstance(features, pd.DataFrame):
-            features = features.replace([np.inf, -np.inf], 0)
+            features = features.replace([np.inf, -np.inf], 0).fillna(0)
         if isinstance(features, pd.DataFrame):
             features.columns = [str(col) for col in features.columns]
         return features
@@ -1979,6 +2064,22 @@ class RollingRegression(ModelObject):
                 index=[forecast_idx],
                 columns=history.columns,
             )
+            # a non-finite step (corrupt input rows, a model diverging to inf)
+            # is fed back into history and poisons every later step, so carry
+            # the last value forward instead
+            arr = rf_pred.to_numpy(dtype=float, copy=True)
+            if not np.isfinite(arr).all():
+                bad = ~np.isfinite(arr)
+                fill = np.nan_to_num(
+                    history.iloc[-1].to_numpy(dtype=float),
+                    nan=0.0,
+                    posinf=0.0,
+                    neginf=0.0,
+                )
+                arr[bad] = np.broadcast_to(fill, arr.shape)[bad]
+                rf_pred = pd.DataFrame(
+                    arr, index=rf_pred.index, columns=rf_pred.columns
+                )
             forecasts.append(rf_pred.copy())
             history = pd.concat([history, rf_pred], axis=0)
 
@@ -2394,11 +2495,10 @@ class WindowRegression(ModelObject):
                 if self.input_dim == 'univariate':
                     rfPred = rfPred.transpose()
                     rfPred.columns = self.last_window.columns
-                # RadiusNeighbors emits NaN when no neighbors are found, and
-                # boosted models can diverge to inf on unscaled data. Fed back
-                # into last_window either one poisons every later step, so carry
-                # the most recent value forward instead.
-                arr = rfPred.to_numpy(dtype=float)
+                # a non-finite step (corrupt input rows, boosted models diverging
+                # to inf on unscaled data) fed back into last_window poisons every
+                # later step, so carry the most recent value forward instead.
+                arr = rfPred.to_numpy(dtype=float, copy=True)
                 if not np.isfinite(arr).all():
                     bad = ~np.isfinite(arr)
                     if rfPred.shape[1] == self.last_window.shape[1]:
@@ -2459,9 +2559,6 @@ class WindowRegression(ModelObject):
 
         df.columns = self.column_names
         df.index = index
-        if self.regression_model.get("model", "None") == "RadiusNeighbors":
-            print('interpolating')
-            df = df.interpolate("pchip").bfill()
         if just_point_forecast:
             return df
         else:
@@ -2744,10 +2841,6 @@ class DatepartRegression(ModelObject):
             raise ValueError(
                 f"Datepart prediction with params {self.get_params()} failed. This is often due to an improperly indexed future_regressor (with drop_most_recent especially)"
             ) from e
-        # RadiusNeighbors works decently well but starts throwing out NaN when it can't find neighbors
-        if self.regression_model.get("model", "None") == "RadiusNeighbors":
-            print('interpolating')
-            forecast = forecast.interpolate("pchip").bfill()
 
         if just_point_forecast:
             return forecast
@@ -3515,9 +3608,9 @@ class MultivariateRegression(ModelObject):
                 c_x_pred = np.nan_to_num(c_x_pred, nan=0.0, posinf=0.0, neginf=0.0)
 
             rfPred = self.model.predict(c_x_pred)
-            # RadiusNeighbors returns NaN when no neighbor falls inside the radius.
-            # pred_clean is fed back into current_x, so one NaN poisons every later
-            # step and the whole forecast; carry the last value forward instead.
+            # pred_clean is fed back into current_x, so one non-finite value
+            # (corrupt input rows, a model diverging to inf) poisons every later
+            # step and the whole forecast; carry the last value forward instead
             if np.any(~np.isfinite(rfPred)):
                 rfPred = np.asarray(rfPred, dtype=float)
                 bad = ~np.isfinite(rfPred)
@@ -3817,8 +3910,8 @@ class VectorizedMultiOutputGPR:
         kernel (str): linear, polynomial, rbf, periodic, locally_periodic, exponential
         noise_var (float): noise variance, effectively regularization. Close to zero little regularization, larger values create more model flexiblity and noise tolerance.
         gamma: For the RBF, Exponential, and Locally Periodic kernels, γ is essentially an inverse length scale. [0.1,1,10,100].
-        lambda_: For the Periodic and Locally Periodic kernels, lambda_ determines the smoothness of the periodic function. A reasonable range might be [0.1,1,10,100].
-        lambda_prime: Specifically for the Locally Periodic kernel, this determines the smoothness of the periodic component. Same range as lambda_.
+        lambda_: For the Periodic and Locally Periodic kernels, ``lambda_`` determines the smoothness of the periodic function. A reasonable range might be [0.1,1,10,100].
+        lambda_prime: Specifically for the Locally Periodic kernel, this determines the smoothness of the periodic component. Same range as ``lambda_``.
         p: The period parameter for the Periodic and Locally Periodic kernels such as 7 or 365.25 for daily data.
     """
 
@@ -4115,7 +4208,8 @@ class PreprocessingRegression(ModelObject):
 
         full_end = df.shape[0] - 1
         window_end = full.shape[0] - 1
-        max_hist_rev = df.shape[0] - max_history if max_history != 0 else 0
+
+        max_hist_rev = max(0, df.shape[0] - max_history) if max_history != 0 else 0
 
         if one_step:
             self.X = full[:-1].reshape(-1, full.shape[-1])

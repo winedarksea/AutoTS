@@ -14,11 +14,11 @@
         gtag('config', 'G-P2KLF8302E');
     </script>
     
-    <title>autots.evaluator.feature_detector.components package &#8212; AutoTS 1.0.4 documentation</title>
+    <title>autots.evaluator.feature_detector.components package &#8212; AutoTS 1.0.5 documentation</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=ec641305" />
-    <script src="../_static/documentation_options.js?v=71272d9f"></script>
+    <script src="../_static/documentation_options.js?v=d55fa986"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../genindex.html" />
@@ -77,6 +77,37 @@
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.components.holidays.</span></span><span class="sig-name descname"><span class="pre">HolidayMixin</span></span><a class="headerlink" href="#autots.evaluator.feature_detector.components.holidays.HolidayMixin" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Mixin providing holiday detection, coefficient solving, and parameter sanitization.</p>
+</dd></dl>
+
+</section>
+<section id="module-autots.evaluator.feature_detector.components.joint_trend">
+<span id="autots-evaluator-feature-detector-components-joint-trend-module"></span><h2>autots.evaluator.feature_detector.components.joint_trend module<a class="headerlink" href="#module-autots.evaluator.feature_detector.components.joint_trend" title="Link to this heading">¶</a></h2>
+<p>JointTrendMixin: opt-in joint hinge/step trend estimation for TimeSeriesFeatureDetector.</p>
+<p>Enabled with <code class="docutils literal notranslate"><span class="pre">changepoint_params={'method':</span> <span class="pre">'joint_hinge_step',</span> <span class="pre">...}</span></code>. PELT-l2
+segments a ramp into a level staircase and the legacy level-shift check accepts
+most random candidates; here slope changes (hinges) and level shifts (steps)
+are selected and sized in one least-squares model with a BIC stop and
+AR(1)-adjusted step t-tests. Also hosts the opt-in t-test level-shift validator
+(<code class="docutils literal notranslate"><span class="pre">level_shift_validation={'method':</span> <span class="pre">'t_test'}</span></code>) usable with any changepoint method.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.components.joint_trend.JointTrendMixin">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.components.joint_trend.</span></span><span class="sig-name descname"><span class="pre">JointTrendMixin</span></span><a class="headerlink" href="#autots.evaluator.feature_detector.components.joint_trend.JointTrendMixin" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Joint hinge/step trend selection and t-test level-shift validation.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.components.joint_trend.mutate_joint_trend_changepoint_params">
+<span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.components.joint_trend.</span></span><span class="sig-name descname"><span class="pre">mutate_joint_trend_changepoint_params</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rng</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_keys</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.components.joint_trend.mutate_joint_trend_changepoint_params" title="Link to this definition">¶</a></dt>
+<dd><p>Resample a few method_params within the declared space.</p>
+<p>Generic numeric jitter would push booleans/ints (seasonal_prior,
+backfit_passes) and the BIC multiplier outside meaningful ranges.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.evaluator.feature_detector.components.joint_trend.sample_joint_trend_changepoint_params">
+<span class="sig-prename descclassname"><span class="pre">autots.evaluator.feature_detector.components.joint_trend.</span></span><span class="sig-name descname"><span class="pre">sample_joint_trend_changepoint_params</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rng</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.feature_detector.components.joint_trend.sample_joint_trend_changepoint_params" title="Link to this definition">¶</a></dt>
+<dd><p>Random <code class="docutils literal notranslate"><span class="pre">changepoint_params</span></code> for the joint method (for get_new_params / optimizers).</p>
 </dd></dl>
 
 </section>
@@ -152,6 +183,7 @@
 <li class="toctree-l1"><a class="reference internal" href="intro.html#autots">AutoTS</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorial.html">Tutorial</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorial.html#extended-tutorial">Extended Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../metric_weighting_guide.html">AutoTS Metric Weighting</a></li>
 </ul>
 <ul class="current">
 <li class="toctree-l1 current"><a class="reference internal" href="modules.html">autots</a><ul class="current">

@@ -14,17 +14,17 @@
         gtag('config', 'G-P2KLF8302E');
     </script>
     
-    <title>autots &#8212; AutoTS 1.0.4 documentation</title>
+    <title>autots &#8212; AutoTS 1.0.5 documentation</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=ec641305" />
-    <script src="../_static/documentation_options.js?v=71272d9f"></script>
+    <script src="../_static/documentation_options.js?v=d55fa986"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="autots package" href="autots.html" />
-    <link rel="prev" title="Tutorial" href="tutorial.html" />
+    <link rel="prev" title="AutoTS Metric Weighting" href="../metric_weighting_guide.html" />
    
   <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
   
@@ -91,13 +91,16 @@
 <li class="toctree-l4"><a class="reference internal" href="autots.models.html#module-autots.models.base">autots.models.base module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.models.html#module-autots.models.basics">autots.models.basics module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.models.html#module-autots.models.cassandra">autots.models.cassandra module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.models.html#module-autots.models.cassandra_ar">autots.models.cassandra_ar module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.models.html#module-autots.models.composite">autots.models.composite module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.models.html#module-autots.models.deepssm">autots.models.deepssm module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.models.html#module-autots.models.dnn">autots.models.dnn module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.models.html#module-autots.models.ensemble">autots.models.ensemble module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.models.html#module-autots.models.forecast_correction">autots.models.forecast_correction module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.models.html#module-autots.models.gluonts">autots.models.gluonts module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.models.html#module-autots.models.matrix_var">autots.models.matrix_var module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.models.html#module-autots.models.mlensemble">autots.models.mlensemble module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.models.html#module-autots.models.mlensemble_features">autots.models.mlensemble_features module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.models.html#module-autots.models.model_list">autots.models.model_list module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.models.html#module-autots.models.neural_forecast">autots.models.neural_forecast module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.models.html#module-autots.models.prophet">autots.models.prophet module</a></li>
@@ -122,9 +125,11 @@
 <li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.bayesian_regression">autots.tools.bayesian_regression module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.calendar">autots.tools.calendar module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.changepoints">autots.tools.changepoints module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.changepoints_probabilistic">autots.tools.changepoints_probabilistic module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.cointegration">autots.tools.cointegration module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.constraint">autots.tools.constraint module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.cpu_count">autots.tools.cpu_count module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.easter">autots.tools.easter module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.fast_kalman">autots.tools.fast_kalman module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.fast_kalman_params">autots.tools.fast_kalman_params module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.fft">autots.tools.fft module</a></li>
@@ -132,10 +137,19 @@
 <li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.g7xx_codec">autots.tools.g7xx_codec module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.hierarchial">autots.tools.hierarchial module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.holiday">autots.tools.holiday module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.holiday_anomaly">autots.tools.holiday_anomaly module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.impute">autots.tools.impute module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.kalman">autots.tools.kalman module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.level_shift">autots.tools.level_shift module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.level_shift_seasonality">autots.tools.level_shift_seasonality module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.level_shift_selection">autots.tools.level_shift_selection module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.level_shift_sizing">autots.tools.level_shift_sizing module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.linear">autots.tools.linear module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.lunar">autots.tools.lunar module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.mlflow">autots.tools.mlflow module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.mlflow_insights">autots.tools.mlflow_insights module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.mlflow_pyfunc">autots.tools.mlflow_pyfunc module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.mlflow_registry">autots.tools.mlflow_registry module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.mocks">autots.tools.mocks module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.percentile">autots.tools.percentile module</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.plotting">autots.tools.plotting module</a></li>
@@ -229,15 +243,6 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="autots.html#autots.Cassandra"><code class="docutils literal notranslate"><span class="pre">Cassandra</span></code></a><ul>
-<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.fit"><code class="docutils literal notranslate"><span class="pre">Cassandra.fit()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.predict"><code class="docutils literal notranslate"><span class="pre">Cassandra.predict()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.holiday_detector.dates_to_holidays"><code class="docutils literal notranslate"><span class="pre">Cassandra.holiday_detector.dates_to_holidays()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.create_forecast_index"><code class="docutils literal notranslate"><span class="pre">Cassandra.create_forecast_index()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.plot_forecast"><code class="docutils literal notranslate"><span class="pre">Cassandra.plot_forecast()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.plot_components"><code class="docutils literal notranslate"><span class="pre">Cassandra.plot_components()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.plot_trend"><code class="docutils literal notranslate"><span class="pre">Cassandra.plot_trend()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.get_new_params"><code class="docutils literal notranslate"><span class="pre">Cassandra.get_new_params()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.return_components"><code class="docutils literal notranslate"><span class="pre">Cassandra.return_components()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra..anomaly_detector.anomalies"><code class="docutils literal notranslate"><span class="pre">Cassandra..anomaly_detector.anomalies</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra..anomaly_detector.scores"><code class="docutils literal notranslate"><span class="pre">Cassandra..anomaly_detector.scores</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra..holiday_count"><code class="docutils literal notranslate"><span class="pre">Cassandra..holiday_count</span></code></a></li>
@@ -254,19 +259,19 @@
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.create_t"><code class="docutils literal notranslate"><span class="pre">Cassandra.create_t()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.cross_validate"><code class="docutils literal notranslate"><span class="pre">Cassandra.cross_validate()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.feature_importance"><code class="docutils literal notranslate"><span class="pre">Cassandra.feature_importance()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="autots.html#id0"><code class="docutils literal notranslate"><span class="pre">Cassandra.fit()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.fit"><code class="docutils literal notranslate"><span class="pre">Cassandra.fit()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.fit_data"><code class="docutils literal notranslate"><span class="pre">Cassandra.fit_data()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="autots.html#id1"><code class="docutils literal notranslate"><span class="pre">Cassandra.get_new_params()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.get_new_params"><code class="docutils literal notranslate"><span class="pre">Cassandra.get_new_params()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.get_params"><code class="docutils literal notranslate"><span class="pre">Cassandra.get_params()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.next_fit"><code class="docutils literal notranslate"><span class="pre">Cassandra.next_fit()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="autots.html#id2"><code class="docutils literal notranslate"><span class="pre">Cassandra.plot_components()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="autots.html#id3"><code class="docutils literal notranslate"><span class="pre">Cassandra.plot_forecast()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.plot_components"><code class="docutils literal notranslate"><span class="pre">Cassandra.plot_components()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.plot_forecast"><code class="docutils literal notranslate"><span class="pre">Cassandra.plot_forecast()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.plot_things"><code class="docutils literal notranslate"><span class="pre">Cassandra.plot_things()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="autots.html#id4"><code class="docutils literal notranslate"><span class="pre">Cassandra.plot_trend()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="autots.html#id5"><code class="docutils literal notranslate"><span class="pre">Cassandra.predict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.plot_trend"><code class="docutils literal notranslate"><span class="pre">Cassandra.plot_trend()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.predict"><code class="docutils literal notranslate"><span class="pre">Cassandra.predict()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.predict_new_product"><code class="docutils literal notranslate"><span class="pre">Cassandra.predict_new_product()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.process_components"><code class="docutils literal notranslate"><span class="pre">Cassandra.process_components()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="autots.html#id6"><code class="docutils literal notranslate"><span class="pre">Cassandra.return_components()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.return_components"><code class="docutils literal notranslate"><span class="pre">Cassandra.return_components()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.rolling_trend"><code class="docutils literal notranslate"><span class="pre">Cassandra.rolling_trend()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.scale_data"><code class="docutils literal notranslate"><span class="pre">Cassandra.scale_data()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.Cassandra.to_origin_space"><code class="docutils literal notranslate"><span class="pre">Cassandra.to_origin_space()</span></code></a></li>
@@ -276,23 +281,15 @@
 </li>
 <li class="toctree-l3"><a class="reference internal" href="autots.html#autots.EventRiskForecast"><code class="docutils literal notranslate"><span class="pre">EventRiskForecast</span></code></a><ul>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.EventRiskForecast.fit"><code class="docutils literal notranslate"><span class="pre">EventRiskForecast.fit()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.EventRiskForecast.predict"><code class="docutils literal notranslate"><span class="pre">EventRiskForecast.predict()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.EventRiskForecast.predict_historic"><code class="docutils literal notranslate"><span class="pre">EventRiskForecast.predict_historic()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.EventRiskForecast.generate_historic_risk_array"><code class="docutils literal notranslate"><span class="pre">EventRiskForecast.generate_historic_risk_array()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.EventRiskForecast.generate_result_windows"><code class="docutils literal notranslate"><span class="pre">EventRiskForecast.generate_result_windows()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.EventRiskForecast.generate_risk_array"><code class="docutils literal notranslate"><span class="pre">EventRiskForecast.generate_risk_array()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.EventRiskForecast.generate_historic_risk_array"><code class="docutils literal notranslate"><span class="pre">EventRiskForecast.generate_historic_risk_array()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.EventRiskForecast.set_limit"><code class="docutils literal notranslate"><span class="pre">EventRiskForecast.set_limit()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.EventRiskForecast.plot"><code class="docutils literal notranslate"><span class="pre">EventRiskForecast.plot()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="autots.html#id9"><code class="docutils literal notranslate"><span class="pre">EventRiskForecast.fit()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="autots.html#id10"><code class="docutils literal notranslate"><span class="pre">EventRiskForecast.generate_historic_risk_array()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="autots.html#id11"><code class="docutils literal notranslate"><span class="pre">EventRiskForecast.generate_result_windows()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="autots.html#id12"><code class="docutils literal notranslate"><span class="pre">EventRiskForecast.generate_risk_array()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="autots.html#id13"><code class="docutils literal notranslate"><span class="pre">EventRiskForecast.plot()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.EventRiskForecast.plot_eval"><code class="docutils literal notranslate"><span class="pre">EventRiskForecast.plot_eval()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="autots.html#id14"><code class="docutils literal notranslate"><span class="pre">EventRiskForecast.predict()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="autots.html#id15"><code class="docutils literal notranslate"><span class="pre">EventRiskForecast.predict_historic()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.EventRiskForecast.predict"><code class="docutils literal notranslate"><span class="pre">EventRiskForecast.predict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.EventRiskForecast.predict_historic"><code class="docutils literal notranslate"><span class="pre">EventRiskForecast.predict_historic()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.html#autots.EventRiskForecast.query_risk"><code class="docutils literal notranslate"><span class="pre">EventRiskForecast.query_risk()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="autots.html#id16"><code class="docutils literal notranslate"><span class="pre">EventRiskForecast.set_limit()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.html#autots.EventRiskForecast.set_limit"><code class="docutils literal notranslate"><span class="pre">EventRiskForecast.set_limit()</span></code></a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="autots.html#autots.FillNA"><code class="docutils literal notranslate"><span class="pre">FillNA()</span></code></a></li>
@@ -394,6 +391,8 @@
 <li class="toctree-l3"><a class="reference internal" href="autots.html#autots.load_yearly"><code class="docutils literal notranslate"><span class="pre">load_yearly()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="autots.html#autots.long_to_wide"><code class="docutils literal notranslate"><span class="pre">long_to_wide()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="autots.html#autots.mlflow_autolog"><code class="docutils literal notranslate"><span class="pre">mlflow_autolog()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.html#autots.mlflow_load_model"><code class="docutils literal notranslate"><span class="pre">mlflow_load_model()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.html#autots.mlflow_log_template"><code class="docutils literal notranslate"><span class="pre">mlflow_log_template()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="autots.html#autots.model_forecast"><code class="docutils literal notranslate"><span class="pre">model_forecast()</span></code></a></li>
 </ul>
 </li>
@@ -448,6 +447,7 @@
 <li class="toctree-l1"><a class="reference internal" href="intro.html#autots">AutoTS</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorial.html">Tutorial</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorial.html#extended-tutorial">Extended Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../metric_weighting_guide.html">AutoTS Metric Weighting</a></li>
 </ul>
 <ul class="current">
 <li class="toctree-l1 current"><a class="current reference internal" href="#">autots</a><ul>
@@ -460,7 +460,7 @@
 <h3>Related Topics</h3>
 <ul>
   <li><a href="../index.html">Documentation overview</a><ul>
-      <li>Previous: <a href="tutorial.html" title="previous chapter">Tutorial</a></li>
+      <li>Previous: <a href="../metric_weighting_guide.html" title="previous chapter">AutoTS Metric Weighting</a></li>
       <li>Next: <a href="autots.html" title="next chapter">autots package</a></li>
   </ul></li>
 </ul>

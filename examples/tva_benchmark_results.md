@@ -923,3 +923,704 @@ Nothing has had its default flipped. Promotion is not claimed: three
 aggregate-level gates pass and the per-series gates do not, and the honest
 reading is that the safety layer succeeded at bounding the *average* damage
 and has not yet bounded the *worst series*.
+
+---
+
+# Loading-structure recovery ladder (C1-C8)
+
+Follow-on to the superset rework, which ended with the Phase-4 coherence shrink
+killed by its own gate — not because the solver is wrong but because the graph
+it is handed is wrong. With the generator's **true** loading graph the identical
+shrink delivered +0.57 trend-only coherence at -1.0% to -2.3% MASE; with the
+fitted graph, gain 0.000 at every strength. The ladder's question: can the
+fitted loading structure be made good enough for that shrink to pay off?
+
+**Answer: no, and not for any reason on the ladder.** The rotation candidate
+(C1) is *correct and powerful* — it reaches 0.97 dominant recovery and 0.93 pair
+precision when handed a clean trend panel — but every candidate operating at or
+after identification is blocked by an input panel that no longer carries the
+loading structure. Nothing had its default flipped.
+
+## Step 0 — the committed metric
+
+`loading_structure_score` (`autots/evaluator/tva/metrics.py`) replaces the
+ad-hoc 41/8/13% audit. Truth pairs are unordered `(i, j)` sharing a true
+dominant factor **and** its sign, over series with nonzero true loading;
+asserted pairs come from the caller's graph
+(`coherence._graph_pairs(group_graph(...))`), so pair precision scores the
+object the shrink actually consumes rather than a proxy for it. Reports
+`pair_precision/recall/f1`, `n_pairs_asserted/true`, `dominant_recovery`,
+`sign_agreement`, `matched_loading_corr`.
+
+Two dominance definitions are reported because they diverge under rank
+over-specification, and the plan's reference number used the charitable one:
+
+- `dominant_recovery` — the estimated dominant column is mapped back to a true
+  factor; a series dominated by a *spurious* extra column counts as a miss.
+- `dominant_recovery_matched` — dominance judged only among matched columns.
+
+They are equal whenever `n_est == n_true`. The fitted rank is 4.0 on the
+primary cell against a true rank of 3, which is why the strict number (0.194)
+sits below the plan's quoted 0.458 while the charitable one (0.278) is closer.
+The gap is definitional, not a failure to reproduce: pair precision (0.247 vs
+"~0.13") and sign agreement (0.578 vs "~0.49") land in the same
+indistinguishable-from-chance regime the audit described.
+
+Harnesses wired: `tva_factor_validation.py` (`graph_structure_scores`, two new
+report tables including a K-misspecification tabulation),
+`tva_coherence_diagnostic.py` (table iv-b), and a new focused sweep harness
+`examples/tva_structure_ladder.py` — named config presets, one TVA fit per
+(cell x seed x preset), structure + span + MASE only. Fast enough to sweep a
+dozen variants; the full validation harness stays the regression check.
+
+## Baseline lock (24 series, K=3, 3 seeds, latent)
+
+| cell | pair prec | dominant | dominant(matched) | sign | loading corr | canon | MASE | K found |
+|---|---|---|---|---|---|---|---|---|
+| s0.9 n0.05 (primary) | 0.247 | 0.194 | 0.278 | 0.578 | 0.089 | 0.752 | 1.301 | 4.0 |
+| s0.9 n0.15 | 0.278 | 0.306 | 0.306 | 0.542 | 0.008 | 0.671 | 2.133 | 3.0 |
+| s0.7 n0.05 | 0.289 | 0.236 | 0.264 | 0.556 | 0.132 | 0.735 | 1.455 | 3.3 |
+| s0.7 n0.15 | 0.279 | 0.264 | 0.278 | 0.444 | -0.065 | 0.726 | 1.157 | 3.3 |
+| s0.5 n0.05 | 0.210 | 0.222 | 0.278 | 0.486 | 0.022 | 0.705 | 1.697 | 3.3 |
+| s0.5 n0.15 | 0.317 | 0.264 | 0.333 | 0.444 | -0.026 | 0.722 | 2.917 | 3.7 |
+| K-misspec (fit 6) | 0.249 | 0.278 | 0.333 | 0.519 | -0.039 | 0.842 | 1.373 | 5.0 |
+
+Matched loading correlation is ~0 (and negative in three cells) everywhere.
+Fitted rank differs from the true rank in **7/7 cells**, which would trigger
+C7 — but C7 selects K, and K is not what is broken (see the root cause).
+
+## The root cause: structure is destroyed before identification runs
+
+The decisive measurement is a stage-attribution probe, primary cell, 3 seeds:
+identify factors from each candidate input panel and score the loadings.
+
+| input panel | rotation | dominant | sign | loading corr | pair prec |
+|---|---|---|---|---|---|
+| generator's true trend | none | 0.389 | 0.972 | 0.518 | 0.526 |
+| generator's true trend | **varimax** | **0.972** | **1.000** | **0.873** | **0.967** |
+| detector-adjusted (what TVA fits) | none | 0.264 | 0.556 | -0.004 | 0.253 |
+| detector-adjusted | varimax | 0.347 | 0.486 | -0.044 | 0.269 |
+| robust-adjusted | none | 0.250 | 0.506 | 0.009 | 0.272 |
+| robust-adjusted | varimax | 0.236 | 0.478 | -0.024 | 0.274 |
+
+Varimax on a clean input clears **every** structure gate with room to spare
+(0.97 vs a 0.70 bar, 0.97 vs 0.50, 0.87 vs 0.50, 1.00 vs 0.75). On either real
+input it is worth nothing. The rotation was never the missing piece it looked
+like from the fitted-graph audit — it is the right mechanism waiting on an
+input that carries the structure.
+
+Second probe, which removes identification from the question entirely: hand
+each panel the **true** factors and solve only for loadings by least squares.
+
+| input panel | true-factor R² | dominant | sign | loading corr | pair prec |
+|---|---|---|---|---|---|
+| generator's true trend | 0.997 | 1.000 | 1.000 | 0.893 | 1.000 |
+| raw observed data | 0.243 | 0.264 | 0.764 | 0.257 | 0.262 |
+| detector-adjusted | 0.156 | 0.444 | 0.639 | 0.248 | 0.285 |
+| robust-adjusted | 0.951 | 0.250 | 0.563 | 0.189 | 0.287 |
+
+Even with the true factors supplied, no observable panel recovers the true
+loadings. This is not an identification problem, a rotation problem, a rank
+problem or a sparsity problem — the information is gone from the input.
+
+Third probe, attributing the loss to a component (mean over 3 seeds):
+
+| panel variant | true-factor R² | pair prec |
+|---|---|---|
+| raw | 0.243 | 0.262 |
+| minus high-pass seasonality | 0.317 | 0.250 |
+| minus high-pass seasonality + holidays + anomalies | 0.338 | 0.250 |
+| minus level_shifts only | 0.097 | 0.266 |
+| FULL `_build_adjusted_panel` | 0.156 | 0.285 |
+| generator's true trend | 0.997 | 1.000 |
+
+**Level-shift subtraction is the single largest loss**: it more than halves the
+factor-explained variance (0.338 -> 0.156 in the full adjustment, 0.243 ->
+0.097 on its own). The detector is classifying genuine shared factor movement
+as per-series level shifts and subtracting it. But the loss is not only there:
+pair precision is ~0.26 even on **raw, unadjusted data**, so seasonality and
+noise at these generator settings are on their own enough to bury the
+cross-sectional structure. Fixing level-shift absorption is necessary and, on
+this evidence, not sufficient.
+
+Note the robust input's R² of 0.951 with chance-level loading recovery: three
+free coefficients fit any smooth 1095-point curve well, so a high R² there is
+evidence of flexible curve-fitting, not of recovered shared structure. This is
+also why its far better *span* metric (canonical correlation 0.770 vs 0.532)
+never converted into better *basis* recovery.
+
+## Candidate results (primary cell, 3 seeds; gates: prec >=0.50 at >=10 pairs, dominant >=0.70, loading corr >=0.50, sign >=0.75)
+
+| candidate | config | pair prec | asserted | dominant | sign | loading corr | MASE drift | verdict |
+|---|---|---|---|---|---|---|---|---|
+| — | baseline | 0.247 | 45.3 | 0.194 | 0.578 | 0.089 | — | — |
+| C1 | varimax | 0.305 | 40.0 | 0.111 | 0.577 | 0.102 | +1.15% | KILLED |
+| C1 | quartimax | 0.252 | 51.0 | 0.083 | 0.562 | 0.143 | +3.19% | KILLED |
+| C1 | promax | 0.263 | 46.7 | 0.194 | 0.562 | 0.072 | +1.19% | KILLED |
+| C1 | varimax, no Kaiser | 0.264 | 45.0 | 0.194 | 0.480 | 0.069 | +2.72% | KILLED |
+| C2 | varimax + margin 1.5 | 0.327 | 14.0 | 0.111 | 0.577 | 0.102 | +1.15% | KILLED |
+| C2 | varimax + margin 2.0 | 0.361 | **4.3** | 0.111 | 0.577 | 0.102 | +1.15% | KILLED |
+| C2 | varimax + share 0.5 | 0.285 | 30.0 | 0.111 | 0.577 | 0.102 | +1.15% | KILLED |
+| C2 | varimax + share 0.6 | 0.334 | 15.0 | 0.111 | 0.577 | 0.102 | +1.15% | KILLED |
+| C3 | varimax + l1 0.03 | 0.321 | 38.3 | 0.181 | 0.577 | 0.076 | +5.12% | KILLED |
+| C3 | varimax + l1 0.1 | 0.272 | 44.7 | 0.167 | 0.575 | 0.076 | -2.63% | KILLED |
+| C3 | + prox 1.0 | 0.201 | 49.0 | 0.333 | 0.646 | 0.123 | -7.11% | KILLED |
+| C4 | varimax + stability veto 0.5 | n/a | **0.0** | 0.111 | 0.577 | 0.102 | +1.15% | KILLED |
+| C5 | robust structure input | 0.259 | 75.7 | 0.194 | 0.581 | -0.004 | 0.00% | KILLED |
+| C5 | varimax + robust structure | 0.298 | 44.0 | 0.236 | 0.538 | 0.053 | +1.15% | KILLED |
+| C6 | w_decorr 0.1 | 0.247 | 45.3 | 0.194 | 0.578 | 0.089 | 0.00% | KILLED |
+| C6 | varimax + w_decorr 0.1 | 0.305 | 40.0 | 0.111 | 0.577 | 0.102 | +1.15% | KILLED |
+
+Per-candidate notes:
+
+- **C1** fails its own kill rule twice over (loading corr 0.102 < 0.3, dominant
+  0.111 < 0.55), and promax — the specified fallback — is no better. The
+  canonical-correlation move (-0.084, i.e. canon *rose*) exceeds the 0.02
+  "that's a bug" threshold, but it is not one: the rotation is exact at the
+  parameter copy (verified at 4.5e-7 relative, and asserted as a test), and the
+  reported figure is `match_factors` column matching, which is rotation-
+  sensitive by construction and rises with the fitted rank (4.0 -> 4.3).
+- **C2** does exactly what it was designed to do — precision rises monotonically
+  with the margin — but it buys 0.247 -> 0.361 by shrinking the graph from 45
+  asserted pairs to 4.3. Its kill rule requires >=0.50 precision at >=10 pairs;
+  the best setting reaching 10+ pairs is 0.334. Abstention cannot manufacture
+  precision that isn't in the loadings.
+- **C3** never reaches the 0.35 precision bar without breaching the MASE guard
+  (l1 0.03 gives 0.321 at +5.12%). The prox companion is the one candidate that
+  moves dominance and sign in the right direction (0.111 -> 0.333, 0.577 ->
+  0.646) at a *better* MASE (-7.11%), but it does so by collapsing the fitted
+  rank to 2.7 and it drops pair precision to 0.201. Recorded as an unexplained
+  positive worth revisiting only after the input is fixed. Note the useful prox
+  range is ~O(1), not the ~1e-3 the plan proposed: the threshold is
+  `w_prox_loadings * lr_aux` against loadings of order 0.3 on a normalized
+  panel, so the planned {1e-4, 1e-3, 1e-2} grid is entirely inert.
+- **C4** vetoes *every* factor on this cell (0 pairs asserted at
+  `min_sign_confidence=0.5`). Correctly conservative — no factor here is
+  reproducible across split halves — but it cannot discriminate real from
+  spurious columns when none are stable, so its K-misspec separation rule is
+  unreachable.
+- **C5** is the informative kill. Its first measurement was wrong: the ladder
+  scored `get_factors()['loadings']` while C5 substitutes loadings only inside
+  `_apply_coherence`, so the robust presets initially came out bitwise identical
+  to baseline. After exposing `structure_loadings` through `get_factors()` and
+  scoring it, the honest number is 0.259 vs 0.247 — a +0.012 gain against a
+  +0.10 bar. The agreement guard behaved as designed (0.426 / 0.346 / 0.683 over
+  the three seeds; it correctly fell back on the middle one).
+- **C6** has *exactly* zero effect — the rows are identical to their baselines.
+  This is the outcome the plan predicted and wrote down in advance: an
+  orthogonal rotation of decorrelated factors stays decorrelated, so a
+  decorrelation penalty has nothing to act on. It earned its slot by being free.
+- **C7** (stability K selection) was triggered by the diagnostic (rank wrong in
+  7/7 cells) but not built: the probes show K is not the binding constraint, and
+  selecting a better K on an input that carries no loading structure changes
+  nothing.
+- **C8** (bootstrap consensus dominance) not built, for the same reason.
+
+## Gates not reached
+
+The evaluation protocol runs later gates only after earlier ones pass. Gate 1
+(synthetic structure) failed for every candidate, so:
+
+- the **Phase-4 coherence-shrink re-test** was not run — there is no winning
+  stack to re-test, and the fitted graph is unchanged in kind from the one that
+  already produced gain 0.000;
+- the **LRP iteration folds** (4a/4b) were not run, and the **promotion folds
+  remain untouched**;
+- **no default was flipped.** `rotate`, `loading_l1`, `w_prox_loadings`,
+  `factor_stability_reps`, `structure_input`, `dominance_margin` and
+  `min_loading_share` all ship default-off/no-op, verified by tests that assert
+  bitwise-identical output against the current behavior.
+
+## What is worth doing next
+
+The ladder's negative result is sharp enough to point somewhere specific.
+Ranked by the evidence above:
+
+1. **Stop the detector from absorbing shared factor movement into
+   `level_shifts`.** This is the largest single measured loss (R² 0.338 ->
+   0.156) and the only one attributable to a specific component. A shared
+   step across many series is a factor move, not N independent level shifts;
+   the detector currently has no cross-series view when it makes that call.
+2. **Re-run this exact ladder afterwards.** The oracle-panel row is the target,
+   and C1 is already implemented, tested and one config flag away. If the input
+   fix lands, the expected payoff is the +0.57 coherence at -1.0% to -2.3% MASE
+   that the true-graph shrink already demonstrated.
+3. **Do not** retry C2/C4/C6 as-is, and do not retry C5 on the current robust
+   estimator. Revisit C3's prox only with the O(1) range recorded above.
+
+## Sparse-code identification (C9) and the level-shift veto (I1)
+
+**Answer: the mechanism works, the input attribution was wrong, and the
+blocker is now isolated by elimination.** C9 is the
+first candidate in this ladder to clear all four structure gates on any panel
+(oracle input, `sparse_alt`: 0.792 / 0.778 / 0.605 / 0.894), it beats varimax
+there on every metric, and it improves synthetic MASE by 4-9% on the *real*
+panel. It does not clear the gates on the detector-adjusted panel. I1 is dead
+twice over: the veto never fires, and the unconditional control shows the thing
+it was built to fix is not the blocker. Nothing had its default flipped.
+
+### What C9 is
+
+Series are samples; a series' loading vector *is* its sparse code; the
+dictionary is parameterized directly in the hinge trend basis, so `coefs` falls
+out and the identification contract is matched by construction:
+
+```
+F = (design @ C) / std(diff)          # (T, K) atoms
+L = signed_topk(Z, k)                 # (N, K) loadings == the codes
+Yhat = F @ L.T + level + slope * t
+```
+
+Sparsity is learned jointly with the span rather than rotated in afterwards. A
+hard support constraint is not rotation-invariant, so the basis is pinned with
+no rotation step at all, and atoms nobody selects fall out -- making the live
+atom count an implicit rank estimate. Two tiers: `sparse_alt` (torch-free
+coordinate descent, re-selects support every iteration) and `sparse_ae`
+(gradient autoencoder over free codes, support locks in after warmup).
+
+### Oracle input: the first passing row on this ladder
+
+Primary cell, 3 seeds, TVA fit on the generator's true trend panel
+(`--input oracle`):
+
+| config | pair prec | dominant | loading corr | sign | MASE drift | verdict |
+|---|---|---|---|---|---|---|
+| baseline | 0.611 | 0.403 | 0.189 | 0.778 | — | fail |
+| varimax | 0.564 | 0.556 | 0.469 | 0.889 | +1.53% | fail |
+| **sparse_alt** | **0.792** | **0.778** | **0.605** | **0.894** | **-14.50%** | **PASS** |
+| sparse_ae | 0.656 | 0.514 | 0.571 | 1.000 | +2.53% | fail |
+
+This is the load-bearing result. It is not that sparsity beats rotation
+everywhere -- it is that the mechanism is *sufficient* when the input carries
+the structure, which no C1-C8 candidate demonstrated end-to-end through TVA.
+
+### Detector-adjusted input: still short, but the largest move measured
+
+Primary cell, 3 seeds. Gates: prec >=0.50 at >=10 pairs, dominant >=0.70,
+loading corr >=0.50, sign >=0.75.
+
+| config | pair prec | asserted | dominant | sign | loading corr | MASE drift |
+|---|---|---|---|---|---|---|
+| baseline | 0.247 | 45.3 | 0.194 | 0.578 | 0.089 | — |
+| varimax (C1) | 0.305 | 40.0 | 0.111 | 0.577 | 0.102 | +1.15% |
+| k3 (forced rank) | 0.283 | 62.0 | 0.278 | 0.562 | 0.016 | -4.91% |
+| sparse_alt | 0.290 | 28.3 | 0.194 | 0.917 | 0.185 | **-6.36%** |
+| sparse_ae | 0.261 | 36.0 | 0.153 | 0.857 | 0.021 | -4.51% |
+| sparse_ae, k=2 | 0.267 | 45.7 | 0.194 | 0.594 | 0.020 | -4.20% |
+| sparse_ae, no idio | 0.354 | 47.3 | 0.333 | 0.778 | 0.088 | **-8.93%** |
+| sparse_ae, no AuxK | 0.261 | 36.0 | 0.153 | 0.857 | 0.021 | -4.51% |
+| sparse_ae, no support freeze | 0.329 | 42.3 | 0.139 | 0.578 | 0.001 | -5.49% |
+| **veto_all + sparse_alt** | **0.385** | 35.0 | **0.361** | 0.820 | 0.213 | +2.82% |
+
+Four things this settles:
+
+1. **The support projection is load-bearing.** Turning it off (`no support
+   freeze`) drops sign agreement 0.857 -> 0.578 and loading correlation
+   0.021 -> 0.001, i.e. back to baseline. Stage A's `w_l1_loadings` is a
+   subgradient term that never reaches zero, so without projecting back onto
+   the identified support the sparsity never reaches `fitted_loadings()` --
+   which is what `_apply_coherence` actually reads.
+2. **AuxK is inert on this panel.** `no AuxK` is bitwise identical to the
+   default: no atom stays dead long enough to trigger revival. The knob earns
+   its place only on the clean panel, where collapse is real (see below).
+3. **The idiosyncratic line hurts here.** `no idio` is the best pure-C9 row
+   (0.354 / 0.333 vs 0.261 / 0.153). That contradicts the design argument for
+   including it, which was made on a clean fixture where it measured +0.09
+   loading correlation. On the detector-adjusted panel the line competes with
+   the factors instead of protecting them. Default stays `idio: True` because
+   the oracle result depends on it, but the two panels genuinely disagree and
+   the knob should be swept, not assumed.
+4. **K over-specification is closed.** Forcing the true rank (`k3`) moves pair
+   precision 0.247 -> 0.283 and dominance 0.194 -> 0.278 -- real but nowhere
+   near the gates, confirming the C1-C8 conclusion that rank is not the binding
+   constraint. C7 remains correctly unbuilt.
+
+**Read the sparse rows' sign agreement with care.** `sign_agreement`'s
+denominator is the rows whose estimate is nonzero at the *true* dominant
+column; for a 1-sparse fit that is exactly the set of rows whose dominance is
+already correct. So `sparse_alt`'s 0.917 is computed over roughly
+`0.194 x 24 ~ 5` series, not 24, and answers "given the right factor, was the
+sign right" -- a strictly easier question than the one baseline's 0.578
+answers. It is reported (`sign_usable_approx`, `mean_nonzeros`) rather than
+compared against the dense C1-C8 rows. The `zero_rows` channel of the same
+hazard turned out inert (0.3/24 across all configs).
+
+### I1: the level-shift veto is dead, and so is the attribution behind it
+
+The prior write-up's #1 recommendation was to stop the detector absorbing
+shared factor movement into `level_shifts`, on the strength of a component
+attribution showing true-factor R^2 dropping 0.338 -> 0.156 when they are
+subtracted. Both halves fail on measurement.
+
+**The veto cannot fire.** On the primary cell the detector emits 38 step events
+across 24 series over 1095 days, and they are not co-timed:
+
+| pooling window | max co-stepping series | share of panel |
+|---|---|---|
+| 1 day | 2 | 8% |
+| 7 days | 4 | 17% |
+| 31 days | 6 | 25% |
+| 61 days | 7 | 29% |
+
+A shared-event rule needs a quorum that never occurs. `veto` and
+`veto_s0.1_w31` are both bit-identical to baseline on every metric.
+
+**And the subtraction is not the blocker anyway.** `veto_all` subtracts no
+level shift whatsoever -- the unconditional control the attribution implies
+should help most:
+
+| config | pair prec | dominant | loading corr | canon | MASE drift |
+|---|---|---|---|---|---|
+| baseline | 0.247 | 0.194 | 0.089 | 0.752 | — |
+| veto_all | 0.202 | 0.208 | 0.179 | **0.859** | -9.36% |
+| veto_all + varimax | 0.234 | 0.208 | 0.090 | 0.859 | -1.88% |
+| veto_all + sparse_alt | 0.385 | 0.361 | 0.213 | 0.864 | +2.82% |
+
+Pair precision goes *down* (0.247 -> 0.202). Dominance and loading correlation
+move up slightly. Nothing approaches the gates. **Level-shift subtraction is
+not the single largest loss in the pipeline** -- at least not measured end to
+end through TVA against the committed metric, which is the measurement that
+matters. Two candidate explanations for the discrepancy with the recorded R^2
+attribution, neither verified here: the detector's `level_shifts` component is
+dominated by a per-series *constant* (`shifts[0]` reaches 31.3 on this cell)
+which `robust_level_scale`'s median centering removes exactly, so an uncentered
+R^2 would attribute variance to it that the factor fit never sees; and R^2
+against supplied true factors rewards fit, not basis recovery, which is the
+same confound already recorded for the robust input's 0.951.
+
+What `veto_all` *does* buy is span: canonical correlation 0.752 -> 0.859, the
+best on the detector panel, at -9.4% MASE. That is worth keeping in view even
+though it does not convert into basis recovery.
+
+### P1: the gates are not SNR-limited either
+
+Sweeping the generator's `noise_scale_mode='trend_delta'` dial, which scales
+observation noise to the trend-increment std, over a 16x range (3 seeds each):
+
+| noise (trend-increment units) | baseline | varimax | sparse_alt |
+|---|---|---|---|
+| 0.5 | 0.268 | 0.333 | 0.290 |
+| 2.0 | 0.283 | 0.243 | 0.292 |
+| 8.0 | 0.253 | 0.237 | 0.239 |
+
+Pair precision is **flat**. A 16-fold reduction in observation noise buys
+nothing, and the cleanest cell still tops out at 0.333 against a 0.50 gate. So
+the ceiling is not an SNR ceiling, and re-basing the gates on SNR grounds --
+which is what this probe was run to test -- is not justified. The gates stay
+where they are.
+
+Caveat on the accuracy claim: `sparse_alt`'s MASE is unstable on these cells
+(+100% at noise 0.5, -15% at 2.0, +69% at 8.0). The consistent -4% to -9% gain
+holds on the primary cell and does not generalize to `trend_delta`-scaled
+panels. Treat the accuracy result as cell-specific until it is tested on LRP.
+
+### Where the blocker actually is
+
+Four independent controls now agree that the usual suspects are not
+responsible, and they converge on one place:
+
+| suspect | control | result |
+|---|---|---|
+| rank over-specification | `k3` (force true K) | 0.247 -> 0.283. Not it. |
+| level-shift absorption | `veto_all` (subtract none) | 0.247 -> 0.202. Not it. |
+| observation noise | 16x SNR sweep | flat at ~0.27. Not it. |
+| identification / basis | `sparse_alt` on oracle input | 0.247 -> **0.792, all gates pass**. Not it. |
+
+The estimator is sufficient, the rank is close enough, the level shifts are
+irrelevant and the noise is irrelevant -- yet the oracle panel scores 0.792 and
+the observed panel scores 0.29. What separates them is the *decomposition's
+trend estimate itself*, which the earlier work already measured at ~0.50
+correlation against an oracle ceiling of 0.90+, and described as "structured,
+not high-frequency noise". That is the remaining candidate, and it is the one
+thing none of these controls isolates.
+
+### Cost and reliability
+
+| tier | identification cost | full TVA fit |
+|---|---|---|
+| baseline | — | 11.7 s |
+| `sparse_alt` | ~14 s (3 restarts x ~4.7 s) | 25.5 s |
+| `sparse_ae` | ~2.3 s (3 restarts) | 13.2 s |
+
+`sparse_alt` roughly doubles the fit; `sparse_ae` costs ~13%. The torch tier is
+6x cheaper and reaches comparable loading correlation, but `sparse_alt` is the
+one that clears the oracle gates, so the dependency does not yet pay for
+itself on quality.
+
+**Known failure mode, measured and unfixed.** On a well-posed fixture
+(orthogonal factors, equal amplitude, 92-99% hinge-representable), 4 of 5 seeds
+recover the true rank; the remaining seed reproducibly merges two orthogonal
+factors onto one atom at every restart schedule tried, and the acceptance guard
+does *not* catch it because the merged fit reconstructs marginally better.
+`n_atoms_live` is what surfaces it and is carried out to `info`. Restarts from
+different initial rotations fix basin-dependent collapses (measured: a varimax
+start collapsing to `[8 16 0 0]` at loss 4.01 while the quartimax start
+recovered `[8 8 8 0]` at loss 2.28 -- reconstruction loss ranks them correctly),
+but not this one.
+
+### Defaults, and what is worth doing next
+
+Everything ships default-off: `identification='alternating'`,
+`level_shift_veto=False`, verified bitwise-identical to the previous behavior
+through `fit_latent_factor_model` and through `TVA`. Gates 3-5 of the standing
+protocol (Phase-4 coherence re-test, LRP folds, default flips) were not run,
+because gate 1 did not pass on the panel TVA actually fits.
+
+1. **Attack the decomposition's trend estimate, not the estimator and not the
+   component subtractions.** That is the only suspect the four controls above
+   leave standing, and C9 is already implemented, tested and one config flag
+   away from re-scoring the moment it improves -- exactly the position C1 was
+   left in, but now with a candidate that demonstrably converts on a clean
+   input rather than one that inverts on a dirty one.
+2. **Sweep `idio` rather than assume it.** It is worth +0.09 loading
+   correlation on a clean fixture and -0.09 pair precision on the real panel.
+3. **Do not retry** the co-timing veto, `sparse_ae` with `aux_k=0` (inert), or
+   `code_topk=2` (worse than k=1 on every panel measured: 0.267 vs 0.290
+   precision, and it re-enables the C2 abstention knobs at the cost of the
+   sparsity that made the basis identifiable).
+4. C9's accuracy effect (-4% to -9% synthetic MASE, consistently, across every
+   variant) is larger and more reliable than its structure effect and has not
+   been tested on LRP at all. That is a separate and possibly more valuable
+   question than the one this ladder was built to answer.
+
+---
+
+# Five-arm network benchmark and the search surface (2026-08-18)
+
+Every `trend_network` value measured on the same protocol for the first time,
+including `v1`, which had never been benchmarked at all. Synthetic is the full
+5-dataset x 2-horizon x 4-fold protocol; LRP is the three iteration folds at
+H=180, base-tagged series (promotion folds 3-4 untouched). One seed per cell.
+`factor:autoencoder` is `trend_network='factor'` with
+`identification='sparse_ae'` and otherwise stock defaults.
+
+| model | synthetic skill vs SN (higher better) | LRP MASE ratio vs SN (lower better) | synthetic dir-coh err | LRP dir-coh err | synthetic fit s | LRP fit s |
+|---|---|---|---|---|---|---|
+| SeasonalNaive | 1.000 | 1.000 | 0.178 | 0.458 | 0.01 | 0.09 |
+| `factor:autoencoder` | **0.507** | 2.387 | **0.150** | **0.185** | 22.3 | 39.1 |
+| `factor` | 0.426 | **2.215** | 0.155 | 0.232 | **10.5** | **19.2** |
+| `v2` | 0.338 | 4.433 | 0.178 | 0.137 | 132.6 | 336.8 |
+| `none` | 0.338 | 4.482 | 0.176 | 0.185 | 5.8 | 11.8 |
+| `v1` | 0.338 | 4.487 | 0.180 | 0.137 | 149.1 | 663.7 |
+
+Synthetic skill is the geometric mean across the five datasets; LRP is
+`mase_base / SeasonalNaive mase_base`. Note the two accuracy columns run in
+opposite directions. `n_failed = 0` for every TVA arm on both benchmarks.
+
+**The LRP `factor` row is plain `TVAModel` defaults, not arm F.** 2.215 here
+reproduces the "unblended factor: 2.22" row from the Phase 1-2 table exactly,
+which is the internal-consistency check that the run is sound. Arm F's 1.011
+needs `sn_blend` + `inner_refit` + tie tolerance 0.25 + `seasonal_arbitration`
++ `space='log'`, none of which any of these five arms sets.
+
+**`v1` is inert and the most expensive arm ever measured here.** Its synthetic
+skill (0.338) is identical to `none` and `v2` to three decimals, its LRP ratio
+(4.487) is the worst of the three, and it costs 663.7s per fit against 11.8s
+for `none` — i.e. it buys nothing for 56x the cost of doing nothing. The
+already-recorded inertness of `v2` extends to `v1`.
+
+**C9's accuracy effect does not transfer to LRP** — the open question left by
+the C9 write-up, now answered. On synthetic the autoencoder is the best arm
+(0.507 vs 0.426) and wins coherence too, consistent with the -4% to -9% MASE
+measured across every C9 variant. On LRP it is *worse* than plain `factor`
+(2.387 vs 2.215) while still winning coherence (0.185 vs 0.232). Structure and
+accuracy separate again, in the same direction 0h found with the pooled
+comparator.
+
+**`load_daily` is where both factor arms regress**, ~8x SeasonalNaive
+(`factor` 8.104, autoencoder 7.537) against ~3.66x for `none`/`v1`/`v2` — the
+known trendless-series blowup. They still win the aggregate because they lead
+the other four datasets by 2-3x.
+
+Per-dataset MASE ratio vs SeasonalNaive:
+
+| dataset | SN MASE | none | v1 | v2 | factor | autoencoder |
+|---|---|---|---|---|---|---|
+| factor_panel | 1.165 | 1.715 | 1.710 | 1.709 | 1.270 | **1.225** |
+| synthetic_factor_panel | 0.978 | 2.710 | 2.721 | 2.710 | 1.461 | **1.285** |
+| load_daily | 0.926 | 3.661 | 3.661 | **3.659** | 8.104 | 7.537 |
+| load_monthly | 0.805 | 3.567 | 3.569 | 3.570 | 2.482 | **2.251** |
+| load_artificial | 3.634 | 3.439 | 3.440 | 3.440 | 2.234 | **2.149** |
+
+## What this changed in the search surface
+
+`TVAModel.get_new_params` only ever exposed `trend_network`, `n_factors`,
+`factor_knot_spacing` and `factor_max_lag` from the factor path. Every knob the
+Phase 1/2 sweep found — the whole 2.22 -> 1.011 gain — was unreachable by the
+optimizer. Three changes, no library defaults touched:
+
+- **`v1` is no longer sampled.** Still constructible; just never worth a fit.
+- **`v2` drops to a 0.10 rare escape hatch**, `factor` rises to 0.60, `none`
+  holds 0.30.
+- **`factor_config` is now sampled in factor mode** by
+  `TVAModel._new_factor_config`, profile-anchored on arm F rather than
+  independent per key. Independent sampling would reach that corner rarely and
+  would draw inert combinations (a blend tie tolerance does nothing without
+  `sn_blend`; `inner_refit` is meaningless without inner folds to grade). Five
+  profiles: `arm_f` 0.32, `arm_f_sparse` 0.23, `safety` 0.15, `explore` 0.15,
+  `default` 0.15, where `default` returns `None` and keeps today's behavior
+  reachable as the comparator. `sparse_alt`/`sparse_ae` enter through the
+  sparse profiles and at 0.15 each elsewhere.
+
+Deliberately **not** sampled, each on a measured result above: `space='auto'`
+(1.166 vs 1.011), `blend_risk_weight` (worst-series moves the wrong way),
+`coherence` (shrink gain 0.000), `level_shift_veto` (never fires), and
+`code_topk=2` (do-not-retry list). All remain settable by hand.
+
+Cost, on a 12-series/500-day panel: plain 4.4s, arm F 7.2s, arm F + `sparse_alt`
+9.3s, arm F + `sparse_ae` 7.6s, and every optional knob at once 47.3s. The
+expensive tail is `group_factors` (0.12, never in fast mode), `structure_input`
+(0.15) and the 3-restart `init_rotate` — all low-weight for that reason.
+
+### Non-autoencoder knobs added to the search (same day)
+
+Four more, all cheap (no extra fits) and none previously reachable:
+
+| knob | default | grid | why |
+|---|---|---|---|
+| `min_trend_to_noise` | 0.6 | 0.0-1.5 | zeroes loadings of series with no low-frequency structure — the direct lever on the `load_daily` 8x blowup, which is a trendless series handed factor exposure. Pinned since the mode was written, never swept. |
+| `prune_share` | 0.02 | 0.0-0.10 | factor exposure-share floor. Fitted rank was 4.0 against a true 3 in 7/7 ladder cells and bad rank selection is what blocked the robust input estimator. |
+| `alpha` | 1e-3 | 3e-4 - 1e-2 | l1 trend-filter smoothness on the factor paths, i.e. how smooth the thing being extrapolated is. Scale-invariant by construction (columns standardized before the Lasso, rescaled after), so it is safe across arbitrary panels. |
+| `n_factors` | reweighted | — | `'auto'` drops 0.50 -> 0.35; explicit small K takes the mass, on the same 4.0-vs-3 evidence. |
+
+Verified across the 2x2x2 extreme corners on three panel shapes (trended,
+trendless, flat): 24/24 finite, no raises. The gate is measurably live rather
+than nominal — on the trendless panel `min_trend_to_noise=1.5` narrows the
+28-step forecast band from [43.0, 52.8] to [48.8, 51.2], which is the
+suppression `load_daily` needs. `prune_share` showed no effect on these
+fixtures (K=3 fit on a K=3 panel leaves every factor above the floor); it is
+not inert in general, just unexercised there.
+
+**Deliberately still not sampled**, each on a standing kill or do-not-retry
+entry: `lr_coef > 0`, `loading_l1` (C3, +5.12% MASE), `w_prox_loadings` (the
+C5 measurement trap), `factor_stability_reps` (C4), `coherence`,
+`level_shift_veto`, `space='auto'`, `blend_risk_weight`, `code_topk=2`.
+
+---
+
+## Forecast covariance, MinT wiring, and factor-mode scenarios (2026-08-19)
+
+Harness: `examples/tva_reconciliation_gate.py`, 10 seeds, 24-series/1095-day
+latent-factor panel from `SyntheticDailyGenerator` grouped into a
+`global -> factor_k -> series` hierarchy by true dominant factor, H=28,
+`trend_network='factor'`. Raw rows: `tva_reconciliation_gate.json`.
+Graded by `examples/tva_scorecard.py` (two new gate entries).
+
+### Two findings that changed the shape of the work
+
+**1. `TVA.reconcile()` was a no-op, not "OLS under the name MinT".** When it is
+handed a bottom-level-only forecast it builds the aggregate rows as `S @ bottom`,
+which places its input *exactly* in the coherent subspace MinT projects onto.
+`S(S'W⁻¹S)⁻¹S'W⁻¹` then returns it unchanged for **every** `W`, in every trend
+mode — v1/v2 included, where a real residual matrix was reaching the bridge all
+along. The `W = I` fallback in factor/`none` mode was real but had no symptom
+because there was nothing to reconcile. Every in-library caller is on this path.
+
+**2. `W = S Σ Sᵀ` cancels Σ out of MinT.** The prescribed expansion is
+rank-deficient (rank M < L), so it needs a ridge; but as the ridge → 0,
+`(S'W⁻¹S)⁻¹S'W⁻¹ → (S'S)⁻¹S'`, which is precisely the OLS reconciler `W = I`
+already gives. Verified to 1e-12 (`test_s_sigma_st_alone_reconciles_identically_to_identity`).
+Σ survives only when the aggregate nodes carry error that is *not* the
+aggregated bottom error — i.e. when the aggregate forecast was produced
+independently. `TVA.reconcile` therefore gained `aggregate_sigma`, and
+`W = S Σ Sᵀ + diag(ψ_agg, 0)`.
+
+The gate harness supplies that configuration: an independent damped-trend model
+on the aggregate history, with its own backtested sigma.
+
+### Arms (mean over 10 seeds, MASE lower is better)
+
+| arm | MASE (all nodes) | MASE (bottom) | MASE (agg) | coherence err | ‖S·b − a‖ |
+|---|---|---|---|---|---|
+| unreconciled | 1.4705 | 1.4174 | 1.7890 | 1.8009 | 781.18 |
+| MinT, `W = I` (previous) | 1.6366 | 1.6221 | 1.7234 | 0.0000 | 0.00 |
+| **MinT, structural Σ** | **1.3852** | 1.4174 | **1.1918** | 0.0000 | 0.00 |
+| control: variance-only W | 1.4087 | 1.4258 | 1.3061 | 0.0000 | 0.00 |
+
+| gate | value | threshold | status |
+|---|---|---|---|
+| `reconciliation_mase_ratio_aggregate` | 0.8464 | ≤ 1.00 | **PASS** |
+| `reconciliation_coherence_error_ratio` | 0.0000 | ≤ 0.999 | **PASS** |
+
+Per-seed MASE ratios: 0.924, 0.866, 1.043, 0.939, 1.031, 0.523, 0.845, 0.850,
+0.934, 0.908 — 8/10 wins, median 0.916, worst 1.043.
+
+**The control matters.** Deleting Σ's off-diagonals costs only 1.385 → 1.409
+(1.7%). Most of the 1.637 → 1.385 gain is ordinary variance weighting: the
+structural W tells MinT the independently-forecast aggregates are the unreliable
+level, so it leaves the bottom forecast untouched (structural `mase_bottom` is
+bitwise the unreconciled one) and pulls the aggregates to `S·b`. That is close
+to bottom-up reconciliation, and it wins here because the TVA bottom model is
+much better than the aggregate one. The cross-series covariance adds a further
+1.7% on top. Both are real; only the second is attributable to Σ.
+
+The coherence gate is read against the **unreconciled** arm, not the identity
+arm: both MinT arms are exactly coherent by construction (the projection *is*
+MinT), so a structural-vs-identity coherence ratio is 0/0 and grades nothing.
+
+### Default flipped
+
+`RECONCILIATION_COVARIANCE_AUTO = 'structural'` (was `'identity'`). Note the
+scope: on the synthesized-aggregate path — every in-library caller — the
+structural W is not even assembled, because no `W` can move already-coherent
+input and building one would be pure cost. This setting bites only for a caller
+passing a full L-column forecast frame with independently-produced aggregates.
+
+### Covariance diagnostics (10 seeds)
+
+| quantity | min | median | max |
+|---|---|---|---|
+| `alpha` (Ledoit-Wolf shrinkage intensity) | 0.0039 | 0.0076 | 0.0106 |
+| `beta` (structural-target scale) | 0.0000 | 35.16 | 315.12 |
+| floor-binding fraction | 1.00 | 1.00 | 1.00 |
+| mean \|off-diagonal corr\| | 0.128 | 0.144 | 0.188 |
+| max \|off-diagonal corr\| | 0.525 | 0.587 | 0.676 |
+
+Two of these are worth reading as results rather than telemetry. `alpha` sits
+under 0.011 on every seed, so Σ is essentially the shrunk empirical covariance
+and the low-rank `Λ Σ_f Λᵀ` target contributes almost nothing — consistent with
+the standing finding that the factor decomposition is the weak stage. And the
+residual floor binds on **100% of series on every seed**: Σ's diagonal is
+entirely the decomposition-derived sigma, and only its correlations come from
+the model's own rolling-origin residuals. The floor is not a rare safety net
+here, it is the whole variance estimate. That is the 2-dof cap on the
+idiosyncratic term showing up exactly where `factor_variance_share = 1.00`
+predicted it would.
+
+### What_if in factor/`none` mode (bug fix, not a measurement)
+
+`what_if()` raised in both default forecasting modes — `BifrostOptimizer`
+dereferences `tva._network`, which is `None` there. Fixed with a sibling
+closed-form solver (`ClosedFormScenario`): those forecasts are linear in the
+factor paths, so the minimum-disruption update is a Gaussian conditioning solve
+`δ = Σ Aᵀ (A Σ Aᵀ)⁻¹ (b − A ŷ)` against the same Σ. Deterministic, torch-free,
+no Adam steps, and cross-series aware instead of a proportional top-down split.
+`apply_hierarchical_adjustment` keeps the proportional split as its fallback
+when Σ is unavailable.
+
+v1/v2 are untouched: `predict()`, `reconcile()`, and both `what_if()` forms are
+**bitwise identical** to commit 76206eb (checked in a worktree, 8/8 arrays).
+
+## LRP-review items: origin anchor, forced continuation, fit horizon (2026-10-06)
+
+Arms on top of the factor default (`factor_config={}`), `examples/tva_benchmark.py`
+built-in datasets, 4 folds. Geometric-mean MASE ratio vs SeasonalNaive (<1 better):
+
+| arm | factor_panel | load_artificial | load_daily | load_monthly | synthetic_factor |
+|---|---|---|---|---|---|
+| factor default | 1.302 | 18.06 | 18.90 | 2.680 | 1.602 |
+| + continuation_force='constant' | 1.299 | 18.09 | 18.84 | 2.647 | 1.578 |
+| + origin_anchor='last_value' | 0.868 | 1.864 | 1.108 | 0.840 | 1.033 |
+| + origin_anchor='deseasonalized' | 0.822 | 2.303 | 1.812 | 0.957 | 1.204 |
+| + last_value + constant | 0.863 | **1.169** | **1.087** | **0.838** | **1.029** |
+| + deseasonalized + constant | **0.821** | 1.451 | 2.366 | 0.957 | 1.198 |
+| TVA 'none' | 0.960 | 1.787 | 1.819 | 1.830 | 1.404 |
+
+LRP (`--data lrp_forecast_data_202502.csv --horizon 180`, 3 iteration folds):
+- On the factor default, last_value + constant takes MASE skill 0.002 -> 0.69.
+- On the best known config (log space + sn_blend tol 0.25 + inner_refit) the new
+  options are neutral-to-worse on the two usable folds (fold 0: best 4.735,
+  +last_value 4.976, +deseasonalized 10.30, +fixed reanchor 4.545; fold 2: all
+  ~= SeasonalNaive 2.710).
+- **Fold 1 overflows in log space for every arm, including the unmodified best
+  config on clean HEAD** (MASE ~1e303): an older bug, not from these changes.

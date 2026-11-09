@@ -16,6 +16,7 @@ import random
 import numpy as np
 import pandas as pd
 from autots.tools.percentile import nan_quantile
+from autots.tools.easter import easter_offsets
 from autots.tools.thresholding import (
     NonparametricThreshold,
     nonparametric,
@@ -42,6 +43,9 @@ try:
     from sklearn.svm import OneClassSVM
     from sklearn.mixture import GaussianMixture
     from sklearn.preprocessing import MinMaxScaler
+except Exception:
+    pass
+try:
     from scipy.stats import chi2, norm, gamma, uniform, laplace, cauchy, beta
 except Exception:
     from autots.tools.mocks import norm
@@ -112,14 +116,15 @@ def sk_outliers(df, method, method_params={}):
             else:
                 raise
     elif method == "GaussianMixture":
-        model = GaussianMixture(**method_params)
-        model.fit(df)
-        scores = -model.score_samples(df)
-        responsibilities = model.predict_proba(df)
-        max_responsibilities = responsibilities.max(axis=1)
-        threshold = 0.05
-        res = np.where(max_responsibilities < threshold, -1, 1)
-        # res = np.where(scores > np.percentile(scores, 95), -1, 1)
+        gm_params = method_params.copy()
+        alpha = gm_params.pop("alpha", 0.05)
+        model = GaussianMixture(**gm_params)
+        # ndarray in and out: sklearn warns on feature-name mismatch if fit saw a DataFrame
+        values = df.to_numpy()
+        model.fit(values)
+        scores = -model.score_samples(values)
+        # flag the alpha share of least likely rows, so the flag agrees with the score
+        res = np.where(scores > np.percentile(scores, 100 * (1 - alpha)), -1, 1)
     return pd.DataFrame({"anomaly": res}, index=df.index), pd.DataFrame(
         {"anomaly_score": scores}, index=df.index
     )
@@ -193,7 +198,7 @@ def zscore_survival_function(
         median_diff = np.abs((df - df.median(axis=0)))
         residual_score = median_diff / median_diff.mean(axis=0)
     elif method == "med_diff":
-        median_diff = df.diff().median()
+        median_diff = df.diff().abs().median()
         residual_score = (df.diff().fillna(0) / median_diff).abs()
     elif method == "max_diff":
         max_diff = df.diff().max()
@@ -249,6 +254,7 @@ def limits_to_anomalies(
     lower_limit,
     method_params=None,
 ):
+    method_params = method_params or {}
     scores = zscore_survival_function(
         np.minimum(abs(df - upper_limit), abs(df - lower_limit)),
         output=output,
@@ -451,10 +457,13 @@ def anomaly_scores_to_strength(scores, method, method_params=None, anomaly_flags
         alpha = float(method_params.get("alpha", 0.05))
         alpha = float(np.clip(alpha, 1e-300, 1.0 - 1e-16))
         z_alpha = float(_norm_isf(alpha))
-        if not np.isfinite(z_alpha) or abs(z_alpha) < 1e-9:
-            z_alpha = 1.0
         p_vals = np.clip(frame.to_numpy(dtype=float), 1e-300, 1.0 - 1e-16)
-        result.loc[:, :] = _norm_isf(p_vals) / z_alpha
+        z = _norm_isf(p_vals)
+        if np.isfinite(z_alpha) and z_alpha > 1e-9:
+            result.loc[:, :] = z / z_alpha
+        else:
+            # alpha >= 0.5: z_alpha <= 0, a ratio would invert the ordering
+            result.loc[:, :] = 1.0 + (z - z_alpha)
         return result[result.columns[0]] if was_series else result
 
     if method in higher_is_anomalous_methods:
@@ -544,31 +553,30 @@ def nonparametric_multivariate(df, output, method_params, n_jobs=1):
                 columns=["anomaly_score"],
             )
             res = pd.DataFrame(
-                np.where(df.index.isin(df.index[i_anom]), -1, 1),
+                np.where(df.index.isin(df.index[np.asarray(i_anom, dtype=int)]), -1, 1),
                 index=df.index,
                 columns=["anomaly"],
             )
         else:
             # this particular take of univariate is a bit awkward
-            if mod.i_anom is not None:
-                if mod.i_anom.size != 0:
-                    cnts = np.unique(
-                        np.tile(np.arange(df.shape[0]), df.shape[1])[mod.i_anom],
-                        return_counts=True,
-                    )
-                else:
-                    cnts = [[], []]
+            if i_anom is not None and np.size(i_anom) != 0:
+                # flatten() is row-major: flat index k belongs to row k // ncols
+                cnts = np.unique(
+                    np.repeat(np.arange(df.shape[0]), df.shape[1])[
+                        np.asarray(i_anom, dtype=int)
+                    ],
+                    return_counts=True,
+                )
             else:
                 cnts = [[], []]
             scores = (
-                1
-                - pd.Series(
-                    cnts[1], index=df.index[cnts[0]], name="anomaly_score"
-                ).reindex(df.index, fill_value=0)
-                / df.shape[1]
+                pd.Series(cnts[1], index=df.index[cnts[0]])
+                .reindex(df.index, fill_value=0)
+                .div(df.shape[1])
+                .to_frame("anomaly_score")
             )
             res = pd.DataFrame(
-                np.where(scores <= 0.9, -1, 1),
+                np.where(scores["anomaly_score"] >= 0.1, -1, 1),
                 index=df.index,
                 columns=["anomaly"],
             )
@@ -823,15 +831,14 @@ def anomaly_new_params(method='random'):
             'tol': random.choices([1e-3, 1e-4, 1e-5], [0.5, 0.3, 0.2])[0],
             'reg_covar': random.choices([1e-6, 1e-5, 1e-4], [0.3, 0.4, 0.3])[0],
             'max_iter': random.choices([100, 200, 300], [0.3, 0.4, 0.3])[0],
+            'alpha': random.choices([0.005, 0.01, 0.02, 0.05], [0.2, 0.3, 0.3, 0.2])[0],
         }
     elif method_choice == "GaussianMixtureBase":
         method_params = {
             'n_components': random.choices([2, 3, 4, 5], [0.2, 0.3, 0.3, 0.2])[0],
             'tol': random.choices([1e-3, 1e-4, 1e-5], [0.5, 0.3, 0.2])[0],
             'max_iter': random.choices([50, 100, 200], [0.3, 0.5, 0.2])[0],
-            "responsibility_threshold": random.choices(
-                [0.05, 0.01, 0.1], [0.3, 0.2, 0.2]
-            )[0],
+            'alpha': random.choices([0.005, 0.01, 0.02, 0.05], [0.2, 0.3, 0.3, 0.2])[0],
         }
     elif method_choice == "zscore":
         method_params = {
@@ -1026,9 +1033,9 @@ def anomaly_df_to_holidays(
     if isinstance(anomaly_df, pd.Series):
         stacked = anomaly_df.copy()  # [anomaly_df == -1]
         stacked.index.name = 'date'
-        stacked = pd.concat(
-            [stacked], keys=["all"], names=["series"]
-        )  # .reorder_levels([1, 0])
+        stacked = pd.concat([stacked], keys=["all"], names=["series"]).reorder_levels(
+            [1, 0]
+        )
         # anomalies = anomaly_df.index[(anomaly_df == -1).iloc[:, 0]]
     else:
         anomaly_df.columns.name = "series"
@@ -1116,8 +1123,8 @@ def anomaly_df_to_holidays(
                 'dom_01_01': "NewYearsDay",
                 'dom_12_31': "NewYearsEve",
                 'dom_02_14': 'ValentinesDay',
-                'dom_10-31': 'Halloween',
-                'dom_11-11': 'ArmisticeDay',
+                'dom_10_31': 'Halloween',
+                'dom_11_11': 'ArmisticeDay',
                 "dom_04_22": "EarthDay",
             }
         )
@@ -1347,12 +1354,14 @@ def dates_to_holidays(
     hebrew_holidays=None,
     hindu_holidays=None,
     max_features: int = None,
+    easter_holidays=None,
 ):
     """Populate date information for a given pd.DatetimeIndex.
 
     Args:
         dates (pd.DatetimeIndex): list of dates
         day_holidays (pd.DataFrame): list of month/day holidays. Pass None if not available
+        easter_holidays (pd.DataFrame): learned rules keyed by easter_offset.
         style (str): option for how to return information
             "long" - return date, name, series for all holidays in a long style dataframe
             "impact" - returns dates, series with values of sum of impacts (if given) or joined string of holiday names
@@ -1379,6 +1388,7 @@ def dates_to_holidays(
         islamic_holidays,
         hebrew_holidays,
         hindu_holidays,
+        easter_holidays,
     ]:
         if holiday_df is not None:
             if not holiday_df.empty:
@@ -1405,7 +1415,18 @@ def dates_to_holidays(
                 else:
                     drop_colz = ['count', 'occurrence_rate']
                 # handle the different holiday calendars
-                if "lunar_month" in holiday_df.columns:
+                if "easter_offset" in holiday_df.columns:
+                    populated_holidays = (
+                        easter_offsets(dates)
+                        .rename_axis('date')
+                        .reset_index()
+                        .merge(
+                            holiday_df.drop(columns=drop_colz, errors='ignore'),
+                            on='easter_offset',
+                            how='left',
+                        )
+                    )
+                elif "lunar_month" in holiday_df.columns:
                     lunar_dates = gregorian_to_chinese(dates)
                     if "weekofmonth" in holiday_df.columns:
                         on = ["lunar_month", "weekofmonth", 'dayofweek']
@@ -1666,9 +1687,17 @@ def holiday_new_params(method='random'):
 
 
 def gaussian_mixture(
-    df, n_components=2, tol=1e-3, max_iter=100, responsibility_threshold=0.05
+    df,
+    n_components=2,
+    tol=1e-3,
+    max_iter=100,
+    alpha=0.05,
+    responsibility_threshold=None,
 ):
     from scipy.stats import multivariate_normal
+    from scipy.special import logsumexp
+
+    # responsibility_threshold is accepted (and ignored) so saved params load; no-op at 1.0.4
 
     n, d = df.shape
     data = df.fillna(0).to_numpy()
@@ -1681,19 +1710,25 @@ def gaussian_mixture(
     covariances = np.array([np.eye(d)] * n_components)
     weights = np.ones(n_components) / n_components
 
+    def weighted_log_densities():
+        # log space: the pdf underflows to 0 far from every component (wide d)
+        with np.errstate(divide="ignore"):
+            log_weights = np.log(weights)
+        return np.column_stack(
+            [
+                log_weights[i]
+                + multivariate_normal.logpdf(data, means[i], covariances[i])
+                for i in range(n_components)
+            ]
+        )
+
     log_likelihood = -np.inf
 
     for iteration in range(max_iter):
         # E-step: compute responsibilities
-        responsibilities = np.zeros((n, n_components))
-
-        for i in range(n_components):
-            responsibilities[:, i] = weights[i] * multivariate_normal.pdf(
-                data, means[i], covariances[i]
-            )
-
-        sum_responsibilities = responsibilities.sum(axis=1)[:, np.newaxis]
-        responsibilities /= sum_responsibilities
+        log_r = weighted_log_densities()
+        log_sum = logsumexp(log_r, axis=1)
+        responsibilities = np.exp(log_r - log_sum[:, np.newaxis])
 
         # M-step: update parameters
         Nk = responsibilities.sum(axis=0)
@@ -1717,31 +1752,26 @@ def gaussian_mixture(
         weights = Nk / n
 
         # Compute log-likelihood and check convergence
-        new_log_likelihood = np.sum(np.log(responsibilities.sum(axis=1)))
+        new_log_likelihood = log_sum.sum()
 
         if np.abs(new_log_likelihood - log_likelihood) < tol:
             break
 
         log_likelihood = new_log_likelihood
 
-    # Calculate anomaly scores using responsibility threshold
-    max_responsibilities = responsibilities.max(axis=1)
-
-    # Identify anomalies: low responsibility indicates a higher likelihood of being an anomaly
+    # score is the negative log-density under the final fit; flag its top alpha share
+    row_scores = -logsumexp(weighted_log_densities(), axis=1)
     anomalies = pd.DataFrame(
-        np.where(max_responsibilities < responsibility_threshold, -1, 1),
+        np.where(row_scores > np.percentile(row_scores, 100 * (1 - alpha)), -1, 1),
         index=df.index,
         columns=['anomaly'],
     )
-
-    # Score: can still calculate log-likelihood-based scores per data point if needed
-    scores = np.zeros((n, d))
-    for i in range(n_components):
-        comp_pdf = multivariate_normal.pdf(data, means[i], covariances[i])
-        comp_scores = -np.log(comp_pdf).reshape(-1, 1)
-        scores += responsibilities[:, i][:, np.newaxis] * comp_scores
-
-    scores = pd.DataFrame(scores, index=df.index, columns=df.columns)
+    # broadcast to (n, d) to keep the per-series score shape callers expect
+    scores = pd.DataFrame(
+        np.repeat(row_scores[:, np.newaxis], d, axis=1),
+        index=df.index,
+        columns=df.columns,
+    )
 
     return anomalies, scores
 

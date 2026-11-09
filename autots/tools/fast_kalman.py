@@ -73,6 +73,8 @@ Smooth all data
    print(smoothed.states.cov[1,2,:,:])
 
 
+::
+
     mean
     [ 0.29311384 -0.06948961]
     covariance

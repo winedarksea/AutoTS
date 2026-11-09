@@ -49,6 +49,12 @@ from autots.tools.impute import FillNA
 from autots.evaluator.metrics import wasserstein
 from autots.models.sklearn import rolling_x_regressor_regressor
 from autots.tools.kalman import kalman_fusion_forecasts
+from autots.tools.linear import (
+    solve_linear_coefficients,
+    solve_huber_coefficients,
+    linear_fit_covariance,
+    observation_mask_groups,
+)
 
 # these are all optional packages
 try:
@@ -713,6 +719,9 @@ class MotifSimulation(ModelObject):
         # else:
         # self.comparison = 'magnitude'
 
+        # a phrase longer than the available history leaves max_samps negative
+        phrase_n = min(phrase_n, max(1, df.shape[0] - 1))
+
         if 'pct_change_sign' in comparison:
             last_motif = df.where(df >= 0, -1).where(df <= 0, 1).tail(phrase_n)
         else:
@@ -1054,13 +1063,13 @@ class MotifSimulation(ModelObject):
                     'dice',
                     'hamming',
                     'jaccard',
-                    'kulczynski1',
+                    # 'kulczynski1',  # removed from scipy in 1.15
                     'mahalanobis',
                     'minkowski',
                     'rogerstanimoto',
                     'russellrao',
                     # 'seuclidean',
-                    'sokalmichener',
+                    # 'sokalmichener',  # removed from scipy in 1.15
                     'sokalsneath',
                     'sqeuclidean',
                     'yule',
@@ -1154,7 +1163,9 @@ def looped_motif(
             if k > A.shape[0]:
                 print("k too large for size of data in motif")
                 k = A.shape[0]
-            idx = np.argpartition(A, k, axis=0)[:k].flatten()
+            # argpartition's kth must be a valid index, so k == len(A) raises
+            kth = min(k, A.shape[0] - 1)
+            idx = np.argpartition(A, kth, axis=0)[:k].flatten()
     # distances for weighted mean
     results = y[idx]
     if point_method == "weighted_mean":
@@ -1381,7 +1392,7 @@ class Motif(ModelObject):
             'rogerstanimoto',
             'russellrao',
             # 'seuclidean',
-            'sokalmichener',
+            # 'sokalmichener',  # removed from scipy in 1.15
             'sokalsneath',
             'sqeuclidean',
             'yule',
@@ -1404,7 +1415,6 @@ class Motif(ModelObject):
             1.0,  # minkowski
             1.0,  # rogerstanimoto
             1.0,  # russellrao
-            1.0,  # sokalmichener
             1.0,  # sokalsneath
             1.0,  # sqeuclidean
             1.0,  # yule
@@ -2158,14 +2168,17 @@ class SectionalMotif(ModelObject):
         # find the lowest distance historical windows
         res_sum = np.nansum(res, axis=0)
         num_top = self.k
-        res_idx = np.argpartition(res_sum, num_top, axis=0)[0:num_top]
+        # argpartition's kth must be a valid index into res_sum
+        kth = max(0, min(num_top, res_sum.shape[0] - 1))
+        res_idx = np.argpartition(res_sum, kth, axis=0)[0:num_top]
         self.windows = window_idxs[res_idx, window_size:]
         # handle window being too big for data, too close to end
         if self.windows.size == 0:
             count = 1
             while self.windows.size == 0:
                 count += 1
-                res_idx = np.argpartition(res_sum, num_top, axis=0)[0 : num_top * count]
+                kth = max(0, min(num_top * count, res_sum.shape[0] - 1))
+                res_idx = np.argpartition(res_sum, kth, axis=0)[0 : num_top * count]
                 self.windows = window_idxs[res_idx, window_size:]
                 # prevent overflow
                 if count > 5:
@@ -2179,6 +2192,9 @@ class SectionalMotif(ModelObject):
                 **self.combination_transformation
             )
             array = self.combination_transformer.fit_transform(self.df).to_numpy()
+            if array.shape[0] != self.df.shape[0]:
+                # a row-dropping transform
+                array = self.df.to_numpy()
         else:
             array = self.df.to_numpy()
         results = array[self.windows]
@@ -2303,14 +2319,14 @@ class SectionalMotif(ModelObject):
             'hamming',
             'jaccard',
             # 'jensenshannon',
-            'kulczynski1',
+            # 'kulczynski1',  # removed from scipy in 1.15
             'mahalanobis',
             'matching',
             'minkowski',
             'rogerstanimoto',
             'russellrao',
             # 'seuclidean',
-            'sokalmichener',
+            # 'sokalmichener',  # removed from scipy in 1.15
             'sokalsneath',
             'sqeuclidean',
             'yule',
@@ -3459,8 +3475,8 @@ class BallTreeMultivariateMotif(ModelObject):
                 else:
                     sample_size = (
                         int(self.sample_fraction)
-                        if Xa.shape[0] < self.sample_fraction
-                        else int(Xa.shape[0] - 1)
+                        if self.sample_fraction < Xa.shape[0]
+                        else int(Xa.shape[0])
                     )
                 Xa = np.random.default_rng().choice(Xa, size=sample_size, axis=0)
         else:
@@ -3648,14 +3664,9 @@ class BasicLinearModel(ModelObject):
         name (str): String to identify class
         frequency (str): String alias of datetime index frequency or else 'infer'
         prediction_interval (float): Confidence interval for probabilistic forecast
+        linear_model (str): ``'lstsq'`` (default) or fixed-scale ``'huber'`` fitting
+        huber_iterations (int): Fixed number of Huber coefficient updates
         regression_type (str): "User" or None. If used, will be as covariate. The ratio of num_series:num_regressor_series will largely determine the impact
-        window (int): length of forecast history to match on
-        point_method (int): how to summarize the nearest neighbors to generate the point forecast
-            "weighted_mean", "mean", "median", "midhinge"
-        distance_metric (str): all valid values for scipy cdist + "nan_euclidean" from sklearn
-        include_differenced (bool): True to have the distance metric result be an average of the distance on absolute values as well as differenced values
-        k (int): number of closest neighbors to consider
-        stride_size (int): how many obs to skip between each new window. Higher numbers will reduce the number of matching windows and make the model faster.
     """
 
     def __init__(
@@ -3671,6 +3682,8 @@ class BasicLinearModel(ModelObject):
         changepoint_spacing: int = 60,
         changepoint_distance_end: int = 180,
         lambda_: float = 2.0,
+        linear_model: str = "lstsq",
+        huber_iterations: int = 50,
         trend_phi: float = None,
         holiday_countries_used: bool = True,
         **kwargs,
@@ -3689,6 +3702,12 @@ class BasicLinearModel(ModelObject):
         self.changepoint_spacing = changepoint_spacing
         self.changepoint_distance_end = changepoint_distance_end
         self.lambda_ = lambda_
+        self.linear_model = str(linear_model).lower()
+        if self.linear_model not in {"lstsq", "huber"}:
+            raise ValueError("linear_model must be 'lstsq' or 'huber'.")
+        self.huber_iterations = int(huber_iterations)
+        if self.huber_iterations < 1:
+            raise ValueError("huber_iterations must be at least 1.")
         self.trend_phi = trend_phi
         self.holiday_countries_used = holiday_countries_used
 
@@ -3787,38 +3806,44 @@ class BasicLinearModel(ModelObject):
         )
 
         # Convert X and df (Y) to NumPy arrays for linear regression
-        X_values = X.to_numpy().astype(float)
-        Y_values = df.to_numpy().astype(float)
-        # handle Y singular matrix
-        if np.all(Y_values == Y_values[0, 0]):
-            noise = np.random.normal(0, 0.001, size=Y_values)
-            Y_values = Y_values + noise
+        X_values = X.to_numpy(dtype=float, na_value=np.nan)
+        Y_values = df.to_numpy(dtype=float, na_value=np.nan)
 
-        if self.lambda_ is not None:
-            I = np.eye(X_values.shape[1])
-            # Perform Ridge regression using the modified normal equation
-            self.beta = (
-                np.linalg.inv(X_values.T @ X_values + self.lambda_ * I)
-                @ X_values.T
-                @ Y_values
+        # Series without usable observations keep NaN coefficients rather than
+        # failing the batch, so one empty series does not block the others.
+        self.beta = np.full((X_values.shape[1], Y_values.shape[1]), np.nan)
+        self.sigma = np.full(Y_values.shape[1], np.nan)
+        self._linear_training_design = X_values
+        self._linear_feature_columns = X.columns.copy()
+        self._linear_observation_groups = []
+        for rows, columns in observation_mask_groups(X_values, Y_values):
+            if not rows.any():
+                continue
+            design = X_values[rows]
+            targets = Y_values[np.ix_(rows, columns)]
+            if self.linear_model == "huber":
+                coefficients = solve_huber_coefficients(
+                    design,
+                    targets,
+                    self.lambda_,
+                    iterations=self.huber_iterations,
+                )
+            else:
+                coefficients = solve_linear_coefficients(design, targets, self.lambda_)
+            covariance, residual_dof = linear_fit_covariance(design, self.lambda_)
+            self.beta[:, columns] = coefficients
+            self.sigma[columns] = np.sqrt(
+                np.sum((targets - design @ coefficients) ** 2, axis=0) / residual_dof
             )
-        else:
-            # Perform linear regression using the normal equation: (X.T @ X)^(-1) @ X.T @ Y
-            self.beta = np.linalg.pinv(X_values.T @ X_values) @ X_values.T @ Y_values
-
-        # Calculate predicted values for Y
-        Y_pred = X_values @ self.beta
-
-        # Calculate residuals for each column of Y
-        residuals = Y_values - Y_pred
-
-        # Calculate the sum of squared errors (SSE) and standard error (sigma) for each column of Y
-        sse = np.sum(
-            residuals**2, axis=0
-        )  # Sum of squared errors for each column (shape (21,))
-        n = Y_values.shape[0]
-        p = X_values.shape[1]  # Number of predictors
-        self.sigma = np.sqrt(sse / (n - p))
+            # Cache the shared case. Distinct missing-data patterns are recomputed
+            # at prediction to avoid retaining a K x K matrix for every series.
+            self._linear_observation_groups.append(
+                (
+                    rows,
+                    columns,
+                    covariance if len(columns) == Y_values.shape[1] else None,
+                )
+            )
 
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
@@ -3851,6 +3876,10 @@ class BasicLinearModel(ModelObject):
         x_t.index = test_index
         X = pd.concat([x_s, x_t], axis=1)
         if str(self.regression_type).lower() == "user":
+            if future_regressor is None:
+                raise ValueError(
+                    "regression_type=='User' but no future_regressor supplied"
+                )
             X = pd.concat(
                 [
                     X,
@@ -3861,7 +3890,12 @@ class BasicLinearModel(ModelObject):
                 axis=1,
             )
         X["constant"] = 1
-        X_values = X.to_numpy().astype(float)
+        X = X.reindex(columns=self._linear_feature_columns)
+        X_values = X.to_numpy(dtype=float, na_value=np.nan)
+        if not np.isfinite(X_values).all():
+            raise ValueError(
+                "BasicLinearModel forecast design contains non-finite values"
+            )
         self.X = X
 
         # ORIGINAL FORECAST CALCULATION (not reconstructed from components)
@@ -3974,17 +4008,33 @@ class BasicLinearModel(ModelObject):
             return forecast
         else:
             z_value = norm.ppf(1 - (1 - self.prediction_interval) / 2)
-            # Vectorized calculation of leverage for all points: diag(X @ (X^T X)^(-1) @ X^T)
-            hat_matrix_diag = np.einsum(
-                'ij,jk,ik->i',
-                X_values,
-                np.linalg.pinv(X_values.T @ X_values, rcond=5e-16),
-                X_values,
-            )
+            interval_design = X_values.copy()
+            if (
+                self.trend_phi is not None
+                and self.trend_phi != 1
+                and len(test_index) >= 2
+            ):
+                trend_positions = X.columns.get_indexer(self.trend_columns)
+                trend_design = interval_design[:, trend_positions]
+                increments = np.diff(trend_design, axis=0)
+                increments *= self.trend_phi ** np.arange(len(test_index) - 1)[:, None]
+                interval_design[:, trend_positions] = np.cumsum(
+                    np.vstack((trend_design[:1], increments)), axis=0
+                )
+            hat_matrix_diag = np.empty((len(test_index), len(self.column_names)))
+            for rows, columns, covariance in self._linear_observation_groups:
+                if covariance is None:
+                    covariance, _ = linear_fit_covariance(
+                        self._linear_training_design[rows], self.lambda_
+                    )
+                variance = np.einsum(
+                    'ij,jk,ik->i', interval_design, covariance, interval_design
+                )
+                hat_matrix_diag[:, columns] = np.maximum(variance[:, None], 0)
             sigma_expanded = self.sigma[np.newaxis, :]
             # Calculate the margin of error for each prediction in each column
             margin_of_error = pd.DataFrame(
-                z_value * sigma_expanded * np.sqrt(1 + hat_matrix_diag[:, np.newaxis]),
+                z_value * sigma_expanded * np.sqrt(1 + hat_matrix_diag),
                 columns=self.column_names,
                 index=test_index,
             )
@@ -4103,6 +4153,11 @@ class BasicLinearModel(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning"""
+        linear_model = (
+            random.choices(["lstsq", "huber"], [0.98, 0.02])[0]
+            if method not in {"fast", "superfast"}
+            else "lstsq"
+        )
         if "regressor" in method:
             regression_choice = "User"
         else:
@@ -4123,6 +4178,8 @@ class BasicLinearModel(ModelObject):
                 [0.6, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
                 k=1,
             )[0],
+            "linear_model": linear_model,
+            "huber_iterations": 50,
             "trend_phi": random.choices(
                 [None, 0.995, 0.99, 0.98, 0.97, 0.8], [0.9, 0.05, 0.05, 0.1, 0.02, 0.01]
             )[0],
@@ -4137,6 +4194,8 @@ class BasicLinearModel(ModelObject):
             "changepoint_distance_end": self.changepoint_distance_end,
             "regression_type": self.regression_type,
             "lambda_": self.lambda_,
+            "linear_model": self.linear_model,
+            "huber_iterations": self.huber_iterations,
             "trend_phi": self.trend_phi,
             "holiday_countries_used": self.holiday_countries_used,
         }
@@ -4326,10 +4385,6 @@ class TVVAR(BasicLinearModel):
         X = X.dropna()
         # note the DF here not df_scaled so potentially index could be different which is not accounted for
         Y_values = df_scaled.loc[X.index].to_numpy().astype(float)
-        # handle Y singular matrix
-        if np.all(Y_values == Y_values[0, 0]):
-            noise = np.random.normal(0, 0.001, size=Y_values)
-            Y_values = Y_values + noise
         # Optionally apply PCA
         if self.apply_pca and (self.lags is not None or self.rolling_means is not None):
             from sklearn.decomposition import PCA
@@ -4354,17 +4409,7 @@ class TVVAR(BasicLinearModel):
 
         self.phi_history = []
         if self.phi is None:
-            if self.lambda_ is not None:
-                I = np.eye(X_values.shape[1])
-                self.beta = (
-                    np.linalg.inv(X_values.T @ X_values + self.lambda_ * I)
-                    @ X_values.T
-                    @ Y_values
-                )
-            else:
-                self.beta = (
-                    np.linalg.pinv(X_values.T @ X_values) @ X_values.T @ Y_values
-                )
+            self.beta = solve_linear_coefficients(X_values, Y_values, self.lambda_)
             # Post-process coefficients to set small values to zero
             self.beta = self.apply_beta_threshold()
             # Calculate residuals

@@ -45,7 +45,11 @@ class DecompositionMixin:
         )
 
         anomaly_params = self._build_anomaly_params()
-        if self.global_holiday_anomaly_suppression:
+        if self.global_holiday_anomaly_suppression is None:
+            anomaly_params = self._build_anomaly_params(
+                holiday_dates=self._named_holiday_dates_temp
+            )
+        elif self.global_holiday_anomaly_suppression:
             combined_holiday_dates = self._flatten_holiday_dates(holiday_dates)
             anomaly_params = self._build_anomaly_params(
                 holiday_dates=combined_holiday_dates

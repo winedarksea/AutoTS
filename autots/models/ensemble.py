@@ -9,7 +9,7 @@ from autots.models.base import PredictionObject
 from autots.models.model_list import no_shared
 from autots.tools.impute import fill_median
 from autots.models.sklearn import retrieve_classifier
-from autots.tools.profile import profile_time_series, summarize_series
+from autots.tools.profile import profile_time_series_mapping, summarize_series
 from autots.tools.kalman import kalman_fusion_forecasts
 
 horizontal_aliases = [
@@ -810,6 +810,8 @@ def HorizontalEnsemble(
     prematched_series: dict = None,
 ):
     """Generate forecast for per_series ensembling."""
+    # The resolved mapping belongs to this forecast, not the reusable template.
+    ensemble_params = ensemble_params.copy()
     startTime = datetime.datetime.now()
     # this is meant to fill in any failures
     available_models = [mod for mod, fcs in forecasts.items() if fcs.shape[0] > 0]
@@ -826,9 +828,7 @@ def HorizontalEnsemble(
     # handle profiled horizontal
     profiled = "profile" in ensemble_params.get("model_metric", "")
     if profiled and prematched_series is None:
-        profiled_mapping = (
-            profile_time_series(df_train).set_index("SERIES").to_dict()["PROFILE"]
-        )
+        profiled_mapping = profile_time_series_mapping(df_train)
         known_matches = ensemble_params['series']
         valid_values = list(known_matches.keys())
         profiled_mapping = {
@@ -1419,9 +1419,16 @@ def EnsembleTemplateGenerator(
             models_pos = []
             tr_df = pd.DataFrame()
             for _ in range(n_dep):
-                cr_df = pd.DataFrame(per_series_des.idxmin()).transpose()
-                tr_df = pd.concat([tr_df, cr_df], axis=0)
-                models_pos.extend(per_series_des.idxmin().tolist())
+                # ties (e.g. many models scoring 0 on a flat series) and failed-model
+                # NaN exhaust a column early; pandas >= 3 raises on all-NA idxmin
+                remaining = per_series_des.dropna(axis=1, how='all')
+                if remaining.shape[1] == 0:
+                    break
+                best_per_series = remaining.idxmin()
+                tr_df = pd.concat(
+                    [tr_df, pd.DataFrame(best_per_series).transpose()], axis=0
+                )
+                models_pos.extend(best_per_series.tolist())
                 per_series_des[per_series_des == per_series_des.min()] = np.nan
             cur_mods = pd.Series(models_pos).value_counts()
             cur_mods = cur_mods.sort_values(ascending=False).head(1)
@@ -1534,7 +1541,7 @@ def find_pattern(strings, x, sep="-"):
 
 def n_limited_horz(per_series, K, safety_model=False):
     # progressively remove best models to try and achieve wider coverage with a few
-    mods = pd.Series()
+    mods = pd.Series(dtype='object')
     per_series_des = per_series.copy()
     if K <= 1:
         safety_model_id = per_series.mean(axis=1).idxmin()
@@ -1547,19 +1554,27 @@ def n_limited_horz(per_series, K, safety_model=False):
         n_dep = x + 1
         n_dep = n_dep if per_series_des.shape[0] > n_dep else per_series_des.shape[0]
         models_pos = []
-        tr_df = pd.DataFrame()
+        picks_at_depth = []
         # find the most common models at this depth
         for _ in range(n_dep):
-            cr_df = pd.DataFrame(per_series_des.idxmin()).transpose()
-            tr_df = pd.concat([tr_df, cr_df], axis=0)
-            models_pos.extend(per_series_des.idxmin().tolist())
+            # ties and failed-model NaN exhaust a column early; pandas >= 3 raises on all-NA idxmin
+            remaining = per_series_des.dropna(axis=1, how='all')
+            if remaining.shape[1] == 0:
+                break
+            best_per_series = remaining.idxmin()
+            picks_at_depth.append(best_per_series)
+            models_pos.extend(best_per_series.tolist())
             per_series_des[per_series_des == per_series_des.min()] = np.nan
         cur_mods = pd.Series(models_pos).value_counts()
         cur_mods = cur_mods.sort_values(ascending=False).head(1)
         mods = mods.combine(cur_mods, max, fill_value=0)
         # drop series which have been satisfied by the model selection so far
-        rm_cols = tr_df[tr_df.isin(mods.index.tolist())]
-        rm_cols = rm_cols.dropna(how='all', axis=1).columns
+        # mosaic callers repeat a label per forecast chunk and columns exhaust unevenly,
+        # so picks are stacked flat: aligning them as rows raises InvalidIndexError
+        rm_cols = []
+        if picks_at_depth:
+            all_picks = pd.concat(picks_at_depth)
+            rm_cols = all_picks.index[all_picks.isin(mods.index)].unique()
         per_series_des = per_series.copy().drop(mods.index, axis=0)
         per_series_des = per_series_des.drop(rm_cols, axis=1)
         # if size reaches zero, start back with the full columns
@@ -2282,15 +2297,15 @@ def MosaicEnsemble(
     Args:
         prematched_series (dict): from outer horizontal generalization, possibly different than params
     """
+    # Preserve the caller's mapping when resolving the current series subset.
+    ensemble_params = ensemble_params.copy()
     # work with forecast_lengths longer or shorter than provided by template
 
     # handle profiled mosaic
     profiled = "profile" in ensemble_params.get("model_metric")
     medianed = "median" in ensemble_params.get("model_metric")
     if profiled:
-        profiled = (
-            profile_time_series(df_train).set_index("SERIES").to_dict()["PROFILE"]
-        )
+        profiled = profile_time_series_mapping(df_train)
         known_matches = ensemble_params['series']
         valid_values = list(known_matches.keys())
         profiled = {
@@ -2433,6 +2448,10 @@ def _buildup_mosaics(
     available_models,
     org_idx,
 ):
+    if isinstance(final.columns, pd.MultiIndex):
+        # melt otherwise keeps only one level, losing the full series identifier.
+        final = final.copy()
+        final.columns = final.columns.to_flat_index()
     melted = pd.melt(
         final,
         var_name="series_id",
