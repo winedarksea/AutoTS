@@ -261,3 +261,19 @@ class TestNLimitedHorz(unittest.TestCase):
                     selected = n_limited_horz(per_series, K, safety_model=safety_model)
                     self.assertGreater(len(selected), 0)
                     self.assertTrue(set(selected).issubset(per_series.index))
+
+    def test_repeated_series_labels_with_ties_do_not_raise(self):
+        # mosaic callers repeat each series label once per forecast chunk, and exact
+        # ties exhaust those columns at different depths
+        rounded_errors_with_ties = np.round(
+            np.random.default_rng(0).gamma(2, 1, size=(40, 12)), 1
+        )
+        per_series = pd.DataFrame(
+            rounded_errors_with_ties,
+            index=[f"m{i}" for i in range(40)],
+            columns=list(range(6)) * 2,
+        )
+        selected = n_limited_horz(per_series, K=30, safety_model=False)
+        self.assertGreater(len(selected), 0)
+        self.assertLessEqual(len(selected), 30)
+        self.assertTrue(set(selected).issubset(per_series.index))

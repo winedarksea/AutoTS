@@ -1554,7 +1554,7 @@ def n_limited_horz(per_series, K, safety_model=False):
         n_dep = x + 1
         n_dep = n_dep if per_series_des.shape[0] > n_dep else per_series_des.shape[0]
         models_pos = []
-        tr_df = pd.DataFrame()
+        picks_at_depth = []
         # find the most common models at this depth
         for _ in range(n_dep):
             # ties and failed-model NaN exhaust a column early; pandas >= 3 raises on all-NA idxmin
@@ -1562,17 +1562,19 @@ def n_limited_horz(per_series, K, safety_model=False):
             if remaining.shape[1] == 0:
                 break
             best_per_series = remaining.idxmin()
-            tr_df = pd.concat(
-                [tr_df, pd.DataFrame(best_per_series).transpose()], axis=0
-            )
+            picks_at_depth.append(best_per_series)
             models_pos.extend(best_per_series.tolist())
             per_series_des[per_series_des == per_series_des.min()] = np.nan
         cur_mods = pd.Series(models_pos).value_counts()
         cur_mods = cur_mods.sort_values(ascending=False).head(1)
         mods = mods.combine(cur_mods, max, fill_value=0)
         # drop series which have been satisfied by the model selection so far
-        rm_cols = tr_df[tr_df.isin(mods.index.tolist())]
-        rm_cols = rm_cols.dropna(how='all', axis=1).columns
+        # mosaic callers repeat a label per forecast chunk and columns exhaust unevenly,
+        # so picks are stacked flat: aligning them as rows raises InvalidIndexError
+        rm_cols = []
+        if picks_at_depth:
+            all_picks = pd.concat(picks_at_depth)
+            rm_cols = all_picks.index[all_picks.isin(mods.index)].unique()
         per_series_des = per_series.copy().drop(mods.index, axis=0)
         per_series_des = per_series_des.drop(rm_cols, axis=1)
         # if size reaches zero, start back with the full columns
