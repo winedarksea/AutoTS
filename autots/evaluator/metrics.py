@@ -632,19 +632,19 @@ def full_metric_evaluation(
     squared_errors = full_errors**2
 
     # np.where(A >= F, quantile * (A - F), (1 - quantile) * (F - A))
-    inv_prediction_interval = 1 - prediction_interval
+    # prediction_interval is central: 0.8 scores upper as q0.9 and lower as q0.1
+    tail_probability = (1 - prediction_interval) / 2
     upper_diff = A - upper_forecast
     upper_pl = np.where(
         A >= upper_forecast,
-        prediction_interval * upper_diff,
-        inv_prediction_interval * -1 * upper_diff,
+        (1 - tail_probability) * upper_diff,
+        tail_probability * -1 * upper_diff,
     )
-    # note that the quantile here is the lower quantile
     low_diff = A - lower_forecast
     lower_pl = np.where(
         A >= lower_forecast,
-        inv_prediction_interval * low_diff,
-        prediction_interval * -1 * low_diff,
+        tail_probability * low_diff,
+        (1 - tail_probability) * -1 * low_diff,
     )
     # calculate scaler once
     if scaler is None:

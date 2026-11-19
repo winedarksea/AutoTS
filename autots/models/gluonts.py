@@ -679,12 +679,12 @@ class GluonTS(ModelObject):
                 result.quantile(0.5), index=test_index, columns=self.column_names
             )
             upper_forecast = pd.DataFrame(
-                result.quantile(self.prediction_interval),
+                result.quantile(1 - (1 - self.prediction_interval) / 2),
                 index=test_index,
                 columns=self.column_names,
             )
             lower_forecast = pd.DataFrame(
-                result.quantile((1 - self.prediction_interval)),
+                result.quantile((1 - self.prediction_interval) / 2),
                 index=test_index,
                 columns=self.column_names,
             )
@@ -706,10 +706,10 @@ class GluonTS(ModelObject):
                         ),
                         "series_id": current_id,
                         "LowerForecast": (
-                            result.quantile((1 - self.prediction_interval))
+                            result.quantile((1 - self.prediction_interval) / 2)
                         ),
                         "MedianForecast": (result.quantile(0.5)),
-                        "UpperForecast": (result.quantile(self.prediction_interval)),
+                        "UpperForecast": (result.quantile(1 - (1 - self.prediction_interval) / 2)),
                     }
                 )
                 all_forecast = pd.concat(

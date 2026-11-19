@@ -991,7 +991,6 @@ class ModelPrediction(ModelObject):
                         f"Using constraint with method: {constraint_method}, {constraint_regularization}, {lower_constraint}, {upper_constraint}, {bounds}"
                     )
 
-                print(constraints)
                 df_forecast = df_forecast.apply_constraints(
                     constraints,
                     self.df,
@@ -3287,7 +3286,6 @@ def generate_score(
             divisor_results = model_results[
                 model_results["Runs"] >= (num_validations + 1)
             ]
-            print(divisor_results["rmse"])
             if divisor_results.empty:
                 divisor_results = model_results
     # generate minimizing scores, where smaller = better accuracy
@@ -3461,7 +3459,7 @@ def generate_score(
             containment_score = (
                 1 + abs(prediction_interval - model_results['containment_weighted'])
             ) * smape_median
-            score_dict['contaiment'] = containment_score * containment_weighting
+            score_dict['containment'] = containment_score * containment_weighting
             overall_score = overall_score + (containment_score * containment_weighting)
         if overall_score.sum() == 0:
             print(

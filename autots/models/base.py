@@ -616,8 +616,8 @@ class PredictionObject(object):
         model_parameters
         transformation_parameters
         forecast
-        upper_forecast
-        lower_forecast
+        upper_forecast: upper bound of the central prediction_interval, quantile 1 - (1 - prediction_interval) / 2
+        lower_forecast: lower bound of the central prediction_interval, quantile (1 - prediction_interval) / 2
 
     Methods
 

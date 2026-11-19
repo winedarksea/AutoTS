@@ -24,12 +24,14 @@ def historic_quantile(df_train, prediction_interval: float = 0.9, nan_flag=None)
 
     Args:
         df_train (pd.DataFrame): a dataframe of training data
-        prediction_interval (float): the desired forecast interval range
+        prediction_interval (float): the desired central forecast interval range,
+            0.8 gives distances from the median to the q0.1 and q0.9 quantiles
 
     Returns:
         lower, upper (np.array): two 1D arrays
     """
-    quantiles = [0, 1 - prediction_interval, 0.5, prediction_interval, 1]
+    tail_probability = (1 - prediction_interval) / 2
+    quantiles = [0, tail_probability, 0.5, 1 - tail_probability, 1]
     # save compute time by using the non-nan verison if possible
     if not isinstance(nan_flag, bool):
         if isinstance(df_train, pd.DataFrame):
@@ -40,12 +42,14 @@ def historic_quantile(df_train, prediction_interval: float = 0.9, nan_flag=None)
         bins = nan_quantile(df_train.astype(float), quantiles, axis=0)
     else:
         bins = np.quantile(df_train.astype(float), quantiles, axis=0, keepdims=False)
+    # quantile ties (common on integer or intermittent data) give zero width, fall back to
+    # a quarter of the median-to-extreme range
     upper = bins[3] - bins[2]
     if 0 in upper:
-        np.where(upper != 0, upper, (bins[4] - bins[2]) / 4)
+        upper = np.where(upper != 0, upper, (bins[4] - bins[2]) / 4)
     lower = bins[2] - bins[1]
     if 0 in lower:
-        np.where(lower != 0, lower, (bins[2] - bins[0]) / 4)
+        lower = np.where(lower != 0, lower, (bins[2] - bins[0]) / 4)
     return lower, upper
 
 

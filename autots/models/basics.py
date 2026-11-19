@@ -877,9 +877,10 @@ class MotifSimulation(ModelObject):
             forecast = current_forecast.copy()
             forecast.name = col
 
+            tail_probability = (1 - prediction_interval) / 2
             current_forecast = (
                 pos_forecasts.dropna(thresh=thresh, axis=0)
-                .quantile(q=[(1 - prediction_interval), prediction_interval], axis=1)
+                .quantile(q=[tail_probability, 1 - tail_probability], axis=1)
                 .transpose()
             )
 
@@ -1720,11 +1721,10 @@ def predict_reservoir(
             else:
                 pred = np.quantile(pred_int, q=0.5, axis=0)[0:d]
 
-        pred_upper = nan_quantile(interval_list, q=prediction_interval, axis=0)[0:d]
+        tail_probability = (1 - prediction_interval) / 2
+        pred_upper = nan_quantile(interval_list, q=1 - tail_probability, axis=0)[0:d]
         pred_upper = np.where(pred_upper < pred, pred, pred_upper)
-        pred_lower = nan_quantile(interval_list, q=(1 - prediction_interval), axis=0)[
-            0:d
-        ]
+        pred_lower = nan_quantile(interval_list, q=tail_probability, axis=0)[0:d]
         pred_lower = np.where(pred_lower > pred, pred, pred_lower)
         return pred, pred_upper, pred_lower
     else:
@@ -2528,25 +2528,25 @@ class KalmanStateSpace(ModelObject):
                 columns=df.columns,
             )
             df_stdev = np.sqrt(result.observations.cov).T
-            bound = df_stdev * norm.ppf(self.prediction_interval)
+            bound = df_stdev * norm.ppf(1 - (1 - self.prediction_interval) / 2)
             upper_forecast = df_smooth + bound
             lower_forecast = df_smooth - bound
 
             # evaluate the prediction
             A = np.asarray(df.iloc[-self.forecast_length :, :])
-            inv_prediction_interval = 1 - self.prediction_interval
+            # central interval: pinball at q=1-tail for upper, q=tail for lower
+            tail_probability = (1 - self.prediction_interval) / 2
             upper_diff = A - upper_forecast
             upper_pl = np.where(
                 A >= upper_forecast,
-                self.prediction_interval * upper_diff,
-                inv_prediction_interval * -1 * upper_diff,
+                (1 - tail_probability) * upper_diff,
+                tail_probability * -1 * upper_diff,
             )
-            # note that the quantile here is the lower quantile
             low_diff = A - lower_forecast
             lower_pl = np.where(
                 A >= lower_forecast,
-                inv_prediction_interval * low_diff,
-                self.prediction_interval * -1 * low_diff,
+                tail_probability * low_diff,
+                (1 - tail_probability) * -1 * low_diff,
             )
             scaler = np.nanmean(np.abs(np.diff(np.asarray(df)[-100:], axis=0)), axis=0)
             fill_val = np.nanmax(scaler)
@@ -2618,7 +2618,7 @@ class KalmanStateSpace(ModelObject):
                 )
                 forecasts.append(df)
                 df_stdev = np.sqrt(result.observations.cov).T
-                bound = df_stdev * norm.ppf(self.prediction_interval)
+                bound = df_stdev * norm.ppf(1 - (1 - self.prediction_interval) / 2)
                 uppers.append(df + bound)
                 lowers.append(df - bound)
             df = pd.concat(forecasts, axis=1).reindex(columns=self.column_names)
@@ -2636,7 +2636,7 @@ class KalmanStateSpace(ModelObject):
                 columns=self.column_names,
             )
             df_stdev = np.sqrt(result.observations.cov).T
-            bound = df_stdev * norm.ppf(self.prediction_interval)
+            bound = df_stdev * norm.ppf(1 - (1 - self.prediction_interval) / 2)
             upper_forecast = df + bound
             lower_forecast = df - bound
         if just_point_forecast:

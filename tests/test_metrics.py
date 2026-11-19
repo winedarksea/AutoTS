@@ -115,7 +115,7 @@ class TestMetrics(unittest.TestCase):
                 1.240,
                 3.333,
                 1.240,
-                0.572,
+                0.513,  # spl, central pinball at q0.05/q0.95
                 0.467,
                 0.467,
                 3.333,
@@ -169,7 +169,7 @@ class TestMetrics(unittest.TestCase):
                 0.207,
                 0.833,
                 0.207,
-                0.623,
+                0.589,  # spl
                 0.567,
                 0.717,
                 0.833,
@@ -223,7 +223,7 @@ class TestMetrics(unittest.TestCase):
                 2.480,
                 10.0,
                 2.480,
-                0.44,
+                0.353,  # spl
                 0.8,
                 0.6,
                 10.0,
